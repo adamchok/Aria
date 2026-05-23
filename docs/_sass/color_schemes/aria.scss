@@ -1,0 +1,55 @@
+// ARIA documentation colour scheme — calm financial UI (CLAUDE.md §4.2)
+// Neutral slate base; semantic colours reserved for status meaning.
+
+$aria-slate-50:  #f8fafc;
+$aria-slate-100: #f1f5f9;
+$aria-slate-200: #e2e8f0;
+$aria-slate-300: #cbd5e1;
+$aria-slate-500: #64748b;
+$aria-slate-700: #334155;
+$aria-slate-800: #1e293b;
+$aria-slate-900: #0f172a;
+
+$aria-blue-600:   #2563eb; // in progress
+$aria-blue-700:   #1d4ed8;
+$aria-green-600:  #16a34a; // matched
+$aria-green-700:  #15803d;
+$aria-amber-600:  #d97706; // uncertain
+$aria-amber-700:  #b45309;
+$aria-red-600:    #dc2626;   // unmatched / failed
+$aria-red-700:    #b91c1c;
+
+// just-the-docs theme tokens
+$body-background-color: $aria-slate-50;
+$body-heading-color: $aria-slate-900;
+$body-text-color: $aria-slate-700;
+
+$link-color: $aria-blue-600;
+$btn-primary-color: $aria-blue-700;
+
+$sidebar-color: #ffffff;
+$sidebar-dividers: $aria-slate-200;
+$nav-child-link-color: $aria-slate-500;
+$nav-child-link-hover-color: $aria-slate-800;
+
+$border-color: $aria-slate-200;
+$search-background-color: #ffffff;
+$search-result-preview-color: $aria-slate-500;
+
+$feedback-color: darken($sidebar-color, 3%);
+$table-background-color: #ffffff;
+
+$code-background-color: $aria-slate-100;
+
+$font-family-monospace: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+
+$border-radius: 8px;
+$border: 1px solid $border-color;
+
+$media-queries: (
+  xs: 320px,
+  sm: 500px,
+  md: 740px,
+  lg: 1200px,
+  xl: 1400px,
+);

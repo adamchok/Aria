@@ -1,7 +1,6 @@
 ---
 title: Configuration
 layout: default
-nav_order: 6
 description: "Environment variables, API keys, and tuning parameters"
 ---
 
@@ -15,6 +14,27 @@ description: "Environment variables, API keys, and tuning parameters"
 {:toc}
 
 ---
+
+<div class="aria-options">
+  <div class="aria-option">
+    <p class="aria-option__tag">Default</p>
+    <p class="aria-option__title">Mock mode</p>
+    <p class="aria-option__desc">No API keys. Deterministic pipeline for dev and CI.</p>
+    <code>LLM_MODE=mock</code>
+  </div>
+  <div class="aria-option">
+    <p class="aria-option__tag">Live AI</p>
+    <p class="aria-option__title">Claude extraction</p>
+    <p class="aria-option__desc">Real multimodal extraction and matching reasoning.</p>
+    <code>LLM_MODE=live + ANTHROPIC_API_KEY</code>
+  </div>
+  <div class="aria-option">
+    <p class="aria-option__tag">Observability</p>
+    <p class="aria-option__title">LangSmith traces</p>
+    <p class="aria-option__desc">Agent pipeline visibility for demo and debugging.</p>
+    <code>LANGSMITH_API_KEY + LANGSMITH_TRACING=true</code>
+  </div>
+</div>
 
 ## Environment files
 
@@ -225,4 +245,4 @@ These values drive routing logic and should not be lowered in production without
 | Match confident | ≥ 0.75 | Auto-match allowed |
 | Match failed | &lt; 0.50 (all candidates) | Exception report |
 
-See [Architecture]({% link architecture.md %}) for how these map to agent routing.
+See [Architecture]({{ '/architecture' | relative_url }}) for how these map to agent routing.

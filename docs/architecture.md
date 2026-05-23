@@ -1,7 +1,6 @@
 ---
 title: Architecture
 layout: default
-nav_order: 4
 description: "System design, agent pipeline, and technology stack"
 ---
 
@@ -20,70 +19,55 @@ description: "System design, agent pipeline, and technology stack"
 
 ARIA is a stateful multi-agent system orchestrated by LangGraph, exposed through a FastAPI REST API and a React web application.
 
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Presentation Layer                              │
-│   React 18 SPA — Upload · Progress · Dashboard · Review Queue · Export  │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │ REST /api/v1/*
-┌─────────────────────────────────▼───────────────────────────────────────┐
-│                         API Layer (FastAPI)                             │
-│   Job submission · Status polling · Results · Review actions · Export   │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │ Celery enqueue
-┌─────────────────────────────────▼───────────────────────────────────────┐
-│                    Agent Orchestration (LangGraph)                      │
-│   Ingestion → Normalisation → Matching → Report (+ human review route)  │
-└───────┬─────────────────┬─────────────────┬─────────────────────────────┘
-        │                 │                 │
-        ▼                 ▼                 ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────────────────────────────┐
-│ Claude LLMs  │  │ FX + SWIFT   │  │ Data                                 │
-│ Sonnet/Haiku │  │ tool APIs    │  │ PostgreSQL · Redis · MinIO (S3)      │
-└──────────────┘  └──────────────┘  └──────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph presentation [Presentation]
+    UI[React 18 SPA]
+  end
+  subgraph api [API Layer]
+    FAST[FastAPI REST]
+  end
+  subgraph orchestration [Agent Orchestration]
+    LG[LangGraph StateGraph]
+  end
+  subgraph intelligence [Intelligence]
+    LLM[Claude Sonnet / Haiku]
+    FX[FX + SWIFT tools]
+  end
+  subgraph data [Data]
+    PG[(PostgreSQL)]
+    RD[(Redis)]
+    S3[(MinIO S3)]
+  end
+  UI -->|/api/v1| FAST
+  FAST -->|Celery| LG
+  LG --> LLM
+  LG --> FX
+  LG --> PG
+  FAST --> S3
+  LG --> RD
 ```
 
 ## Agent pipeline
 
 Four specialised agents execute sequentially with shared typed state (`ReconciliationState`):
 
-```text
-INPUT DOCUMENTS
-       │
-       ▼
-┌──────────────────────────────────────┐
-│  Agent 1: Document Ingestion         │
-│  Model: claude-sonnet-4-6 (vision)   │
-│  Output: List[PaymentRecord]         │
-└──────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│  Agent 2: Normalisation              │
-│  Model: claude-haiku-4-5 (tool-use)  │
-│  Tools: get_fx_rate, estimate_swift   │
-│  Output: List[NormalisedRecord]      │
-└──────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│  Agent 3: Matching                   │
-│  Model: claude-sonnet-4-6 (reasoning)│
-│  3-stage: date filter → amount window│
-│           → LLM semantic reasoning   │
-│  Output: List[MatchResult]           │
-└──────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│  Agent 4: Audit & Report             │
-│  Model: claude-sonnet-4-6            │
-│  Output: ReconciliationReport + Excel│
-└──────────────────────────────────────┘
-       │
-       ▼
-REVIEW QUEUE (UNCERTAIN) + FINAL REPORT
+```mermaid
+flowchart TD
+  IN[Agent 1: Ingestion<br/>Sonnet · vision] --> NO[Agent 2: Normalisation<br/>Haiku · FX tools]
+  NO --> MA[Agent 3: Matching<br/>Sonnet · fuzzy + LLM]
+  MA --> RE[Agent 4: Report<br/>Sonnet · Excel export]
+  IN -->|confidence &lt; 0.5| HR[Human review queue]
+  HR --> RE
+  MA -->|0.5 ≤ conf &lt; 0.75| HR
 ```
+
+<div class="aria-pipeline">
+  <span class="aria-pipeline__step aria-pipeline__step--active">Ingestion</span>
+  <span class="aria-pipeline__step">Normalisation</span>
+  <span class="aria-pipeline__step">Matching</span>
+  <span class="aria-pipeline__step">Report</span>
+</div>
 
 ### Agent responsibilities
 
@@ -243,4 +227,4 @@ frontend/
 └── tests/                   Vitest + Playwright e2e
 ```
 
-See [API Reference]({% link api-reference.md %}) for endpoints and [Getting Started]({% link getting-started.md %}) to run the stack.
+See [API Reference]({{ '/api-reference' | relative_url }}) for endpoints and [Getting Started]({{ '/getting-started' | relative_url }}) to run the stack.

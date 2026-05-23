@@ -1,7 +1,6 @@
 ---
 title: API Reference
 layout: default
-nav_order: 7
 description: "REST API endpoints, request/response shapes, and job lifecycle"
 ---
 
@@ -31,9 +30,13 @@ All v1 routes are prefixed with `/api/v1`.
 
 ---
 
-## Health
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/health</span>
+  </div>
 
-### `GET /health`
+### Health check
 
 Returns service status and version.
 
@@ -46,14 +49,17 @@ Returns service status and version.
   "env": "development"
 }
 ```
+</div>
 
 ---
 
-## Jobs
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--post">POST</span>
+    <span class="aria-endpoint__path">/api/v1/jobs</span>
+  </div>
 
-### `POST /api/v1/jobs`
-
-Submit a new reconciliation job.
+### Submit reconciliation job
 
 **Content-Type:** `multipart/form-data`
 
@@ -91,12 +97,17 @@ curl -X POST http://localhost:8000/api/v1/jobs \
   -F "bank_statement=@statement.csv" \
   -F "base_currency=MYR"
 ```
+</div>
 
 ---
 
-### `GET /api/v1/jobs/{job_id}`
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}</span>
+  </div>
 
-Poll job status and progress.
+### Poll job status
 
 **Response `200`**
 
@@ -114,23 +125,28 @@ Poll job status and progress.
 
 **Job statuses**
 
-| Status | Meaning |
-| --- | --- |
-| `PENDING` | Queued, not yet started |
-| `RUNNING` | Pipeline in progress |
-| `COMPLETED` | Finished; all matches resolved or none uncertain |
-| `AWAITING_REVIEW` | Pipeline done; uncertain items need human review |
-| `FAILED` | Unrecoverable error (`error` field populated) |
+| Status | Meaning | Badge |
+| --- | --- | --- |
+| `PENDING` | Queued, not yet started | <span class="aria-badge aria-badge--neutral">Pending</span> |
+| `RUNNING` | Pipeline in progress | <span class="aria-badge aria-badge--progress">Running</span> |
+| `COMPLETED` | Finished successfully | <span class="aria-badge aria-badge--matched">Complete</span> |
+| `AWAITING_REVIEW` | Uncertain items need review | <span class="aria-badge aria-badge--uncertain">Review</span> |
+| `FAILED` | Unrecoverable error | <span class="aria-badge aria-badge--unmatched">Failed</span> |
 
 **Errors:** `404` if job not found.
 
 The frontend polls this endpoint every **2 seconds** until a terminal status is reached.
+</div>
 
 ---
 
-### `GET /api/v1/jobs/{job_id}/results`
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/results</span>
+  </div>
 
-Retrieve the full reconciliation report.
+### Retrieve reconciliation report
 
 **Response `200`** — `ReconciliationReport`
 
@@ -163,12 +179,17 @@ Each match in `matches` includes:
 | `bank_entry` | object \| null | Matched bank statement row |
 
 **Errors:** `404` job not found · `409` job not yet complete
+</div>
 
 ---
 
-### `GET /api/v1/jobs/{job_id}/review`
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/review</span>
+  </div>
 
-Fetch items requiring human review (`status = UNCERTAIN` only).
+### Human review queue
 
 **Response `200`** — `MatchResult[]`
 
@@ -186,12 +207,17 @@ Fetch items requiring human review (`status = UNCERTAIN` only).
 ```
 
 Returns an empty array when no uncertain items remain.
+</div>
 
 ---
 
-### `POST /api/v1/jobs/{job_id}/review/{match_id}`
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--post">POST</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/review/{match_id}</span>
+  </div>
 
-Submit a human decision on an uncertain match.
+### Submit human review decision
 
 **Content-Type:** `application/json`
 
@@ -222,12 +248,17 @@ Submit a human decision on an uncertain match.
 **Idempotency:** Re-submitting `confirm` or `reject` on an already-reviewed match returns the current state without error.
 
 **Errors:** `404` match not found · `409` invalid job state
+</div>
 
 ---
 
-### `GET /api/v1/jobs/{job_id}/export`
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/export</span>
+  </div>
 
-Download the reconciliation Excel report.
+### Download Excel report
 
 **Response `200`**
 
@@ -243,21 +274,22 @@ Download the reconciliation Excel report.
 ```bash
 curl -OJ http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/export
 ```
+</div>
 
 ---
 
 ## Job lifecycle
 
-```text
-POST /jobs
-    │
-    ▼
- PENDING ──► RUNNING ──► COMPLETED
-                │              ▲
-                │              │
-                └─► AWAITING_REVIEW ──► (human review) ──► COMPLETED
-                │
-                └─► FAILED
+```mermaid
+stateDiagram-v2
+  [*] --> PENDING
+  PENDING --> RUNNING
+  RUNNING --> COMPLETED
+  RUNNING --> AWAITING_REVIEW
+  RUNNING --> FAILED
+  AWAITING_REVIEW --> COMPLETED: human review
+  COMPLETED --> [*]
+  FAILED --> [*]
 ```
 
 1. **Submit** — files uploaded to MinIO; job row created; Celery task enqueued

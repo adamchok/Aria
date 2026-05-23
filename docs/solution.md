@@ -1,7 +1,6 @@
 ---
 title: Solution
 layout: default
-nav_order: 3
 description: "ARIA's value proposition and key differentiators"
 ---
 
@@ -26,62 +25,69 @@ description: "ARIA's value proposition and key differentiators"
 
 ## End-to-end workflow
 
-```text
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌─────────┐    ┌────────┐
-│   Upload    │ →  │  Extract     │ →  │  Normalise  │ →  │  Match  │ →  │ Report │
-│ proofs +    │    │  (vision +   │    │  (FX +      │    │ (fuzzy  │    │ Excel  │
-│ bank stmt   │    │   parsers)   │    │  tolerance) │    │ + LLM)  │    │ export │
-└─────────────┘    └──────────────┘    └─────────────┘    └─────────┘    └────────┘
-                                                                    ↓
-                                                          ┌─────────────────┐
-                                                          │ Human review    │
-                                                          │ (0.5 ≤ conf     │
-                                                          │  < 0.75)        │
-                                                          └─────────────────┘
+```mermaid
+flowchart LR
+  U[Upload proofs + bank stmt] --> E[Extract]
+  E --> N[Normalise FX]
+  N --> M[Match + score]
+  M --> R[Report + Excel]
+  M --> H{Confidence 0.5–0.75?}
+  H -->|Yes| Q[Human review queue]
+  H -->|No| R
+  Q --> R
 ```
 
-### What the user does
+<div class="aria-pipeline">
+  <span class="aria-pipeline__step">Upload</span>
+  <span class="aria-pipeline__step">Extract</span>
+  <span class="aria-pipeline__step">Normalise</span>
+  <span class="aria-pipeline__step">Match</span>
+  <span class="aria-pipeline__step">Report</span>
+  <span class="aria-pipeline__step aria-pipeline__step--active">Review</span>
+</div>
 
-1. **Upload** — Drag payment proofs (multi-file) and one bank statement onto `/upload`
-2. **Wait** — Watch the four-agent progress stepper on `/jobs/{id}` (~seconds per batch)
-3. **Review results** — Summary cards, filterable AG Grid, variance explanations on `/jobs/{id}/results`
-4. **Resolve uncertain items** — Side-by-side review with Confirm / Reject / Manual Match on `/jobs/{id}/review`
-5. **Export** — Download Excel with Summary, Matched, Exceptions, and Audit Log sheets
+### What the finance officer does
+
+| Step | Screen | Action |
+| --- | --- | --- |
+| 1 | `/upload` | Drag payment proofs + bank statement; select base currency (MYR) |
+| 2 | `/jobs/{id}` | Watch four-agent stepper; progress persists if you navigate away |
+| 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
+| 4 | `/jobs/{id}/review` | Confirm, reject, or manual-match uncertain items |
+| 5 | Export | Download Excel — Summary, Matched, Exceptions, Audit Log |
 
 ## Key differentiators
 
-### AI-first, not AI-bolted-on
+<div class="aria-grid">
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">AI-first engine</p>
+    <p class="aria-card__desc">The LLM reasoning chain is the reconciliation engine — rules are safety nets only.</p>
+  </div>
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">Vision-first ingestion</p>
+    <p class="aria-card__desc">Multimodal extraction without template OCR. PDF/Excel fall back to structured parsers.</p>
+  </div>
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">FX-aware matching</p>
+    <p class="aria-card__desc">Per-transaction tolerance windows using invoice and settlement rates plus SWIFT estimates.</p>
+  </div>
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">Audit-ready output</p>
+    <p class="aria-card__desc">Every decision includes variance explanation and full reasoning chain in the audit log.</p>
+  </div>
+</div>
 
-The LLM reasoning chain **is** the reconciliation engine. Rule-based logic exists only as a safety net (date windows, amount tolerance filters). This lets ARIA handle ambiguity — FX timing, intermediary fees, format variation — without brittle rule sets.
-
-### Zero-OCR multimodal pipeline
-
-Claude's vision capabilities read payment proofs the way a human would — layout, context, handwriting — without template-based OCR. Structured PDFs and Excel fall back to `pdfplumber` / `openpyxl` parsers.
-
-### FX-aware fuzzy matching
-
-Standard tools match on exact amounts. ARIA understands that USD 10.00 may legitimately appear as MYR 42.30–42.80 depending on FX rate date, corridor, and SWIFT charges. The Matching Agent retrieves historical rates and reasons through a **per-transaction tolerance window**.
-
-### Explainable, auditable decisions
-
-Every match includes:
-
-- A natural-language **variance explanation**
-- A full **reasoning chain** stored in the audit log
-- A composite **confidence score** (0.0–1.0)
-
-Finance teams can answer *why* ARIA matched — or failed to match — any transaction.
-
-### Human-in-the-loop by design
+## Confidence routing
 
 | Confidence | Status | Action |
-| --- | --- | --- |
-| ≥ 0.75 | `MATCHED` | Auto-match allowed |
-| 0.50 – 0.74 | `UNCERTAIN` | Human review queue |
-| &lt; 0.50 | `UNMATCHED` | Exception report |
-| Extraction &lt; 0.50 | — | Route to review; never auto-confirm |
+| ---: | --- | --- |
+| ≥ 0.75 | <span class="aria-badge aria-badge--matched">Matched</span> | Auto-match allowed |
+| 0.50 – 0.74 | <span class="aria-badge aria-badge--uncertain">Uncertain</span> | Human review queue; never auto-confirmed |
+| &lt; 0.50 | <span class="aria-badge aria-badge--unmatched">Unmatched</span> | Exception report |
+| Extraction &lt; 0.50 | <span class="aria-badge aria-badge--neutral">Escalated</span> | Route to review |
 
-Low-confidence items are **never** auto-confirmed — a deliberate compliance control.
+{: .tip }
+> ARIA matched because the settlement amount falls within the FX tolerance window for USD/MYR on the value date — not because amounts were identical. See [Architecture]({{ '/architecture' | relative_url }}) for tolerance calculation.
 
 ## Supported scope (MVP)
 
@@ -102,4 +108,4 @@ Low-confidence items are **never** auto-confirmed — a deliberate compliance co
 | Pipeline latency (50 tx) | &lt; 60 s |
 | Escalation rate | 5–20% to human review |
 
-See [Architecture]({% link architecture.md %}) for technical design and [Getting Started]({% link getting-started.md %}) to run it locally.
+See [Architecture]({{ '/architecture' | relative_url }}) for technical design and [Getting Started]({{ '/getting-started' | relative_url }}) to run it locally.

@@ -1,7 +1,6 @@
 ---
 title: Getting Started
 layout: default
-nav_order: 5
 description: "Prerequisites, installation, and step-by-step local run instructions"
 ---
 
@@ -16,7 +15,28 @@ description: "Prerequisites, installation, and step-by-step local run instructio
 
 ---
 
-This guide walks through three run modes, from fastest (Docker + mock LLM) to full production-like local development (live LLM + all services).
+Choose the run mode that fits your goal. All three paths support the full reconciliation pipeline in **mock LLM** mode without API keys.
+
+<div class="aria-options">
+  <div class="aria-option aria-option--recommended">
+    <p class="aria-option__tag">Recommended</p>
+    <p class="aria-option__title">Option 1 — Docker full stack</p>
+    <p class="aria-option__desc">Postgres, Redis, MinIO, API, Celery worker, and React UI in one command.</p>
+    <code>docker compose up --build</code>
+  </div>
+  <div class="aria-option">
+    <p class="aria-option__tag">Developers</p>
+    <p class="aria-option__title">Option 2 — Hybrid local</p>
+    <p class="aria-option__desc">Infra in Docker; backend and frontend with hot reload.</p>
+    <code>uvicorn + celery + npm run dev</code>
+  </div>
+  <div class="aria-option">
+    <p class="aria-option__tag">Fastest</p>
+    <p class="aria-option__title">Option 3 — Zero infra</p>
+    <p class="aria-option__desc">SQLite + local storage; API only, jobs run inline.</p>
+    <code>uvicorn app.main:app --reload</code>
+  </div>
+</div>
 
 ## Prerequisites
 
@@ -40,7 +60,7 @@ Runs PostgreSQL, Redis, MinIO, FastAPI, Celery worker, and the React frontend. U
 ### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/your-org/Aria.git
+git clone https://github.com/adamchok/Aria.git
 cd Aria
 ```
 
@@ -293,6 +313,6 @@ bundle exec jekyll serve --livereload
 
 ## Next steps
 
-- [Configuration]({% link configuration.md %}) — full environment variable reference
-- [API Reference]({% link api-reference.md %}) — REST endpoints and job lifecycle
-- [Development]({% link development.md %}) — running tests and contributing
+- [Configuration]({{ '/configuration' | relative_url }}) — full environment variable reference
+- [API Reference]({{ '/api-reference' | relative_url }}) — REST endpoints and job lifecycle
+- [Development]({{ '/development' | relative_url }}) — running tests and contributing

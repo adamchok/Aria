@@ -1,8 +1,5 @@
-# GitHub Pages — Jekyll configuration
-# Enable: Settings → Pages → Deploy from branch → master → /docs
-#
-# just-the-docs is loaded via remote_theme (not bundled in github-pages gem).
-# Local preview: cd docs && bundle install && bundle exec jekyll serve --livereload
+# GitHub Pages — Jekyll + just-the-docs
+# Preview: cd docs && bundle install && bundle exec jekyll serve --livereload
 
 title: ARIA
 description: >-
@@ -14,8 +11,33 @@ remote_theme: just-the-docs/just-the-docs@v0.10.1
 url: "https://adamchok.github.io"
 baseurl: "/Aria"
 
+logo: "/assets/images/aria-icon.png"
+favicon_ico: "/assets/images/favicon.ico"
+
+# ARIA financial UI — slate base, semantic status colours (see _sass/color_schemes/aria.scss)
+color_scheme: aria
+
+logo: "/assets/images/aria-mark.svg"
+
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+
+heading_anchors: true
+back_to_top: true
+back_to_top_text: "Back to top"
+last_edit_timestamp: true
+last_edit_time_format: "%B %d, %Y"
+
+mermaid:
+  version: "10.6.0"
+
 callouts:
   highlight:
+    title: Note
     color: yellow
   important:
     title: Important
@@ -23,17 +45,49 @@ callouts:
   warning:
     title: Warning
     color: red
+  tip:
+    title: Tip
+    color: green
 
-# Sidebar navigation order is controlled by nav_order in each page's front matter.
+# Grouped sidebar navigation
+nav:
+  - title: Overview
+    url: /
+  - title: Product
+    children:
+      - title: Problem Statement
+        url: /problem-statement
+      - title: Solution
+        url: /solution
+  - title: Technical
+    children:
+      - title: Architecture
+        url: /architecture
+      - title: API Reference
+        url: /api-reference
+  - title: Setup
+    children:
+      - title: Getting Started
+        url: /getting-started
+      - title: Configuration
+        url: /configuration
+  - title: Development
+    url: /development
+
 nav_external_links:
-  - title: OpenAPI (local)
+  - title: GitHub
+    url: https://github.com/adamchok/Aria
+    hide_url: false
+  - title: OpenAPI
     url: http://localhost:8000/docs
     hide_url: false
 
 aux_links:
   Repository: https://github.com/adamchok/Aria
 
-footer_content: "Built for AI Marathon 2026 — Global Treasury Agent track."
+footer_content: >-
+  ARIA · AI Marathon 2026 · Challenge Track 3 — Global Treasury Agent.
+  Documentation reflects production behaviour; amounts use tabular figures.
 
 gh_edit_link: true
 gh_edit_repository: https://github.com/adamchok/Aria
@@ -52,3 +106,6 @@ exclude:
   - Gemfile.lock
   - node_modules
   - vendor
+
+sass:
+  style: compressed

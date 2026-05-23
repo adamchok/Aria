@@ -1,7 +1,6 @@
 ---
 title: Development
 layout: default
-nav_order: 8
 description: "Testing, project conventions, and contribution guide"
 ---
 
@@ -18,7 +17,7 @@ description: "Testing, project conventions, and contribution guide"
 
 ## Development setup
 
-For day-to-day work, use the **hybrid local development** flow described in [Getting Started]({% link getting-started.md %}#option-2--hybrid-local-development):
+For day-to-day work, use the **hybrid local development** flow in [Getting Started]({{ '/getting-started' | relative_url }}#option-2--hybrid-local-development):
 
 - Docker: Postgres + Redis + MinIO
 - Native: backend (uvicorn), Celery worker, frontend (Vite)
@@ -242,6 +241,6 @@ Before opening a PR touching data or AI:
 
 ## Getting help
 
-1. Check [Getting Started — Troubleshooting]({% link getting-started.md %}#troubleshooting)
+1. Check [Getting Started — Troubleshooting]({{ '/getting-started' | relative_url }}#troubleshooting)
 2. Inspect API logs: `docker compose logs api worker`
 3. Open an issue on GitHub with job ID, environment, and relevant log excerpts (redact secrets)

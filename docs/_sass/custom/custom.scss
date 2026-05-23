@@ -1,0 +1,440 @@
+// ARIA documentation components — extends just-the-docs
+
+// ─── Layout utilities ───────────────────────────────────────────────────────
+
+.aria-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #1e293b 100%);
+  border-radius: 12px;
+  color: #f8fafc;
+  margin: 0 0 2rem;
+  padding: 2.25rem 2rem 2rem;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 85% 15%, rgba(37, 99, 235, 0.18) 0%, transparent 45%),
+      radial-gradient(circle at 10% 90%, rgba(22, 163, 74, 0.1) 0%, transparent 40%);
+    pointer-events: none;
+  }
+
+  &__logo {
+    border-radius: 12px;
+    display: block;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+
+  &__eyebrow {
+    color: #94a3b8;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    margin: 0 0 0.75rem;
+    position: relative;
+    text-transform: uppercase;
+  }
+
+  &__title {
+    color: #ffffff !important;
+    font-size: 1.875rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+    line-height: 1.2 !important;
+    margin: 0 0 0.75rem !important;
+    position: relative;
+  }
+
+  &__lead {
+    color: #cbd5e1;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    margin: 0 0 1.5rem;
+    max-width: 42rem;
+    position: relative;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    position: relative;
+  }
+
+  &__btn {
+    border-radius: 8px;
+    display: inline-block;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 0.625rem 1.125rem;
+    text-decoration: none !important;
+    transition: background 0.15s ease, transform 0.15s ease;
+
+    &--primary {
+      background: #2563eb;
+      color: #ffffff !important;
+
+      &:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+      }
+    }
+
+    &--secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f1f5f9 !important;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+    }
+  }
+}
+
+// ─── Metric stat cards ──────────────────────────────────────────────────────
+
+.aria-stats {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  margin: 1.5rem 0 2rem;
+}
+
+.aria-stat {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.125rem;
+
+  &__label {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0 0 0.35rem;
+    text-transform: uppercase;
+  }
+
+  &__value {
+    color: #0f172a;
+    font-size: 1.375rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  &__hint {
+    color: #64748b;
+    font-size: 0.8125rem;
+    margin: 0.35rem 0 0;
+  }
+}
+
+// ─── Feature / doc link cards ───────────────────────────────────────────────
+
+.aria-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  margin: 1.5rem 0 2rem;
+}
+
+.aria-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: block;
+  padding: 1.125rem 1.25rem;
+  text-decoration: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    transform: translateY(-2px);
+  }
+
+  &__title {
+    color: #0f172a !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    margin: 0 0 0.35rem !important;
+  }
+
+  &__desc {
+    color: #64748b;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  &__arrow {
+    color: #2563eb;
+    float: right;
+    font-size: 1.125rem;
+    line-height: 1;
+    margin-top: -1.5rem;
+  }
+}
+
+// ─── Confidence / status badges (never colour-only — paired with text) ─────
+
+.aria-badge {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 0.3rem 0.65rem;
+  white-space: nowrap;
+
+  &--matched {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  &--uncertain {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  &--unmatched {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  &--progress {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  &--neutral {
+    background: #f1f5f9;
+    color: #475569;
+  }
+}
+
+// ─── Pipeline stepper (mirrors app JobStepper) ──────────────────────────────
+
+.aria-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 1.75rem;
+}
+
+.aria-pipeline__step {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+
+  &::after {
+    color: #94a3b8;
+    content: "→";
+    margin-left: 0.25rem;
+  }
+
+  &:last-child::after {
+    content: none;
+  }
+
+  &--active {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e40af;
+  }
+}
+
+// ─── API endpoint blocks ────────────────────────────────────────────────────
+
+.aria-endpoint {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 0 10px 10px 0;
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem 0.25rem;
+
+  &__header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-bottom: 0.5rem;
+  }
+
+  &__path {
+    color: #0f172a;
+    font-family: $font-family-monospace;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  h3 {
+    margin-top: 0 !important;
+  }
+}
+
+.aria-method {
+  border-radius: 6px;
+  font-family: $font-family-monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.25rem 0.5rem;
+  text-transform: uppercase;
+
+  &--get {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  &--post {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+}
+
+// ─── Setup option cards ─────────────────────────────────────────────────────
+
+.aria-options {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  margin: 1.5rem 0;
+}
+
+.aria-option {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem;
+
+  &__tag {
+    color: #2563eb;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+  }
+
+  &__title {
+    color: #0f172a !important;
+    font-size: 1.0625rem !important;
+    margin: 0 0 0.5rem !important;
+  }
+
+  &__desc {
+    color: #64748b;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    margin: 0 0 0.75rem;
+  }
+
+  &--recommended {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08);
+  }
+}
+
+// ─── Tables — tabular figures for amounts ───────────────────────────────────
+
+.main-content {
+  table {
+    font-variant-numeric: tabular-nums;
+
+    th {
+      background: #f8fafc;
+      color: #475569;
+      font-size: 0.8125rem;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    td.amount,
+    th.amount {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+  }
+
+  // Softer blockquotes for value props
+  blockquote {
+    background: #f8fafc;
+    border-left: 4px solid #2563eb;
+    border-radius: 0 8px 8px 0;
+    color: #334155;
+    font-size: 1.0625rem;
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  // Mermaid diagrams — calm container
+  .language-mermaid {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin: 1.25rem 0 1.75rem;
+    padding: 1rem;
+  }
+}
+
+// ─── Sidebar polish ─────────────────────────────────────────────────────────
+
+.site-title {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+
+.site-header .site-logo {
+  max-height: 2rem;
+  width: auto;
+}
+
+.site-header .site-logo img {
+  max-height: 2rem;
+  width: auto;
+  border-radius: 6px;
+}
+
+.side-bar {
+  border-right: 1px solid #e2e8f0;
+}
+
+.search-input {
+  border-radius: 8px !important;
+}
+
+// ─── Responsive ─────────────────────────────────────────────────────────────
+
+@media (max-width: 740px) {
+  .aria-hero {
+    padding: 1.5rem 1.25rem;
+
+    &__title {
+      font-size: 1.5rem !important;
+    }
+  }
+
+  .aria-pipeline__step::after {
+    display: none;
+  }
+}

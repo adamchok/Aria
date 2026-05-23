@@ -37,7 +37,7 @@ No API keys required in default **mock LLM** mode. For live Claude extraction, s
 
 ## Documentation
 
-**Live docs:** [adamchok.github.io/Aria](https://adamchok.github.io/Aria/) — GitHub Pages site with sidebar navigation (just-the-docs). Source lives in [`docs/`](docs/).
+**Live docs:** [adamchok.github.io/Aria](https://adamchok.github.io/Aria/) — professional documentation site with sidebar navigation, search, and ARIA financial UI styling.
 
 | Page | Description |
 | --- | --- |
