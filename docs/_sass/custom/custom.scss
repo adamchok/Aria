@@ -1,4 +1,7 @@
 // ARIA documentation components — extends just-the-docs
+// Use local tokens here; custom.scss is compiled for every theme variant.
+
+$aria-font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
 
 // ─── Layout utilities ───────────────────────────────────────────────────────
 
@@ -278,7 +281,7 @@
 
   &__path {
     color: #0f172a;
-    font-family: $font-family-monospace;
+    font-family: $aria-font-mono;
     font-size: 0.9375rem;
     font-weight: 600;
   }
@@ -290,7 +293,7 @@
 
 .aria-method {
   border-radius: 6px;
-  font-family: $font-family-monospace;
+  font-family: $aria-font-mono;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
