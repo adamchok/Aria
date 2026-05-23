@@ -1,4 +1,5 @@
 source "https://rubygems.org"
 
+# Match the github-pages gem used by actions/jekyll-build-pages@v1.
+# Theme is loaded via remote_theme in _config.yml — do not add just-the-docs here.
 gem "github-pages", group: :jekyll_plugins
-gem "just-the-docs"

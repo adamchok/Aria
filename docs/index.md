@@ -52,7 +52,7 @@ Finance teams upload payment proofs (screenshots, PDFs, Excel) and a bank statem
 The fastest path to a running stack (Docker, mock LLM — no API keys required):
 
 ```bash
-git clone https://github.com/your-org/Aria.git
+git clone https://github.com/adamchok/Aria.git
 cd Aria
 docker compose up --build
 ```

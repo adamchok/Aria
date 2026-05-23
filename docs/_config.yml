@@ -1,19 +1,18 @@
 # GitHub Pages — Jekyll configuration
-# Enable: Repo Settings → Pages → Source: Deploy from branch → main → /docs
+# Enable: Settings → Pages → Deploy from branch → master → /docs
 #
-# Local preview (optional):
-#   cd docs && bundle install && bundle exec jekyll serve --livereload
+# just-the-docs is loaded via remote_theme (not bundled in github-pages gem).
+# Local preview: cd docs && bundle install && bundle exec jekyll serve --livereload
 
 title: ARIA
 description: >-
   Autonomous Reconciliation Intelligence Agent — AI-native cross-border
   payment reconciliation for SMEs. AI Marathon 2026, Challenge Track 3.
-theme: just-the-docs
 
-# Set baseurl to your repository name when publishing, e.g. "/Aria"
-# Leave empty if using a custom domain or user/org site root.
-baseurl: ""
-url: ""
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+
+url: "https://adamchok.github.io"
+baseurl: "/Aria"
 
 callouts:
   highlight:
@@ -32,14 +31,13 @@ nav_external_links:
     hide_url: false
 
 aux_links:
-  Repository: https://github.com/your-org/Aria
+  Repository: https://github.com/adamchok/Aria
 
 footer_content: "Built for AI Marathon 2026 — Global Treasury Agent track."
 
-# Suppress default "Edit this page" until the repo URL is configured.
 gh_edit_link: true
-gh_edit_repository: https://github.com/your-org/Aria
-gh_edit_branch: main
+gh_edit_repository: https://github.com/adamchok/Aria
+gh_edit_branch: master
 gh_edit_view_mode: tree
 gh_edit_source: docs
 gh_edit_source_ext: md

@@ -22,7 +22,7 @@ Upload payment proofs in any format, match them against bank statements with FX-
 **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ```bash
-git clone https://github.com/your-org/Aria.git
+git clone https://github.com/adamchok/Aria.git
 cd Aria
 docker compose up --build
 ```
@@ -37,7 +37,7 @@ No API keys required in default **mock LLM** mode. For live Claude extraction, s
 
 ## Documentation
 
-Full documentation is published from the [`docs/`](docs/) folder and renders as a multi-page GitHub Pages site (just-the-docs theme with sidebar navigation).
+**Live docs:** [adamchok.github.io/Aria](https://adamchok.github.io/Aria/) — GitHub Pages site with sidebar navigation (just-the-docs). Source lives in [`docs/`](docs/).
 
 | Page | Description |
 | --- | --- |
@@ -50,7 +50,7 @@ Full documentation is published from the [`docs/`](docs/) folder and renders as 
 | [API Reference](docs/api-reference.md) | REST endpoints and job lifecycle |
 | [Development](docs/development.md) | Testing and contribution guide |
 
-**Enable GitHub Pages:** Repository Settings → Pages → Source: `/docs` on `main`.
+**Enable GitHub Pages:** Repository Settings → Pages → Source: `/docs` on `master`.
 
 ## Architecture at a glance
 

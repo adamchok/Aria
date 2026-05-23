@@ -263,7 +263,7 @@ To publish this documentation site:
 1. Push the `docs/` folder to your default branch
 2. Go to **Repository Settings → Pages**
 3. Under **Build and deployment**, set **Source** to **Deploy from a branch**
-4. Select branch **main** (or your default) and folder **/docs**
+4. Select branch **master** and folder **/docs**
 5. Save — the site will be available at `https://<user>.github.io/<repo>/`
 
 Update `baseurl` and `gh_edit_repository` in `docs/_config.yml` to match your repository name.
