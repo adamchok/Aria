@@ -1,0 +1,56 @@
+# GitHub Pages — Jekyll configuration
+# Enable: Repo Settings → Pages → Source: Deploy from branch → main → /docs
+#
+# Local preview (optional):
+#   cd docs && bundle install && bundle exec jekyll serve --livereload
+
+title: ARIA
+description: >-
+  Autonomous Reconciliation Intelligence Agent — AI-native cross-border
+  payment reconciliation for SMEs. AI Marathon 2026, Challenge Track 3.
+theme: just-the-docs
+
+# Set baseurl to your repository name when publishing, e.g. "/Aria"
+# Leave empty if using a custom domain or user/org site root.
+baseurl: ""
+url: ""
+
+callouts:
+  highlight:
+    color: yellow
+  important:
+    title: Important
+    color: blue
+  warning:
+    title: Warning
+    color: red
+
+# Sidebar navigation order is controlled by nav_order in each page's front matter.
+nav_external_links:
+  - title: OpenAPI (local)
+    url: http://localhost:8000/docs
+    hide_url: false
+
+aux_links:
+  Repository: https://github.com/your-org/Aria
+
+footer_content: "Built for AI Marathon 2026 — Global Treasury Agent track."
+
+# Suppress default "Edit this page" until the repo URL is configured.
+gh_edit_link: true
+gh_edit_repository: https://github.com/your-org/Aria
+gh_edit_branch: main
+gh_edit_view_mode: tree
+gh_edit_source: docs
+gh_edit_source_ext: md
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-github-metadata
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor

@@ -1,0 +1,18 @@
+{
+  "payer": "Unknown",
+  "payee": "ARIA Demo SDN BHD",
+  "amount_original": "12.34",
+  "currency": "USD",
+  "value_date": "2026-05-18",
+  "reference": null,
+  "bank_charges": null,
+  "extraction_confidence": 0.42,
+  "field_confidences": {
+    "amount_original": 0.5,
+    "currency": 0.4,
+    "value_date": 0.3,
+    "reference": 0.2,
+    "payer": 0.3
+  },
+  "raw_extracted_text": "Low-quality scan"
+}

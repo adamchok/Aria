@@ -1,0 +1,6 @@
+Date,Amount,Description,Reference,Counterparty
+2026-05-20,4179.24,Inward Telegraphic Transfer Acme US Inc,INV-001,ACME US INC
+2026-05-21,5450.20,Inward TT Euro Buyer GmbH,INV-002,EURO BUYER GMBH
+2026-05-22,4200.04,SWIFT Credit GBP Customer Ltd,INV-003,GBP CUSTOMER LTD
+2026-05-23,9394.88,FAST Transfer Singapore Client,INV-004,SG CLIENT PTE
+2026-05-22,9999.00,Unrelated cash deposit,REF-CASH,

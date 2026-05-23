@@ -1,0 +1,7 @@
+{
+  "confidence": 0.62,
+  "status": "UNCERTAIN",
+  "amount_variance_myr": "0.25",
+  "variance_explanation": "Amount inside tolerance but payer name match is weak.",
+  "reasoning_chain": "stage-1 retained candidate; stage-2 confirmed inside window; payer fuzz < 0.5."
+}

@@ -1,0 +1,40 @@
+# Internal / duplicate spec copies (public docs live in docs/)
+CLAUDE.md
+ARIA_Project_Overview.md
+ARIA_Technical_Specification.md
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+*.db
+aria.db
+_test_aria.db
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.vite/
+
+# Local uploads (S3_ENDPOINT=local://)
+_uploads/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

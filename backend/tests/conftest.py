@@ -1,0 +1,161 @@
+"""Shared pytest fixtures for ARIA backend tests."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import tempfile
+from collections.abc import AsyncIterator, Iterator
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+# Tests use SQLite + local storage so no external services are required.
+# FX keys are FORCED empty so tests use the deterministic static fallback
+# regardless of what's in the developer's .env file.
+os.environ["APP_ENV"] = "test"
+os.environ["LLM_MODE"] = "mock"
+os.environ["EXCHANGERATE_API_KEY"] = ""
+os.environ["OPENEXCHANGERATES_APP_ID"] = ""
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./_test_aria.db")
+os.environ.setdefault("S3_ENDPOINT", f"local://{tempfile.mkdtemp(prefix='aria_test_')}")
+os.environ.setdefault("CELERY_TASK_ALWAYS_EAGER", "1")
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
+
+from app.core.config import get_settings
+from app.core.database import Base
+from app.models.enums import SourceFormat
+from app.models.schemas import (
+    BankEntry,
+    BankStatement,
+    NormalisedRecord,
+    PaymentRecord,
+)
+
+
+@pytest.fixture(scope="session")
+def settings():
+    get_settings.cache_clear()
+    return get_settings()
+
+
+@pytest_asyncio.fixture
+async def db_engine():
+    """Fresh in-memory SQLite engine per test."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db_session(db_engine) -> AsyncIterator[AsyncSession]:
+    factory = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def api_client(db_engine):
+    """ASGI client for the FastAPI app, sharing the in-memory test engine."""
+    from app.core import database as db_module
+    from app.core.dependencies import get_db_session
+    from app.main import app
+
+    test_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+
+    # Rebind the module-level factory so the inline pipeline (asyncio.run inside
+    # the request handler) sees the same DB.
+    original_factory = db_module._session_factory
+    db_module._session_factory = test_factory
+
+    async def _override_session():
+        async with test_factory() as s:
+            yield s
+
+    app.dependency_overrides[get_db_session] = _override_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    app.dependency_overrides.clear()
+    db_module._session_factory = original_factory
+
+
+# ─── Reusable schema fixtures ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def payment_record_usd() -> PaymentRecord:
+    return PaymentRecord(
+        payer="Acme US Inc",
+        payee="ARIA Demo SDN BHD",
+        amount_original=Decimal("10.00"),
+        currency="USD",
+        value_date=date(2026, 5, 18),
+        reference="INV-001",
+        bank_charges=None,
+        source_format=SourceFormat.IMAGE,
+        extraction_confidence=0.92,
+        raw_extracted_text="USD 10.00 invoice",
+        field_confidences={"amount_original": 0.95, "currency": 0.99},
+    )
+
+
+@pytest.fixture
+def normalised_record_usd(payment_record_usd: PaymentRecord) -> NormalisedRecord:
+    return NormalisedRecord(
+        payment=payment_record_usd,
+        amount_myr_at_invoice_rate=Decimal("42.30"),
+        amount_myr_at_settlement_rate=Decimal("42.55"),
+        fx_rate_invoice=Decimal("4.230"),
+        fx_rate_settlement=Decimal("4.255"),
+        tolerance_low=Decimal("41.10"),
+        tolerance_high=Decimal("43.20"),
+        estimated_charges_myr=Decimal("0.50"),
+        base_currency="MYR",
+    )
+
+
+@pytest.fixture
+def bank_entry_myr() -> BankEntry:
+    return BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("42.30"),
+        currency="MYR",
+        description="Inward Telegraphic Transfer Acme US Inc",
+        reference="INV-001",
+        counterparty="ACME US INC",
+    )
+
+
+@pytest.fixture
+def bank_statement(bank_entry_myr) -> BankStatement:
+    return BankStatement(
+        base_currency="MYR",
+        entries=[bank_entry_myr],
+        statement_period_start=date(2026, 5, 1),
+        statement_period_end=date(2026, 5, 31),
+    )
+
+
+@pytest.fixture
+def fixtures_dir() -> Path:
+    return Path(__file__).parent / "fixtures"

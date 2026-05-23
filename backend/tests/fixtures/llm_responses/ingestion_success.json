@@ -1,0 +1,18 @@
+{
+  "payer": "Acme US Inc",
+  "payee": "ARIA Demo SDN BHD",
+  "amount_original": "10.00",
+  "currency": "USD",
+  "value_date": "2026-05-18",
+  "reference": "INV-001",
+  "bank_charges": null,
+  "extraction_confidence": 0.94,
+  "field_confidences": {
+    "amount_original": 0.98,
+    "currency": 0.99,
+    "value_date": 0.92,
+    "reference": 0.88,
+    "payer": 0.9
+  },
+  "raw_extracted_text": "Sample USD invoice text"
+}

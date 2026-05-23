@@ -1,0 +1,36 @@
+{
+  "transactions": [
+    {
+      "currency": "USD",
+      "amount": "1000.00",
+      "value_date": "2026-05-18",
+      "payer": "Acme US Inc",
+      "reference": "INV-001",
+      "expected_status": "MATCHED"
+    },
+    {
+      "currency": "EUR",
+      "amount": "1200.00",
+      "value_date": "2026-05-19",
+      "payer": "Euro Buyer GmbH",
+      "reference": "INV-002",
+      "expected_status": "MATCHED"
+    },
+    {
+      "currency": "GBP",
+      "amount": "800.00",
+      "value_date": "2026-05-20",
+      "payer": "GBP Customer Ltd",
+      "reference": "INV-003",
+      "expected_status": "MATCHED"
+    },
+    {
+      "currency": "SGD",
+      "amount": "3000.00",
+      "value_date": "2026-05-21",
+      "payer": "SG Client Pte",
+      "reference": "INV-004",
+      "expected_status": "MATCHED"
+    }
+  ]
+}

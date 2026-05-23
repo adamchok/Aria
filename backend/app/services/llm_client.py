@@ -1,0 +1,374 @@
+"""LLM client with mock/live toggle.
+
+In ``mock`` mode the client returns deterministic, schema-shaped responses
+synthesised from the input. This lets the full pipeline run end-to-end in
+CI and locally without burning credits. In ``live`` mode the same surface
+delegates to the Anthropic SDK.
+
+The surface intentionally mirrors what each agent needs rather than the raw
+Anthropic API — agents call ``extract_payment_record``, ``reason_match``,
+etc., not ``messages.create``. This keeps the prompt + parsing logic
+testable, and the mock path obvious.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Any
+
+from app.core.config import Settings, get_settings
+from app.core.exceptions import LLMError
+from app.core.logging import get_logger
+from app.models.enums import SourceFormat
+
+logger = get_logger(__name__)
+
+
+def _parse_json_block(text: str) -> dict[str, Any]:
+    """Best-effort extract of a JSON object from LLM output."""
+    # Strip ```json fences if present
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1)
+    # Otherwise take the first {...} balanced object.
+    start = text.find("{")
+    if start == -1:
+        raise LLMError("No JSON object in LLM response")
+    depth = 0
+    for i, ch in enumerate(text[start:], start=start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError as exc:
+                    raise LLMError(f"Malformed JSON in LLM response: {exc}") from exc
+    raise LLMError("Unbalanced JSON in LLM response")
+
+
+class LLMClient:
+    """Thin abstraction over Anthropic + a deterministic mock backend."""
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
+        self._anthropic: Any = None
+
+    @property
+    def mode(self) -> str:
+        return self._settings.llm_mode
+
+    def _get_anthropic(self) -> Any:
+        if self._anthropic is None:
+            try:
+                from anthropic import Anthropic  # local import — optional dep at runtime
+            except ImportError as exc:  # pragma: no cover
+                raise LLMError("anthropic package not installed") from exc
+            self._anthropic = Anthropic(api_key=self._settings.anthropic_api_key)
+        return self._anthropic
+
+    # ─── Agent 1: ingestion ──────────────────────────────────────────────
+
+    def extract_payment_record(
+        self,
+        *,
+        document_bytes: bytes,
+        filename: str,
+        source_format: SourceFormat,
+        text_hint: str | None = None,
+    ) -> dict[str, Any]:
+        """Return a dict matching ``PaymentRecord`` (without id/source_format)."""
+        if self._settings.llm_mode == "mock":
+            return _mock_extraction(filename=filename, text_hint=text_hint)
+
+        # Live mode — Sonnet with multimodal input.
+        client = self._get_anthropic()
+        content: list[dict[str, Any]] = []
+        if source_format == SourceFormat.IMAGE:
+            import base64
+
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": _guess_image_media_type(filename),
+                        "data": base64.b64encode(document_bytes).decode(),
+                    },
+                }
+            )
+        else:
+            content.append(
+                {
+                    "type": "text",
+                    "text": (text_hint or document_bytes.decode("utf-8", errors="replace"))[
+                        :40_000
+                    ],
+                }
+            )
+
+        content.append({"type": "text", "text": _EXTRACTION_PROMPT})
+        try:
+            resp = client.messages.create(
+                model=self._settings.sonnet_model,
+                max_tokens=2048,
+                messages=[{"role": "user", "content": content}],
+            )
+        except Exception as exc:
+            raise LLMError(f"Anthropic extract call failed: {exc}") from exc
+
+        text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
+        return _parse_json_block(text)
+
+    # ─── Agent 3: matching reasoning ─────────────────────────────────────
+
+    def reason_match(
+        self,
+        *,
+        normalised: dict[str, Any],
+        candidate: dict[str, Any] | None,
+        candidate_scores: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Return ``{confidence, status, amount_variance_myr, variance_explanation,
+        reasoning_chain}`` — see schemas.MatchResult."""
+        if self._settings.llm_mode == "mock":
+            return _mock_match_reasoning(normalised, candidate, candidate_scores)
+
+        client = self._get_anthropic()
+        prompt = _MATCHING_PROMPT.format(
+            normalised=json.dumps(normalised, default=str),
+            candidate=json.dumps(candidate, default=str) if candidate else "null",
+            scores=json.dumps(candidate_scores, default=str),
+        )
+        try:
+            resp = client.messages.create(
+                model=self._settings.sonnet_model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            raise LLMError(f"Anthropic match call failed: {exc}") from exc
+        text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+        return _parse_json_block(text)
+
+    # ─── Agent 4: report narrative ───────────────────────────────────────
+
+    def summarise_report(self, *, summary: dict[str, Any], exceptions: list[dict[str, Any]]) -> str:
+        if self._settings.llm_mode == "mock":
+            return _mock_report_narrative(summary, exceptions)
+        client = self._get_anthropic()
+        prompt = _REPORT_PROMPT.format(
+            summary=json.dumps(summary, default=str),
+            exceptions=json.dumps(exceptions, default=str)[:8_000],
+        )
+        try:
+            resp = client.messages.create(
+                model=self._settings.sonnet_model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            raise LLMError(f"Anthropic report call failed: {exc}") from exc
+        return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+
+
+# ─── Mock implementations ───────────────────────────────────────────────────
+
+
+def _mock_extraction(*, filename: str, text_hint: str | None) -> dict[str, Any]:
+    """Deterministic mock extraction.
+
+    If ``text_hint`` looks like one of our fixture strings (``CURRENCY|AMOUNT|...``)
+    we parse it; otherwise we synthesise sensible defaults from the filename
+    so the pipeline can still run end-to-end on arbitrary inputs.
+    """
+    if text_hint and text_hint.startswith("MOCK|"):
+        # MOCK|USD|10.00|2026-05-18|ACME Ltd|SME Sdn Bhd|INV-001
+        parts = [p.strip() for p in text_hint.strip().split("|")]
+        currency = parts[1] if len(parts) > 1 else "USD"
+        amount = parts[2] if len(parts) > 2 else "100.00"
+        value_date = parts[3] if len(parts) > 3 else "2026-05-18"
+        payer = parts[4] if len(parts) > 4 else "Mock Payer Ltd"
+        payee = parts[5] if len(parts) > 5 else "ARIA Demo SDN BHD"
+        reference = parts[6] if len(parts) > 6 else "MOCK-REF"
+        confidence = 0.92
+    else:
+        currency = "USD"
+        amount = "100.00"
+        value_date = date.today().isoformat()
+        payer = "Acme Inc"
+        payee = "ARIA Demo SDN BHD"
+        reference = filename.rsplit(".", 1)[0][:16].upper()
+        confidence = 0.85
+
+    return {
+        "payer": payer,
+        "payee": payee,
+        "amount_original": amount,
+        "currency": currency,
+        "value_date": value_date,
+        "reference": reference,
+        "bank_charges": None,
+        "extraction_confidence": confidence,
+        "field_confidences": {
+            "amount_original": 0.95,
+            "currency": 0.99,
+            "value_date": 0.9,
+            "reference": 0.8,
+            "payer": 0.85,
+        },
+        "raw_extracted_text": text_hint or f"[mock extracted text for {filename}]",
+    }
+
+
+def _mock_match_reasoning(
+    normalised: dict[str, Any],
+    candidate: dict[str, Any] | None,
+    candidate_scores: dict[str, Any],
+) -> dict[str, Any]:
+    if candidate is None:
+        return {
+            "confidence": 0.0,
+            "status": "UNMATCHED",
+            "amount_variance_myr": "0",
+            "variance_explanation": (
+                "No bank statement entry was within the date and tolerance window."
+            ),
+            "reasoning_chain": (
+                "Mock reasoning: empty candidate set after filter stages 1 and 2 — "
+                "no match possible."
+            ),
+        }
+
+    composite = float(candidate_scores.get("composite", 0.7))
+    tol_low = Decimal(str(normalised["tolerance_low"]))
+    tol_high = Decimal(str(normalised["tolerance_high"]))
+    amount = Decimal(str(candidate["amount"]))
+    midpoint = (tol_low + tol_high) / Decimal("2")
+    variance = (amount - midpoint).quantize(Decimal("0.01"))
+
+    if composite >= 0.75:
+        status = "MATCHED"
+        explanation = (
+            f"Bank entry of MYR {amount} falls inside tolerance window "
+            f"[{tol_low}, {tol_high}]. Variance vs. mid-window is MYR {variance}, "
+            "consistent with FX settlement timing and estimated SWIFT charges."
+        )
+    elif composite >= 0.5:
+        status = "UNCERTAIN"
+        explanation = (
+            f"Bank entry of MYR {amount} sits at the edge of the tolerance window. "
+            "Payer-name match is weak; referring to human review."
+        )
+    else:
+        status = "UNMATCHED"
+        explanation = "Composite confidence below review threshold; no candidate retained."
+
+    return {
+        "confidence": composite,
+        "status": status,
+        "amount_variance_myr": str(variance),
+        "variance_explanation": explanation,
+        "reasoning_chain": (
+            "Mock chain-of-thought: stage-1 date filter retained the candidate within "
+            f"±{_DATE_WINDOW_DAYS} days; stage-2 amount filter confirmed it fell within "
+            "the FX-derived tolerance window; stage-3 composite scoring produced "
+            f"{composite:.2f} from amount/date/reference/payer weights."
+        ),
+    }
+
+
+def _mock_report_narrative(summary: dict[str, Any], exceptions: list[dict[str, Any]]) -> str:
+    matched = summary.get("matched_count", 0)
+    total = summary.get("total_records", 0)
+    uncertain = summary.get("uncertain_count", 0)
+    unmatched = summary.get("unmatched_count", 0)
+    return (
+        f"ARIA reconciled {matched} of {total} payment records with high confidence. "
+        f"{uncertain} item(s) were routed to human review and {unmatched} could not be "
+        f"matched within the tolerance window. Total variance against bank entries was "
+        f"MYR {summary.get('total_variance_myr', '0')}."
+    )
+
+
+# Date window used in mock reasoning text only.
+_DATE_WINDOW_DAYS = 5
+
+_EXTRACTION_PROMPT = """You are ARIA Agent 1 (Document Ingestion).
+
+Extract structured payment data from the document above. Respond with a single
+JSON object only — no prose, no markdown fences — matching this schema:
+
+{
+  "payer": str,
+  "payee": str,
+  "amount_original": str (decimal, e.g. "1234.56"),
+  "currency": str (ISO 4217 code),
+  "value_date": str (YYYY-MM-DD),
+  "reference": str | null,
+  "bank_charges": str | null,
+  "extraction_confidence": float (0..1, overall),
+  "field_confidences": { "amount_original": float, "currency": float, ... },
+  "raw_extracted_text": str (key text you read from the document)
+}
+
+Set "extraction_confidence" below 0.5 if the document is unreadable or
+fields cannot be identified. Set per-field confidences below 0.7 for any
+field you are uncertain about.
+"""
+
+_MATCHING_PROMPT = """You are ARIA Agent 3 (Matching).
+
+A normalised payment record and one candidate bank-statement entry are given.
+Composite candidate scores are also provided.
+
+Normalised record:
+{normalised}
+
+Candidate bank entry (may be null):
+{candidate}
+
+Candidate scores:
+{scores}
+
+Decide MATCHED, UNCERTAIN, or UNMATCHED using these rules:
+- confidence >= 0.75 -> MATCHED
+- 0.5 <= confidence < 0.75 -> UNCERTAIN (route to human review)
+- confidence < 0.5 -> UNMATCHED
+
+Respond with a single JSON object (no markdown fences):
+
+{{
+  "confidence": float,
+  "status": "MATCHED" | "UNCERTAIN" | "UNMATCHED",
+  "amount_variance_myr": str,
+  "variance_explanation": str (plain language, finance audience),
+  "reasoning_chain": str (your chain-of-thought, audit log)
+}}
+"""
+
+_REPORT_PROMPT = """You are ARIA Agent 4 (Audit & Report).
+
+Reconciliation summary stats:
+{summary}
+
+Exception items:
+{exceptions}
+
+Write a 4-6 sentence executive narrative for a finance officer. State counts,
+total variance, and the likely cause categories (FX timing, SWIFT charges,
+duplicate, partial payment). Plain language, no jargon, no apologies.
+"""
+
+
+def _guess_image_media_type(filename: str) -> str:
+    lower = filename.lower()
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".webp"):
+        return "image/webp"
+    return "image/jpeg"
