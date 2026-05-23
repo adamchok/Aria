@@ -73,7 +73,7 @@ flowchart TD
 
 | Agent | Model | Responsibility |
 | --- | --- | --- |
-| **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images, PDFs, Excel/CSV |
+| **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text); parse bank statements from XLSX, CSV, or PDF |
 | **Normalisation** | Haiku | FX conversion to base currency; tolerance window calculation |
 | **Matching** | Sonnet | FX-aware fuzzy match + confidence scoring + explanations |
 | **Report** | Sonnet | Summary synthesis, exception narratives, Excel export |
@@ -96,19 +96,24 @@ Implementation: `backend/app/graph/builder.py`, `backend/app/graph/routing.py`.
 ### FX tolerance window
 
 ```python
+# Inbound wire transfers: full SWIFT charge estimate applies.
+# Payments under 1,000 units in source currency skip SWIFT deduction in the
+# tolerance band (card / e-commerce debits). A 2.5% card FX markup is added
+# to tolerance_high.
 tolerance_low = (
     amount_myr_at_invoice_rate
-    - estimated_swift_charges_myr
+    - charges_for_tolerance
     - FX_VARIANCE_BUFFER_PCT * amount_myr_at_invoice_rate
 )
 
 tolerance_high = (
     amount_myr_at_settlement_rate
     + FX_VARIANCE_BUFFER_PCT * amount_myr_at_settlement_rate
+    + card_markup
 )
 ```
 
-Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%).
+Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee names and foreign-currency amounts embedded in bank descriptions (e.g. `(USD 20.00)`).
 
 ### Composite confidence score
 
@@ -134,9 +139,9 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%).
 | 3. Normalise | Agent 2 | Records + FX API | `List[NormalisedRecord]` | 1–2 s / record |
 | 4. Match | Agent 3 | Normalised + statement | `List[MatchResult]` | 2–5 s / match |
 | 5. Report | Agent 4 | All match results | `ReconciliationReport` | 3–5 s |
-| 6. Review | Human | UNCERTAIN items | Confirmed matches | Async |
+| 6. Review | Human | UNCERTAIN items | Confirmed / rejected matches | Async; results re-hydrated from DB |
 
-Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Redis is unreachable, the API falls back to inline execution for developer convenience.
+Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Redis is unreachable, the API falls back to inline execution for developer convenience. On **Windows**, run the worker with `--pool=solo`.
 
 ## Core data models
 

@@ -9,6 +9,7 @@ import { SummaryCards } from '@/components/SummaryCards';
 import { api } from '@/api/client';
 import { useResults } from '@/hooks/useResults';
 import { useReviewActions } from '@/hooks/useReviewActions';
+import { formatNarrative } from '@/lib/format';
 import type { MatchResult, ReviewAction } from '@/types/api';
 
 export function ResultsPage() {
@@ -59,10 +60,7 @@ export function ResultsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Reconciliation results</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">{report.narrative}</p>
-        </div>
+        <h1 className="text-2xl font-semibold text-slate-900">Reconciliation results</h1>
         <div className="flex items-center gap-2">
           <a href={api.exportUrl(report.job_id)} download>
             <Button variant="secondary">Export Excel</Button>
@@ -75,6 +73,19 @@ export function ResultsPage() {
           </Link>
         </div>
       </header>
+
+      {report.narrative ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Executive summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="w-full text-sm leading-relaxed text-slate-600 text-pretty">
+              {formatNarrative(report.narrative)}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <SummaryCards summary={report.summary} baseCurrency={report.base_currency} />
 

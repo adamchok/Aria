@@ -23,6 +23,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import LLMError
 from app.core.logging import get_logger
 from app.models.enums import SourceFormat
+from app.tools.file_parsers import detect_image_media_type
 
 logger = get_logger(__name__)
 
@@ -96,7 +97,7 @@ class LLMClient:
                     "type": "image",
                     "source": {
                         "type": "base64",
-                        "media_type": _guess_image_media_type(filename),
+                        "media_type": detect_image_media_type(document_bytes, filename),
                         "data": base64.b64encode(document_bytes).decode(),
                     },
                 }
@@ -155,11 +156,43 @@ class LLMClient:
         text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
         return _parse_json_block(text)
 
+    # ─── Bank statement extraction (PDF fallback) ────────────────────────
+
+    def extract_bank_statement(
+        self,
+        *,
+        text_hint: str,
+        filename: str,
+        base_currency: str,
+    ) -> dict[str, Any]:
+        """Return ``{entries: [{value_date, amount, currency, ...}]}``."""
+        if self._settings.llm_mode == "mock":
+            return _mock_bank_statement(
+                text_hint=text_hint, filename=filename, base_currency=base_currency
+            )
+
+        client = self._get_anthropic()
+        prompt = _BANK_STATEMENT_PROMPT.format(
+            base_currency=base_currency,
+            filename=filename,
+            text=text_hint[:40_000],
+        )
+        try:
+            resp = client.messages.create(
+                model=self._settings.sonnet_model,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            raise LLMError(f"Anthropic bank-statement call failed: {exc}") from exc
+        text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
+        return _parse_json_block(text)
+
     # ─── Agent 4: report narrative ───────────────────────────────────────
 
     def summarise_report(self, *, summary: dict[str, Any], exceptions: list[dict[str, Any]]) -> str:
         if self._settings.llm_mode == "mock":
-            return _mock_report_narrative(summary, exceptions)
+            return _sanitize_narrative(_mock_report_narrative(summary, exceptions))
         client = self._get_anthropic()
         prompt = _REPORT_PROMPT.format(
             summary=json.dumps(summary, default=str),
@@ -173,7 +206,8 @@ class LLMClient:
             )
         except Exception as exc:
             raise LLMError(f"Anthropic report call failed: {exc}") from exc
-        return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+        raw = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+        return _sanitize_narrative(raw)
 
 
 # ─── Mock implementations ───────────────────────────────────────────────────
@@ -222,6 +256,89 @@ def _mock_extraction(*, filename: str, text_hint: str | None) -> dict[str, Any]:
             "payer": 0.85,
         },
         "raw_extracted_text": text_hint or f"[mock extracted text for {filename}]",
+    }
+
+
+def _mock_bank_statement(*, text_hint: str, filename: str, base_currency: str) -> dict[str, Any]:
+    """Deterministic bank-statement extraction for mock mode."""
+    from app.tools.file_parsers import parse_bank_statement_text
+
+    if text_hint:
+        if text_hint.strip().startswith("MOCK|STMT|"):
+            entries: list[dict[str, Any]] = []
+            for line in text_hint.splitlines():
+                line = line.strip()
+                if not line.startswith("MOCK|STMT|"):
+                    continue
+                # MOCK|STMT|2026-05-20|4179.24|Inward TT|INV-001|ACME US INC
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) < 4:
+                    continue
+                entries.append(
+                    {
+                        "value_date": parts[2],
+                        "amount": parts[3],
+                        "currency": base_currency,
+                        "description": parts[4] if len(parts) > 4 else "",
+                        "reference": parts[5] if len(parts) > 5 else None,
+                        "counterparty": parts[6] if len(parts) > 6 else None,
+                    }
+                )
+            if entries:
+                return {"entries": entries}
+
+        parsed = parse_bank_statement_text(text_hint, base_currency=base_currency)
+        if parsed.entries:
+            return {
+                "entries": [
+                    {
+                        "value_date": e.value_date.isoformat(),
+                        "amount": str(e.amount),
+                        "currency": e.currency,
+                        "description": e.description,
+                        "reference": e.reference,
+                        "counterparty": e.counterparty,
+                    }
+                    for e in parsed.entries
+                ]
+            }
+
+    # Default demo rows so PDF uploads still run end-to-end in mock mode.
+    return {
+        "entries": [
+            {
+                "value_date": "2026-05-20",
+                "amount": "4179.24",
+                "currency": base_currency,
+                "description": "Inward Telegraphic Transfer Acme US Inc",
+                "reference": "INV-001",
+                "counterparty": "ACME US INC",
+            },
+            {
+                "value_date": "2026-05-21",
+                "amount": "5450.20",
+                "currency": base_currency,
+                "description": "Inward TT Euro Buyer GmbH",
+                "reference": "INV-002",
+                "counterparty": "EURO BUYER GMBH",
+            },
+            {
+                "value_date": "2026-05-22",
+                "amount": "4200.04",
+                "currency": base_currency,
+                "description": "SWIFT Credit GBP Customer Ltd",
+                "reference": "INV-003",
+                "counterparty": "GBP CUSTOMER LTD",
+            },
+            {
+                "value_date": "2026-05-23",
+                "amount": "9394.88",
+                "currency": base_currency,
+                "description": "FAST Transfer Singapore Client",
+                "reference": "INV-004",
+                "counterparty": "SG CLIENT PTE",
+            },
+        ]
     }
 
 
@@ -280,6 +397,21 @@ def _mock_match_reasoning(
             f"{composite:.2f} from amount/date/reference/payer weights."
         ),
     }
+
+
+def _sanitize_narrative(text: str) -> str:
+    """Strip markdown artefacts — report copy is plain prose for finance officers."""
+    cleaned = text.strip()
+    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned)
+    cleaned = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"\1", cleaned)
+    cleaned = re.sub(r"\^+", "", cleaned)
+    cleaned = re.sub(
+        r"^Reconciliation Executive Narrative\s*\n?",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned.strip()
 
 
 def _mock_report_narrative(summary: dict[str, Any], exceptions: list[dict[str, Any]]) -> str:
@@ -362,13 +494,33 @@ Exception items:
 Write a 4-6 sentence executive narrative for a finance officer. State counts,
 total variance, and the likely cause categories (FX timing, SWIFT charges,
 duplicate, partial payment). Plain language, no jargon, no apologies.
+Plain text only — no markdown, no headers, no bullet lists, no **bold** markers.
 """
 
+_BANK_STATEMENT_PROMPT = """You are ARIA Agent 1 (Document Ingestion) extracting a bank statement.
 
-def _guess_image_media_type(filename: str) -> str:
-    lower = filename.lower()
-    if lower.endswith(".png"):
-        return "image/png"
-    if lower.endswith(".webp"):
-        return "image/webp"
-    return "image/jpeg"
+Filename: {filename}
+Base currency: {base_currency}
+
+Statement text:
+{text}
+
+Extract every credit/deposit transaction row you can identify. Respond with a
+single JSON object only — no prose, no markdown fences:
+
+{{
+  "entries": [
+    {{
+      "value_date": "YYYY-MM-DD",
+      "amount": "1234.56",
+      "currency": "{base_currency}",
+      "description": str,
+      "reference": str | null,
+      "counterparty": str | null
+    }}
+  ]
+}}
+
+Use positive decimal strings for amounts. Skip header/footer/balance rows.
+If no rows can be identified, return {{"entries": []}}.
+"""

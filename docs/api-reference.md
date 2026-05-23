@@ -66,7 +66,7 @@ Returns service status and version.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `payment_proofs` | file[] | Yes | One or more payment proof files |
-| `bank_statement` | file | Yes | Bank statement (XLSX or CSV) |
+| `bank_statement` | file | Yes | Bank statement (XLSX, CSV, or PDF) |
 | `base_currency` | string | No | ISO 4217 code (default: `MYR`) |
 
 **Accepted MIME types for proofs:** `image/jpeg`, `image/png`, `image/webp`, `application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `text/csv`, `application/csv`
@@ -178,6 +178,8 @@ Each match in `matches` includes:
 | `normalised_record` | object | Payment + MYR amounts + tolerance bounds |
 | `bank_entry` | object \| null | Matched bank statement row |
 
+**Live data after human review:** Match rows and summary counts are **merged from the database** on each request (not a frozen pipeline snapshot). After you `confirm` or `reject` via the review endpoint, call this again — or refresh the results page — to see updated statuses and counts. The executive narrative text is generated once at report time and is not regenerated after review.
+
 **Errors:** `404` job not found · `409` job not yet complete
 </div>
 
@@ -232,7 +234,7 @@ Returns an empty array when no uncertain items remain.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `action` | enum | Yes | `confirm` \| `reject` \| `manual_match` |
-| `bank_entry_id` | UUID | For `manual_match` | Target bank entry |
+| `bank_entry_id` | UUID | For `manual_match` only | Target bank entry (API integrators; the web UI uses `confirm` / `reject` only) |
 | `note` | string | No | Optional reviewer note |
 
 **Response `200`**
@@ -246,6 +248,8 @@ Returns an empty array when no uncertain items remain.
 ```
 
 **Idempotency:** Re-submitting `confirm` or `reject` on an already-reviewed match returns the current state without error.
+
+**Side effects:** Updates the match row, refreshes the stored report blob (matches + summary), and sets job status to `COMPLETED` when no uncertain items remain.
 
 **Errors:** `404` match not found · `409` invalid job state
 </div>
@@ -266,6 +270,8 @@ Returns an empty array when no uncertain items remain.
 - **Content-Disposition:** `attachment; filename="aria-reconciliation-{job_id}.xlsx"`
 
 **Sheets:** Summary · Matched · Exceptions · Audit Log
+
+Uses the same **live hydrated report** as `GET /results` (reflects human review decisions).
 
 **Errors:** `404` job not found · `409` report not yet available
 
@@ -295,8 +301,8 @@ stateDiagram-v2
 1. **Submit** — files uploaded to MinIO; job row created; Celery task enqueued
 2. **Process** — worker runs LangGraph pipeline; progress updated per agent
 3. **Complete** — report stored; status set to `COMPLETED` or `AWAITING_REVIEW`
-4. **Review** (optional) — human confirms/rejects uncertain matches via review endpoint
-5. **Export** — Excel generated from stored report blob
+4. **Review** (optional) — human confirms or rejects uncertain matches; results and export update immediately
+5. **Export** — Excel generated from the hydrated report (includes review outcomes)
 
 ---
 

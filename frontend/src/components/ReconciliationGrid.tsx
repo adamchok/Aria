@@ -5,14 +5,11 @@ import type {
   RowClickedEvent,
   ValueFormatterParams,
 } from 'ag-grid-community';
-import { ModuleRegistry, ClientSideRowModelModule } from 'ag-grid-community';
 
 import { StatusBadge } from '@/components/StatusBadge';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import type { MatchResult, MatchStatus } from '@/types/api';
 import { formatAmount } from '@/lib/format';
-
-ModuleRegistry.registerModules([ClientSideRowModelModule]);
 
 type FilterValue = 'ALL' | MatchStatus;
 
@@ -85,6 +82,7 @@ export function ReconciliationGrid({ matches, baseCurrency, onRowClick }: Reconc
       {
         headerName: 'Confidence',
         flex: 1,
+        minWidth: 160,
         cellRenderer: (p: { data: MatchResult }) =>
           p.data ? <ConfidenceBadge confidence={p.data.confidence} /> : null,
       },

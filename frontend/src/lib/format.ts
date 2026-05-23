@@ -82,3 +82,14 @@ export function formatBytes(n: number): string {
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 ** 2).toFixed(1)} MB`;
 }
+
+/** Plain-text executive narrative — strips markdown the LLM may emit. */
+export function formatNarrative(text: string): string {
+  return text
+    .trim()
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1')
+    .replace(/\^+/g, '')
+    .replace(/^Reconciliation Executive Narrative\s*\n?/i, '')
+    .trim();
+}

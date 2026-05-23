@@ -3,6 +3,7 @@ import {
   confidenceLabel,
   formatAmount,
   formatBytes,
+  formatNarrative,
   formatPercent,
   statusColor,
 } from '@/lib/format';
@@ -55,6 +56,14 @@ describe('statusColor', () => {
     expect(statusColor('MATCHED').label).toBe('Matched');
     expect(statusColor('UNCERTAIN').label).toBe('Needs review');
     expect(statusColor('UNMATCHED').label).toBe('Unmatched');
+  });
+});
+
+describe('formatNarrative', () => {
+  it('strips markdown bold and stray carets from LLM output', () => {
+    const raw =
+      '**Reconciliation Executive Narrative**\n\n**2 payment records** totalling MYR 99.25^^.';
+    expect(formatNarrative(raw)).toBe('2 payment records totalling MYR 99.25.');
   });
 });
 

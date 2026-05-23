@@ -43,6 +43,7 @@ export function useReviewActions(jobId: UUID | null) {
       if (jobId) {
         void qc.invalidateQueries({ queryKey: ['job', jobId, 'review'] });
         void qc.invalidateQueries({ queryKey: ['job', jobId, 'results'] });
+        void qc.invalidateQueries({ queryKey: ['job', jobId, 'status'] });
       }
     },
   });

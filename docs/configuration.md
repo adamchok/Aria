@@ -107,6 +107,7 @@ DATABASE_URL=sqlite+aiosqlite:///./aria.db
 | `S3_BUCKET` | `aria-documents` | Bucket name (auto-created on first upload) |
 | `S3_REGION` | `us-east-1` | AWS region (required by boto3) |
 | `S3_PRESIGN_TTL_SECONDS` | `900` | Presigned URL expiry (15 min) |
+| `S3_SERVER_SIDE_ENCRYPTION` | *(unset)* | Set `AES256` on AWS S3; **leave unset** for Docker MinIO |
 
 Local filesystem fallback (no MinIO):
 

@@ -108,10 +108,23 @@ class NormalisationAgent:
         charges_myr = (charges_source * fx_settlement).quantize(Decimal("0.01"))
 
         buffer = self._settings.fx_variance_buffer_pct
-        tolerance_low = (amount_invoice - charges_myr - buffer * amount_invoice).quantize(
-            Decimal("0.01")
+        # SWIFT estimates target inbound wire transfers. Flat correspondent fees
+        # would collapse the tolerance band for small amounts and admit unrelated
+        # bank lines (e.g. other card debits in the same statement).
+        charges_for_tolerance = (
+            Decimal("0")
+            if record.amount_original < Decimal("1000")
+            else charges_myr
         )
-        tolerance_high = (amount_settlement + buffer * amount_settlement).quantize(Decimal("0.01"))
+        # Card/acquirer FX markup on POS debits can exceed the base FX buffer alone.
+        card_markup = (amount_settlement * Decimal("0.025")).quantize(Decimal("0.01"))
+
+        tolerance_low = (
+            amount_invoice - charges_for_tolerance - buffer * amount_invoice
+        ).quantize(Decimal("0.01"))
+        tolerance_high = (
+            amount_settlement + buffer * amount_settlement + card_markup
+        ).quantize(Decimal("0.01"))
         # If FX drift went the other direction make sure low <= high.
         if tolerance_low > tolerance_high:
             tolerance_low, tolerance_high = tolerance_high, tolerance_low

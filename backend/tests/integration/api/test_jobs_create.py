@@ -34,6 +34,20 @@ async def test_create_job_returns_id_and_runs_inline(api_client, fixtures_dir: P
 
 
 @pytest.mark.asyncio
+async def test_create_job_accepts_pdf_bank_statement(api_client, fixtures_dir: Path):
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={
+            "payment_proofs": files["payment_proofs"],
+            "bank_statement": ("statement.pdf", b"%PDF-1.4", "application/pdf"),
+        },
+        data={"base_currency": "MYR"},
+    )
+    assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.asyncio
 async def test_create_job_rejects_missing_bank_statement(api_client, fixtures_dir: Path):
     files = _files(fixtures_dir)
     resp = await api_client.post(

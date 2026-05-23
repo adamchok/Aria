@@ -23,6 +23,20 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _sse_unsupported(exc: Exception) -> bool:
+    """True when the S3-compatible backend rejects server-side encryption (e.g. MinIO without KMS)."""
+    msg = str(exc).lower()
+    return any(
+        token in msg
+        for token in (
+            "serversideencryption",
+            "server side encryption",
+            "kms",
+            "notimplemented",
+        )
+    )
+
+
 class StorageService:
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -70,15 +84,18 @@ class StorageService:
         extra: dict[str, Any] = {}
         if content_type:
             extra["ContentType"] = content_type
-        # ServerSideEncryption requested for AES-256 at rest where the backend supports it.
-        extra["ServerSideEncryption"] = "AES256"
+        if self._settings.s3_server_side_encryption:
+            extra["ServerSideEncryption"] = self._settings.s3_server_side_encryption
         try:
             self._client.put_object(Bucket=self.bucket, Key=key, Body=body, **extra)
         except Exception as exc:
-            # MinIO without SSE config still works without the header.
-            if "ServerSideEncryption" in str(exc):
-                extra.pop("ServerSideEncryption", None)
-                self._client.put_object(Bucket=self.bucket, Key=key, Body=body, **extra)
+            if extra.get("ServerSideEncryption") and _sse_unsupported(exc):
+                extra.pop("ServerSideEncryption")
+                logger.warning("storage.sse.fallback", reason=str(exc))
+                try:
+                    self._client.put_object(Bucket=self.bucket, Key=key, Body=body, **extra)
+                except Exception as retry_exc:
+                    raise StorageError(f"put_object failed: {retry_exc}") from retry_exc
             else:
                 raise StorageError(f"put_object failed: {exc}") from exc
         return key

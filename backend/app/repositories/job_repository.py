@@ -121,12 +121,16 @@ class JobRepository:
         match.human_reviewed = human_reviewed
         if review_notes is not None:
             match.review_notes = review_notes
+
+        payload = dict(match.payload or {})
+        payload["status"] = status.value
+        payload["human_reviewed"] = human_reviewed
+        if review_notes is not None:
+            payload["review_notes"] = review_notes
         if bank_entry_payload is not None:
-            payload = dict(match.payload or {})
             payload["bank_entry"] = bank_entry_payload
-            payload["status"] = status.value
-            payload["human_reviewed"] = human_reviewed
-            match.payload = payload
+        match.payload = payload
+
         match.updated_at = datetime.utcnow()
         await self._s.commit()
         await self._s.refresh(match)

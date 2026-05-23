@@ -99,7 +99,7 @@ Wait until all health checks pass and you see the API listening on port 8000.
 
 1. Navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
 2. Upload one or more payment proof files (JPEG, PNG, PDF, XLSX, or CSV)
-3. Upload a bank statement (XLSX or CSV)
+3. Upload a bank statement (XLSX, CSV, or PDF)
 4. Confirm base currency is **MYR**
 5. Click **Start Reconciliation**
 6. Watch progress on the job page — results appear when complete
@@ -194,8 +194,11 @@ In a **second terminal** (same venv):
 ```bash
 cd backend
 source .venv/bin/activate   # or Windows equivalent
-celery -A app.workers.celery_app:celery_app worker --loglevel=INFO
+celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
 ```
+
+{: .important }
+> **Windows (Git Bash / hybrid dev):** Use `--pool=solo`. The default prefork pool fails on Windows (`WinError 5`), and the threads pool can conflict with async database drivers.
 
 {: .warning }
 > Without the Celery worker, jobs are enqueued but not processed unless Redis is down (in which case the API runs the pipeline inline as a fallback).
@@ -302,8 +305,13 @@ bundle exec jekyll serve --livereload
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Job stuck at `PENDING` / `RUNNING` | Celery worker not running | Start worker (Option 2 Step 3) or use full Docker stack |
+| Job stuck at `PENDING` / `RUNNING` | Celery worker not running | Start worker (Option 2 Step 3) with `--pool=solo` on Windows |
+| Celery `WinError 5` on Windows | Prefork pool unsupported | Add `--pool=solo` to the worker command |
+| `Event loop is closed` in Celery (Windows) | Threads pool + asyncpg | Use `--pool=solo`; restart worker after code changes |
+| Results unchanged after review | Stale browser cache / old API | Refresh results page; ensure uvicorn was restarted after backend updates |
 | `502` on upload | MinIO not ready | Wait for health checks; verify port 9000 |
+| MinIO upload / SSE error | `AES256` set against Docker MinIO | Leave `S3_SERVER_SIDE_ENCRYPTION` unset in `backend/.env` |
+| LLM `image/png` vs `image/jpeg` error | PNG re-encoded as JPEG before vision call | Fixed in current backend — restart Celery worker |
 | CORS error from frontend | Origin not allowed | Add your dev URL to `CORS_ORIGINS` in `backend/.env` |
 | LLM errors with `LLM_MODE=live` | Missing/invalid Anthropic key | Set `ANTHROPIC_API_KEY`; check billing at console.anthropic.com |
 | Port already in use | Conflicting local service | Stop other Postgres/Redis instances or change compose ports |

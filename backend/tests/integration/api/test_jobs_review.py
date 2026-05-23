@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.models.enums import MatchStatus
+from app.models.enums import JobStatus, MatchStatus
 from app.models.schemas import MatchResult
 from app.repositories.job_repository import JobRepository
 
@@ -34,3 +34,18 @@ async def test_review_queue_filters_uncertain(api_client, db_session, normalised
     body = resp.json()
     assert len(body) == 1
     assert body[0]["status"] == "UNCERTAIN"
+
+
+@pytest.mark.asyncio
+async def test_review_queue_returns_409_when_job_failed(api_client, db_session):
+    repo = JobRepository(db_session)
+    job = await repo.create_job(base_currency="MYR", payment_proof_keys=[], bank_statement_key=None)
+    await repo.update_status(
+        job.id,
+        status=JobStatus.FAILED,
+        error="Could not extract transaction rows from the PDF bank statement.",
+    )
+
+    resp = await api_client.get(f"/api/v1/jobs/{job.id}/review")
+    assert resp.status_code == 409
+    assert "PDF bank statement" in resp.json()["detail"] or "extract" in resp.json()["detail"].lower()

@@ -8,6 +8,14 @@ import { useCreateJob } from '@/hooks/useCreateJob';
 
 const CURRENCIES = ['MYR', 'USD', 'EUR', 'GBP', 'SGD'];
 
+const BANK_STATEMENT_EXTENSIONS = ['.xlsx', '.csv', '.pdf'] as const;
+const BANK_STATEMENT_MIME = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
+  'application/pdf',
+]);
+
 export function UploadPage() {
   const navigate = useNavigate();
   const {
@@ -77,7 +85,9 @@ export function UploadPage() {
               testId="bank-statement-dropzone"
               label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
               onFiles={(files) => setBankStatement(files[0] ?? null)}
-              helperText="One XLSX or CSV file with columns for date, amount, reference, counterparty."
+              helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
+              acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
+              acceptedMimeTypes={BANK_STATEMENT_MIME}
             />
             <FileList
               files={bankStatement ? [bankStatement] : []}

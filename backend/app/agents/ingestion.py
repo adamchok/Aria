@@ -1,8 +1,8 @@
 """Agent 1 — Document Ingestion.
 
 Vision-first extraction via the LLM client. PDF/Excel/CSV use structured
-parsers with an LLM hint pass. Bank statement is parsed structurally
-(spec section 4.1 ``raw_extracted_text`` is for payment proofs).
+parsers with an LLM hint pass. Bank statements use pdfplumber table/text
+extraction for PDFs, with an LLM fallback when structured parsing finds no rows.
 """
 
 from __future__ import annotations
@@ -16,10 +16,12 @@ from app.models.schemas import PaymentRecord
 from app.services.llm_client import LLMClient
 from app.services.storage import StorageService
 from app.tools.file_parsers import (
+    bank_statement_from_llm_payload,
     detect_source_format,
     extract_pdf_text,
     parse_bank_statement_csv,
     parse_bank_statement_excel,
+    parse_bank_statement_pdf,
     preprocess_image,
 )
 
@@ -109,11 +111,20 @@ class IngestionAgent:
         if fmt == SourceFormat.CSV:
             return parse_bank_statement_csv(data, base_currency=base_currency)
         if fmt == SourceFormat.PDF:
-            # PDF bank statements: take text and pass as CSV-shaped — out of scope
-            # for MVP, but we surface a sensible error.
-            raise ExtractionError(
-                "PDF bank statements are not supported in MVP. Provide XLSX or CSV."
-            )
+            stmt = parse_bank_statement_pdf(data, base_currency=base_currency)
+            if not stmt.entries:
+                text = extract_pdf_text(data)
+                payload = self._llm.extract_bank_statement(
+                    text_hint=text,
+                    filename=doc.filename,
+                    base_currency=base_currency,
+                )
+                stmt = bank_statement_from_llm_payload(payload, base_currency)
+            if not stmt.entries:
+                raise ExtractionError(
+                    "Could not extract transaction rows from the PDF bank statement."
+                )
+            return stmt
         raise ExtractionError(f"Unsupported bank statement format: {fmt}")
 
     def _extract_one(self, doc: DocumentInput) -> PaymentRecord:

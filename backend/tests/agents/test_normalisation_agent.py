@@ -33,7 +33,8 @@ async def test_normalisation_computes_tolerance_window(payment_record_usd):
     assert nr.tolerance_low <= nr.tolerance_high
     assert nr.amount_myr_at_invoice_rate > Decimal("30")
     assert nr.estimated_charges_myr > Decimal("0")
-    # Buffer of 1.5% must affect tolerance bounds.
+    # Small payments skip SWIFT deduction in tolerance band (card/e-commerce).
+    assert nr.tolerance_low >= nr.amount_myr_at_invoice_rate * Decimal("0.95")
     assert nr.tolerance_high >= nr.amount_myr_at_settlement_rate
 
 

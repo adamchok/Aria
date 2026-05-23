@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
 from app.core.exceptions import MatchNotFoundError
-from app.models.enums import MatchStatus, ReviewAction
+from app.models.enums import JobStatus, MatchStatus, ReviewAction
 from app.models.schemas import MatchResult, ReviewActionRequest, ReviewActionResponse
 from app.repositories.job_repository import JobRepository
+from app.services.report_hydration import hydrate_report
 
 router = APIRouter()
 
@@ -71,6 +72,15 @@ async def submit_review_action(
         review_notes=payload.note,
         bank_entry_payload=bank_entry_payload,
     )
+
+    job = await repo.get(job_id)
+    if job.report_blob:
+        hydrated = await hydrate_report(repo, job)
+        await repo.save_report(job_id, hydrated.model_dump(mode="json"))
+
+    remaining_uncertain = await repo.list_matches(job_id, status=MatchStatus.UNCERTAIN)
+    if not remaining_uncertain and job.status == JobStatus.AWAITING_REVIEW:
+        await repo.update_status(job_id, status=JobStatus.COMPLETED)
 
     return ReviewActionResponse(
         match_id=UUID(updated.id),

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
 import { cn } from '@/lib/cn';
 
-const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.xlsx', '.csv'] as const;
-const ACCEPTED_MIME = new Set([
+const DEFAULT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.xlsx', '.csv'] as const;
+const DEFAULT_MIME = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -12,10 +12,14 @@ const ACCEPTED_MIME = new Set([
   'application/csv',
 ]);
 
-function isAccepted(file: File): boolean {
-  if (ACCEPTED_MIME.has(file.type)) return true;
+function isAccepted(
+  file: File,
+  extensions: readonly string[],
+  mimeTypes: Set<string>,
+): boolean {
+  if (mimeTypes.has(file.type)) return true;
   const lower = file.name.toLowerCase();
-  return ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  return extensions.some((ext) => lower.endsWith(ext));
 }
 
 interface UploadDropzoneProps {
@@ -24,6 +28,8 @@ interface UploadDropzoneProps {
   onFiles: (files: File[]) => void;
   helperText?: string;
   testId?: string;
+  acceptedExtensions?: readonly string[];
+  acceptedMimeTypes?: Set<string>;
 }
 
 export function UploadDropzone({
@@ -32,6 +38,8 @@ export function UploadDropzone({
   onFiles,
   helperText,
   testId,
+  acceptedExtensions = DEFAULT_EXTENSIONS,
+  acceptedMimeTypes = DEFAULT_MIME,
 }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,18 +49,18 @@ export function UploadDropzone({
     (fileList: FileList | null) => {
       if (!fileList || fileList.length === 0) return;
       const files = Array.from(fileList);
-      const rejected = files.filter((f) => !isAccepted(f));
+      const rejected = files.filter((f) => !isAccepted(f, acceptedExtensions, acceptedMimeTypes));
       if (rejected.length) {
         setError(
           `Unsupported file type: ${rejected.map((f) => f.name).join(', ')}. ` +
-            `Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}.`,
+            `Accepted: ${acceptedExtensions.join(', ')}.`,
         );
         return;
       }
       setError(null);
       onFiles(multiple ? files : [files[0]!]);
     },
-    [multiple, onFiles],
+    [acceptedExtensions, acceptedMimeTypes, multiple, onFiles],
   );
 
   const onDrop = useCallback(
@@ -100,13 +108,14 @@ export function UploadDropzone({
       >
         <p className="text-sm font-medium text-slate-900">{label}</p>
         <p className="text-xs text-slate-500">
-          {helperText ?? `Drop files here or click to browse. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`}
+          {helperText ??
+            `Drop files here or click to browse. Accepted: ${acceptedExtensions.join(', ')}`}
         </p>
         <input
           ref={inputRef}
           type="file"
           multiple={multiple}
-          accept={ACCEPTED_EXTENSIONS.join(',')}
+          accept={acceptedExtensions.join(',')}
           className="sr-only"
           onChange={onChange}
           aria-label={`${label} file input`}

@@ -26,7 +26,10 @@ class JobORM(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.PENDING)
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(JobStatus, native_enum=False, length=32),
+        default=JobStatus.PENDING,
+    )
     progress_pct: Mapped[float] = mapped_column(default=0.0)
     agents_completed: Mapped[list[str]] = mapped_column(JSON, default=list)
     base_currency: Mapped[str] = mapped_column(String(3), default="MYR")
@@ -50,7 +53,9 @@ class MatchORM(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True)
-    status: Mapped[MatchStatus] = mapped_column(Enum(MatchStatus))
+    status: Mapped[MatchStatus] = mapped_column(
+        Enum(MatchStatus, native_enum=False, length=32),
+    )
     confidence: Mapped[float] = mapped_column(default=0.0)
     amount_variance_myr: Mapped[Decimal] = mapped_column(Numeric(20, 6), default=Decimal("0"))
     variance_explanation: Mapped[str] = mapped_column(Text, default="")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.models.enums import SourceFormat
-from app.services.llm_client import LLMClient, _parse_json_block
+from app.services.llm_client import LLMClient, _parse_json_block, _sanitize_narrative
 
 
 def test_extract_payment_record_mock_hint():
@@ -57,6 +57,11 @@ def test_reason_match_no_candidate_unmatched(normalised_record_usd):
 def test_parse_json_block_strips_fences():
     text = "Here is the result:\n```json\n{\"a\": 1, \"b\": [2, 3]}\n```"
     assert _parse_json_block(text) == {"a": 1, "b": [2, 3]}
+
+
+def test_sanitize_narrative_strips_markdown():
+    raw = "**Reconciliation Executive Narrative**\n\n**2 payment records** totalling MYR 99.25^^."
+    assert _sanitize_narrative(raw) == "2 payment records totalling MYR 99.25."
 
 
 def test_summarise_report_mock_contains_counts():

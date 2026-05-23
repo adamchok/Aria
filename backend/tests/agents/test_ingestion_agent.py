@@ -56,3 +56,21 @@ def test_ingestion_audits_each_document():
     extract_events = [e for e in out.audit_log if e.action == "extract"]
     assert len(extract_events) == 2
     assert "ingestion" in out.agents_completed
+
+
+def test_ingestion_parses_pdf_bank_statement_via_llm_fallback():
+    mock_stmt = b"MOCK|STMT|2026-05-20|4179.24|Inward TT|INV-001|ACME US INC"
+    state = ReconciliationState(
+        job_id=uuid4(),
+        base_currency="MYR",
+        bank_statement_input=DocumentInput(
+            storage_key="k/statement.pdf",
+            filename="statement.pdf",
+            bytes_data=mock_stmt,
+        ),
+    )
+    out = IngestionAgent(llm=LLMClient())(state)
+    assert out.bank_statement is not None
+    assert len(out.bank_statement.entries) == 1
+    assert out.bank_statement.entries[0].reference == "INV-001"
+    assert any(e.action == "bank_statement_parsed" for e in out.audit_log)

@@ -53,7 +53,7 @@ flowchart LR
 | 1 | `/upload` | Drag payment proofs + bank statement; select base currency (MYR) |
 | 2 | `/jobs/{id}` | Watch four-agent stepper; progress persists if you navigate away |
 | 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
-| 4 | `/jobs/{id}/review` | Confirm, reject, or manual-match uncertain items |
+| 4 | `/jobs/{id}/review` | Confirm or reject uncertain items (side-by-side proof vs bank line) |
 | 5 | Export | Download Excel — Summary, Matched, Exceptions, Audit Log |
 
 ## Key differentiators
@@ -65,7 +65,7 @@ flowchart LR
   </div>
   <div class="aria-card" style="pointer-events: none;">
     <p class="aria-card__title">Vision-first ingestion</p>
-    <p class="aria-card__desc">Multimodal extraction without template OCR. PDF/Excel fall back to structured parsers.</p>
+    <p class="aria-card__desc">Multimodal extraction for images (PNG/JPG). PDF payment proofs and bank statements use structured parsers with LLM fallback.</p>
   </div>
   <div class="aria-card" style="pointer-events: none;">
     <p class="aria-card__title">FX-aware matching</p>

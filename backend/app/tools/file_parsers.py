@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -44,6 +45,22 @@ def extract_pdf_text(data: bytes) -> str:
             if text:
                 chunks.append(text)
     return "\n\n".join(chunks)
+
+
+def detect_image_media_type(data: bytes, filename: str = "") -> str:
+    """Sniff image MIME type from magic bytes; fall back to filename extension."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    lower = filename.lower()
+    if lower.endswith(".webp"):
+        return "image/webp"
+    if lower.endswith(".png"):
+        return "image/png"
+    return "image/jpeg"
 
 
 def preprocess_image(data: bytes, max_side: int = 2000) -> bytes:
@@ -92,7 +109,15 @@ def _to_date(value: Any) -> date | None:
 
 
 _DATE_KEYS = {"date", "value date", "valuedate", "posting date", "transaction date", "txn date"}
-_AMOUNT_KEYS = {"amount", "credit", "credit amount", "amount (myr)", "amount myr"}
+_AMOUNT_KEYS = {
+    "amount",
+    "credit",
+    "credit amount",
+    "deposit",
+    "money in",
+    "amount (myr)",
+    "amount myr",
+}
 _DESC_KEYS = {"description", "narrative", "details", "particulars"}
 _REF_KEYS = {"reference", "ref", "reference no", "ref no", "txn ref"}
 _COUNTERPARTY_KEYS = {"counterparty", "payer", "remitter", "sender"}
@@ -125,6 +150,85 @@ def parse_bank_statement_csv(data: bytes, base_currency: str = "MYR") -> BankSta
     return _build_statement(list(reader), base_currency)
 
 
+def parse_bank_statement_text(text: str, base_currency: str = "MYR") -> BankStatement:
+    """Parse CSV-shaped or line-oriented text extracted from PDFs."""
+    stripped = text.strip()
+    if not stripped:
+        return BankStatement(base_currency=base_currency)
+
+    if "," in stripped.splitlines()[0].lower():
+        reader = csv.DictReader(io.StringIO(stripped))
+        stmt = _build_statement(list(reader), base_currency)
+        if stmt.entries:
+            return stmt
+
+    return _build_statement(_parse_pdf_text_lines(stripped), base_currency)
+
+
+def parse_bank_statement_pdf(data: bytes, base_currency: str = "MYR") -> BankStatement:
+    """Extract tabular bank rows from PDF via pdfplumber tables and text heuristics."""
+    table_rows: list[dict[str, Any]] = []
+    text_chunks: list[str] = []
+
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if text:
+                    text_chunks.append(text)
+                for table in page.extract_tables() or []:
+                    if not table or len(table) < 2:
+                        continue
+                    headers = [str(c or "").strip() for c in table[0]]
+                    if not any(headers):
+                        continue
+                    for row in table[1:]:
+                        if not row or not any(cell not in (None, "") for cell in row):
+                            continue
+                        padded = list(row) + [None] * max(0, len(headers) - len(row))
+                        table_rows.append(dict(zip(headers, padded[: len(headers)])))
+    except Exception:
+        embedded = data.decode("utf-8-sig", errors="replace").strip()
+        if embedded:
+            return parse_bank_statement_text(embedded, base_currency=base_currency)
+        return BankStatement(base_currency=base_currency)
+
+    stmt = _build_statement(table_rows, base_currency)
+    if stmt.entries:
+        return stmt
+
+    combined_text = "\n".join(text_chunks)
+    return parse_bank_statement_text(combined_text, base_currency=base_currency)
+
+
+_DATE_LINE_RE = re.compile(
+    r"\b(\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b",
+    re.IGNORECASE,
+)
+_AMOUNT_LINE_RE = re.compile(r"(?<!\d)(-?\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})(?!\d)")
+
+
+def _parse_pdf_text_lines(text: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        cleaned = " ".join(line.split())
+        if not cleaned or cleaned.lower().startswith(("date ", "total", "balance", "opening", "closing")):
+            continue
+        date_match = _DATE_LINE_RE.search(cleaned)
+        amounts = _AMOUNT_LINE_RE.findall(cleaned)
+        if not date_match or not amounts:
+            continue
+        amount_raw = amounts[-1]
+        rows.append(
+            {
+                "Date": date_match.group(1),
+                "Amount": amount_raw,
+                "Description": cleaned,
+            }
+        )
+    return rows
+
+
 def _build_statement(rows: list[dict[str, Any]], base_currency: str) -> BankStatement:
     entries: list[BankEntry] = []
     dates: list[date] = []
@@ -145,6 +249,36 @@ def _build_statement(rows: list[dict[str, Any]], base_currency: str) -> BankStat
                 if _pick(raw, _COUNTERPARTY_KEYS)
                 else None,
                 raw_row={k: (v if not isinstance(v, datetime) else v.isoformat()) for k, v in raw.items()},
+            )
+        )
+    return BankStatement(
+        base_currency=base_currency,
+        entries=entries,
+        statement_period_start=min(dates) if dates else None,
+        statement_period_end=max(dates) if dates else None,
+    )
+
+
+def bank_statement_from_llm_payload(payload: dict[str, Any], base_currency: str) -> BankStatement:
+    """Convert LLM JSON output into a validated ``BankStatement``."""
+    entries: list[BankEntry] = []
+    dates: list[date] = []
+    for row in payload.get("entries", []):
+        value_date = _to_date(row.get("value_date"))
+        amount = _to_decimal(row.get("amount"))
+        if value_date is None or amount is None:
+            continue
+        dates.append(value_date)
+        currency = str(row.get("currency") or base_currency).upper()
+        entries.append(
+            BankEntry(
+                value_date=value_date,
+                amount=amount,
+                currency=currency,
+                description=str(row.get("description") or ""),
+                reference=str(row["reference"]) if row.get("reference") else None,
+                counterparty=str(row["counterparty"]) if row.get("counterparty") else None,
+                raw_row=row,
             )
         )
     return BankStatement(

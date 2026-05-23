@@ -5,16 +5,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-WORKDIR /app
+WORKDIR /aria/backend
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml /app/
+COPY pyproject.toml ./
+COPY app ./app
 RUN pip install --upgrade pip && pip install .
 
-COPY . /app
+COPY . .
 
 EXPOSE 8000
 

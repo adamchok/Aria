@@ -13,6 +13,7 @@ from app.core.exceptions import JobNotFoundError
 from app.models.schemas import AuditLogEntry, ReconciliationReport
 from app.repositories.job_repository import JobRepository
 from app.services.excel_export import render_excel_report
+from app.services.report_hydration import hydrate_report
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ async def export_excel(
     if not job.report_blob:
         raise HTTPException(status_code=409, detail="Report not yet available")
 
-    report = ReconciliationReport.model_validate(job.report_blob)
+    report = await hydrate_report(repo, job)
     audit_rows = await repo.list_audit(job_id)
     audit_entries = [
         AuditLogEntry(

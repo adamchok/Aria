@@ -11,9 +11,11 @@ import openpyxl
 
 from app.models.enums import SourceFormat
 from app.tools.file_parsers import (
+    detect_image_media_type,
     detect_source_format,
     parse_bank_statement_csv,
     parse_bank_statement_excel,
+    parse_bank_statement_text,
     preprocess_image,
 )
 
@@ -62,6 +64,24 @@ def test_parse_bank_statement_csv():
     assert stmt.entries[1].value_date == date(2026, 5, 21)
 
 
+def test_parse_bank_statement_text_from_csv_shape():
+    text = (
+        "Date,Amount,Description,Reference,Counterparty\n"
+        "2026-05-20,4179.24,Inward TT,INV-001,ACME US INC\n"
+    )
+    stmt = parse_bank_statement_text(text)
+    assert len(stmt.entries) == 1
+    assert stmt.entries[0].amount == Decimal("4179.24")
+    assert stmt.entries[0].reference == "INV-001"
+
+
+def test_parse_bank_statement_text_from_freeform_lines():
+    text = "2026-05-20 4179.24 Inward Telegraphic Transfer INV-001 ACME US INC"
+    stmt = parse_bank_statement_text(text)
+    assert len(stmt.entries) == 1
+    assert stmt.entries[0].value_date == date(2026, 5, 20)
+
+
 def test_preprocess_image_returns_jpeg():
     from PIL import Image
 
@@ -71,3 +91,15 @@ def test_preprocess_image_returns_jpeg():
     img = Image.open(io.BytesIO(out))
     assert img.format == "JPEG"
     assert max(img.size) <= 2000
+
+
+def test_detect_image_media_type_from_bytes_not_filename():
+    from PIL import Image
+
+    png_buf = io.BytesIO()
+    Image.new("RGB", (10, 10), color=(0, 0, 0)).save(png_buf, format="PNG")
+    assert detect_image_media_type(png_buf.getvalue(), "receipt.png") == "image/png"
+
+    jpeg_out = preprocess_image(png_buf.getvalue())
+    # Preprocess re-encodes as JPEG; filename may still say .png.
+    assert detect_image_media_type(jpeg_out, "receipt.png") == "image/jpeg"

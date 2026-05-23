@@ -24,6 +24,16 @@ For day-to-day work, use the **hybrid local development** flow in [Getting Start
 
 This gives hot reload on both backend and frontend without rebuilding containers.
 
+### Celery on Windows
+
+When running the worker natively on Windows (Option 2), always use the solo pool:
+
+```bash
+celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
+```
+
+Restart the worker after changing `backend/.env` (settings are loaded at process start).
+
 ---
 
 ## Running tests
@@ -158,6 +168,8 @@ See `CLAUDE.md` §6 for full conventions.
 
 Mock mode returns deterministic, schema-shaped responses from `backend/app/services/llm_client.py`. The full pipeline runs identically — only the intelligence layer changes.
 
+**Live vision notes:** Image proofs (PNG/JPG) are sent to Claude as multimodal input. PNGs are downscaled and re-encoded as JPEG before upload — MIME type is detected from bytes, not the filename. PDF payment proofs use extracted text, not vision.
+
 ---
 
 ## Project layout reference
@@ -171,7 +183,7 @@ Aria/
 │   │   ├── agents/          ingestion, normalisation, matching, report
 │   │   ├── graph/           builder.py, routing.py, state.py
 │   │   ├── models/          Pydantic schemas + SQLAlchemy ORM
-│   │   ├── services/        fx_service, llm_client, storage, excel_export
+│   │   ├── services/        fx_service, llm_client, storage, excel_export, report_hydration
 │   │   ├── tools/           file_parsers, fx_tools, swift_tools
 │   │   ├── workers/         celery_app.py, tasks.py
 │   │   └── core/            config, database, logging, exceptions

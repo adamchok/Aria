@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import { StatusBadge } from '@/components/StatusBadge';
+import { cn } from '@/lib/cn';
 import { formatAmount } from '@/lib/format';
 import type { MatchResult, ReviewAction, UUID } from '@/types/api';
 
@@ -37,7 +38,7 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
     >
       <aside
         onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full max-w-2xl flex-col gap-4 overflow-y-auto bg-slate-50 p-6 shadow-xl"
+        className="flex h-full w-full max-w-4xl flex-col gap-4 overflow-y-auto bg-slate-50 p-6 shadow-xl"
       >
         <header className="flex items-start justify-between gap-4">
           <div>
@@ -87,7 +88,7 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
                   <Row label="Value date" value={bank.value_date} />
                   <Row label="Amount" value={formatAmount(bank.amount, bank.currency)} />
                   <Row label="Reference" value={bank.reference ?? '—'} />
-                  <Row label="Description" value={bank.description || '—'} />
+                  <Row label="Description" value={bank.description || '—'} wrap />
                 </>
               ) : (
                 <p className="text-sm text-slate-500">
@@ -193,11 +194,20 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
-      <span className="text-right text-sm tabular-nums text-slate-900">{value}</span>
+    <div className={cn('flex items-start justify-between gap-3', !wrap && 'flex-nowrap')}>
+      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'text-sm tabular-nums text-slate-900',
+          wrap ? 'min-w-0 text-left' : 'shrink-0 whitespace-nowrap text-right',
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }

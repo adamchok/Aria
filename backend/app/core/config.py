@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     s3_bucket: str = "aria-documents"
     s3_region: str = "us-east-1"
     s3_presign_ttl_seconds: int = 900
+    # Set to AES256 on AWS S3; leave unset for MinIO (default Docker stack).
+    s3_server_side_encryption: str | None = None
 
     # FX
     exchangerate_api_key: str = ""

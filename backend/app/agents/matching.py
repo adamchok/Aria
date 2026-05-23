@@ -14,6 +14,7 @@ payer name 0.1. Status routing:
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -192,14 +193,17 @@ class MatchingAgent:
         return [e for e in entries if lo <= e.amount <= hi]
 
     def _score(self, nr: NormalisedRecord, entry: BankEntry) -> CandidateScore:
-        # Amount score: 1 when at tolerance midpoint, decays linearly to edges.
-        midpoint = (nr.tolerance_low + nr.tolerance_high) / Decimal("2")
-        half_width = (nr.tolerance_high - nr.tolerance_low) / Decimal("2")
-        if half_width == 0:
-            amount_score = 1.0 if entry.amount == midpoint else 0.0
+        # Amount score: anchor on settlement-rate MYR (card debits sit near this).
+        target_amount = nr.amount_myr_at_settlement_rate
+        spread_half = max(
+            (nr.tolerance_high - nr.tolerance_low) / Decimal("2"),
+            nr.amount_myr_at_settlement_rate * Decimal("0.025"),
+        )
+        if spread_half == 0:
+            amount_score = 1.0 if entry.amount == target_amount else 0.0
         else:
-            dist = abs(entry.amount - midpoint)
-            amount_score = max(0.0, 1.0 - float(dist / half_width))
+            dist = abs(entry.amount - target_amount)
+            amount_score = max(0.0, 1.0 - float(dist / spread_half))
 
         # Date score: 1.0 same day, decays over window.
         delta = abs((entry.value_date - nr.payment.value_date).days)
@@ -213,19 +217,23 @@ class MatchingAgent:
             ref_score = (
                 fuzz.partial_ratio(nr.payment.reference.upper(), entry.description.upper()) / 100.0
             )
+        ref_score = max(
+            ref_score,
+            _foreign_amount_in_description(
+                nr.payment.currency,
+                nr.payment.amount_original,
+                f"{entry.description} {entry.reference or ''}",
+            ),
+        )
 
-        # Payer name similarity.
-        payer_score = 0.0
-        if entry.counterparty:
-            payer_score = fuzz.token_set_ratio(nr.payment.payer, entry.counterparty) / 100.0
-        elif entry.description:
-            payer_score = similarity(nr.payment.payer, entry.description)
+        # Match payer (inbound) or payee (outbound card/vendor debits) against bank text.
+        party_score = _party_match_score(nr, entry)
 
         composite = (
             _W_AMOUNT * amount_score
             + _W_DATE * date_score
             + _W_REF * ref_score
-            + _W_PAYER * payer_score
+            + _W_PAYER * party_score
         )
         composite = max(0.0, min(1.0, composite))
         return CandidateScore(
@@ -233,9 +241,38 @@ class MatchingAgent:
             amount_match_score=amount_score,
             date_proximity_score=date_score,
             reference_similarity_score=ref_score,
-            payer_name_score=payer_score,
+            payer_name_score=party_score,
             composite=composite,
         )
+
+
+def _foreign_amount_in_description(currency: str, amount: Decimal, text: str) -> float:
+    """Return 1.0 when a bank line mentions the payment's original currency amount."""
+    if not text:
+        return 0.0
+    cur = re.escape(currency.upper())
+    normalized = amount.quantize(Decimal("0.01"))
+    variants = {str(normalized), str(normalized.normalize())}
+    if normalized == normalized.to_integral_value():
+        variants.add(str(int(normalized)))
+    haystack = text.upper()
+    for amt in variants:
+        if re.search(rf"{cur}\s*{re.escape(amt)}", haystack):
+            return 1.0
+    return 0.0
+
+
+def _party_match_score(nr: NormalisedRecord, entry: BankEntry) -> float:
+    """Score payer/payee against bank counterparty or description."""
+    parties = [nr.payment.payer, nr.payment.payee]
+    targets = [t for t in (entry.counterparty, entry.description) if t]
+    best = 0.0
+    for party in parties:
+        for target in targets:
+            best = max(best, fuzz.token_set_ratio(party, target) / 100.0)
+            best = max(best, fuzz.partial_ratio(party.upper(), target.upper()) / 100.0)
+            best = max(best, similarity(party, target))
+    return best
 
 
 def _serialise_normalised(nr: NormalisedRecord) -> dict:
