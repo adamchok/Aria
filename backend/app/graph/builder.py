@@ -78,7 +78,7 @@ async def arun_pipeline(state: ReconciliationState) -> ReconciliationState:
     bind_job_id(state.job_id)
     state.started_at = state.started_at or datetime.utcnow()
 
-    state = IngestionAgent()(state)
+    state = await IngestionAgent().arun(state)
     next_node = after_ingestion(state)
     if next_node == "human_review_queue":
         _passthrough_review(state)

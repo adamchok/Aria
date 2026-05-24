@@ -86,12 +86,22 @@ class LLMClient:
         if self._settings.llm_mode == "mock":
             return _mock_extraction(filename=filename, text_hint=text_hint)
 
-        # Live mode — Sonnet with multimodal input.
+        # Route model by source format:
+        #   IMAGE  → Opus 4.7 (3× image resolution — critical for WhatsApp screenshots / SWIFT scans)
+        #   EXCEL/CSV → Haiku 4.5 (structured text only; 3× cheaper than Sonnet, no vision needed)
+        #   PDF    → Sonnet 4.6 (text extraction via pdfplumber; good doc comprehension)
+        if source_format == SourceFormat.IMAGE:
+            model = self._settings.opus_model
+        elif source_format in {SourceFormat.EXCEL, SourceFormat.CSV}:
+            model = self._settings.haiku_model
+        else:
+            model = self._settings.sonnet_model
+
         client = self._get_anthropic()
         content: list[dict[str, Any]] = []
+
         if source_format == SourceFormat.IMAGE:
             import base64
-
             content.append(
                 {
                     "type": "image",
@@ -106,17 +116,17 @@ class LLMClient:
             content.append(
                 {
                     "type": "text",
-                    "text": (text_hint or document_bytes.decode("utf-8", errors="replace"))[
-                        :40_000
-                    ],
+                    "text": (text_hint or document_bytes.decode("utf-8", errors="replace"))[:40_000],
                 }
             )
 
-        content.append({"type": "text", "text": _EXTRACTION_PROMPT})
+        # Extraction instructions in system with cache_control — cached across all calls
+        # in a batch job (same prompt, different documents → 90% input token saving).
         try:
             resp = client.messages.create(
-                model=self._settings.sonnet_model,
+                model=model,
                 max_tokens=2048,
+                system=[{"type": "text", "text": _EXTRACTION_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": content}],
             )
         except Exception as exc:
@@ -139,6 +149,37 @@ class LLMClient:
         if self._settings.llm_mode == "mock":
             return _mock_match_reasoning(normalised, candidate, candidate_scores)
 
+        # Sonnet with adaptive thinking on first pass.
+        result = self._reason_match_with_model(
+            self._settings.sonnet_model,
+            normalised=normalised,
+            candidate=candidate,
+            candidate_scores=candidate_scores,
+        )
+
+        # Border zone (0.45–0.65): escalate to Opus 4.7.
+        # Opus self-verifies its match decision, converting some uncertain items to
+        # confirmed matches and reducing human escalation rate.
+        confidence = float(result.get("confidence", 0.0))
+        if 0.45 <= confidence <= 0.65:
+            logger.info("match.escalating_to_opus", confidence=round(confidence, 3))
+            result = self._reason_match_with_model(
+                self._settings.opus_model,
+                normalised=normalised,
+                candidate=candidate,
+                candidate_scores=candidate_scores,
+            )
+
+        return result
+
+    def _reason_match_with_model(
+        self,
+        model: str,
+        *,
+        normalised: dict[str, Any],
+        candidate: dict[str, Any] | None,
+        candidate_scores: dict[str, Any],
+    ) -> dict[str, Any]:
         client = self._get_anthropic()
         prompt = _MATCHING_PROMPT.format(
             normalised=json.dumps(normalised, default=str),
@@ -147,8 +188,9 @@ class LLMClient:
         )
         try:
             resp = client.messages.create(
-                model=self._settings.sonnet_model,
-                max_tokens=1024,
+                model=model,
+                max_tokens=8000,
+                thinking={"type": "adaptive"},
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:
@@ -171,6 +213,7 @@ class LLMClient:
                 text_hint=text_hint, filename=filename, base_currency=base_currency
             )
 
+        # Haiku 4.5: structured text extraction — no vision, no deep reasoning needed.
         client = self._get_anthropic()
         prompt = _BANK_STATEMENT_PROMPT.format(
             base_currency=base_currency,
@@ -179,7 +222,7 @@ class LLMClient:
         )
         try:
             resp = client.messages.create(
-                model=self._settings.sonnet_model,
+                model=self._settings.haiku_model,
                 max_tokens=4096,
                 messages=[{"role": "user", "content": prompt}],
             )

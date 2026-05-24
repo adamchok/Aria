@@ -7,6 +7,9 @@ extraction for PDFs, with an LLM fallback when structured parsing finds no rows.
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 from app.agents.audit import make_audit_entry
 from app.core.config import get_settings
 from app.core.exceptions import ExtractionError
@@ -44,9 +47,10 @@ class IngestionAgent:
         return self.run(state)
 
     def run(self, state: ReconciliationState) -> ReconciliationState:
+        """Sync entry point used by LangGraph node and test suite."""
         state.status = JobStatus.INGESTING
 
-        # 1. Bank statement (structured-only).
+        # 1. Bank statement (structured-only; single call — no parallelism needed).
         if state.bank_statement_input is not None:
             stmt = self._parse_bank_statement(state.bank_statement_input, state.base_currency)
             state.bank_statement = stmt
@@ -59,44 +63,97 @@ class IngestionAgent:
                 )
             )
 
-        # 2. Payment proofs.
+        # 2. Payment proofs — sequential for sync callers.
         records: list[PaymentRecord] = []
         for doc in state.payment_documents:
             try:
                 record = self._extract_one(doc)
                 records.append(record)
-                state.audit_log.append(
-                    make_audit_entry(
-                        job_id=state.job_id,
-                        agent="ingestion",
-                        action="extract",
-                        input_snapshot={"filename": doc.filename, "storage_key": doc.storage_key},
-                        output_snapshot=record.model_dump(mode="json"),
-                        confidence=record.extraction_confidence,
-                        reasoning=(
-                            f"Extracted via {self._llm.mode} mode from {record.source_format.value}; "
-                            f"extraction_confidence={record.extraction_confidence:.2f}."
-                        ),
-                    )
-                )
+                state.audit_log.append(self._extract_audit(state.job_id, doc, record))
             except ExtractionError as exc:
                 logger.error("ingestion.extract.failed", filename=doc.filename, error=str(exc))
-                state.audit_log.append(
-                    make_audit_entry(
-                        job_id=state.job_id,
-                        agent="ingestion",
-                        action="extract_failed",
-                        input_snapshot={"filename": doc.filename},
-                        reasoning=str(exc),
-                    )
-                )
+                state.audit_log.append(self._fail_audit(state.job_id, doc, exc))
 
         state.payment_records = records
         state.agents_completed.append("ingestion")
         logger.info("ingestion.complete", count=len(records))
         return state
 
+    async def arun(self, state: ReconciliationState) -> ReconciliationState:
+        """Async entry point: extracts all payment proofs in parallel.
+
+        Bank statement parsing is sequential (single call). Payment proofs are
+        dispatched concurrently via a thread pool because the Anthropic SDK is
+        synchronous. On 50 documents this cuts ingestion latency from O(n·latency)
+        to ~O(latency of slowest call).
+        """
+        state.status = JobStatus.INGESTING
+
+        if state.bank_statement_input is not None:
+            stmt = self._parse_bank_statement(state.bank_statement_input, state.base_currency)
+            state.bank_statement = stmt
+            state.audit_log.append(
+                make_audit_entry(
+                    job_id=state.job_id,
+                    agent="ingestion",
+                    action="bank_statement_parsed",
+                    output_snapshot={"entry_count": len(stmt.entries)},
+                )
+            )
+
+        # Pre-warm the Anthropic client before spawning threads to avoid lazy-init race.
+        if self._settings.llm_mode == "live":
+            self._llm._get_anthropic()
+
+        loop = asyncio.get_running_loop()
+        n = len(state.payment_documents)
+        max_workers = min(n, 10)  # cap at 10 concurrent LLM calls
+
+        records: list[PaymentRecord] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            tasks = [
+                loop.run_in_executor(pool, self._extract_one, doc)
+                for doc in state.payment_documents
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for doc, result in zip(state.payment_documents, results):
+            if isinstance(result, Exception):
+                logger.error("ingestion.extract.failed", filename=doc.filename, error=str(result))
+                state.audit_log.append(self._fail_audit(state.job_id, doc, result))
+            else:
+                records.append(result)
+                state.audit_log.append(self._extract_audit(state.job_id, doc, result))
+
+        state.payment_records = records
+        state.agents_completed.append("ingestion")
+        logger.info("ingestion.complete", count=len(records), parallel=True)
+        return state
+
     # ── helpers ───────────────────────────────────────────────────────────
+
+    def _extract_audit(self, job_id, doc: DocumentInput, record: PaymentRecord):
+        return make_audit_entry(
+            job_id=job_id,
+            agent="ingestion",
+            action="extract",
+            input_snapshot={"filename": doc.filename, "storage_key": doc.storage_key},
+            output_snapshot=record.model_dump(mode="json"),
+            confidence=record.extraction_confidence,
+            reasoning=(
+                f"Extracted via {self._llm.mode} mode from {record.source_format.value}; "
+                f"extraction_confidence={record.extraction_confidence:.2f}."
+            ),
+        )
+
+    def _fail_audit(self, job_id, doc: DocumentInput, exc: Exception):
+        return make_audit_entry(
+            job_id=job_id,
+            agent="ingestion",
+            action="extract_failed",
+            input_snapshot={"filename": doc.filename},
+            reasoning=str(exc),
+        )
 
     def _load_bytes(self, doc: DocumentInput) -> bytes:
         if doc.bytes_data is not None:
