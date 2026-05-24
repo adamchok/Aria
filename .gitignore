@@ -2,6 +2,7 @@
 CLAUDE.md
 ARIA_Project_Overview.md
 ARIA_Technical_Specification.md
+ARIA_Platform_Architecture.md.
 
 # Secrets
 .env
@@ -28,6 +29,7 @@ coverage/
 playwright-report/
 test-results/
 .vite/
+*.tsbuildinfo
 
 # Local uploads (S3_ENDPOINT=local://)
 _uploads/
@@ -43,3 +45,4 @@ Thumbs.db
 
 # Added by code-review-graph
 .code-review-graph/
+.mcp.json
