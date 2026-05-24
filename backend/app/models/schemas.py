@@ -349,7 +349,10 @@ class BankAccountCreate(_Base):
     @field_validator("currency")
     @classmethod
     def _upper_currency(cls, v: str) -> str:
-        return v.upper()
+        upper = v.strip().upper()
+        if not upper.isalpha() or len(upper) != 3:
+            raise ValueError("currency must be a 3-letter ISO 4217 code (e.g. MYR, USD)")
+        return upper
 
 
 class BankAccountResponse(_Base):

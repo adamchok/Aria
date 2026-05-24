@@ -25,6 +25,7 @@ from app.models.schemas import (
     BankStatementSummary,
     BankStatementUploadResponse,
 )
+from app.repositories.bank_account_repository import BankAccountRepository
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.services.storage import StorageService
 from app.tools.file_parsers import detect_source_format
@@ -47,10 +48,26 @@ def _validate_currency(code: str) -> str:
 async def upload_bank_statement(
     bank_statement: Annotated[UploadFile, File(description="Bank statement (XLSX, CSV, or PDF)")],
     base_currency: Annotated[str, Form()] = "MYR",
+    account_id: Annotated[
+        str | None,
+        Form(description="Optional bank account ID to link this statement to its ledger."),
+    ] = None,
     session: AsyncSession = Depends(get_db_session),
     tenant_id: str = Depends(require_tenant),
 ) -> BankStatementUploadResponse:
     validated_currency = _validate_currency(base_currency)
+
+    # Validate account_id ownership before parsing (fast fail).
+    resolved_account_id: str | None = None
+    if account_id:
+        try:
+            acc_uuid = UUID(account_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"account_id is not a valid UUID: {account_id!r}") from exc
+        acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+        if await acc_repo.get(acc_uuid) is None:
+            raise HTTPException(status_code=404, detail="Bank account not found")
+        resolved_account_id = str(acc_uuid)
 
     fmt = detect_source_format(bank_statement.filename or "statement", bank_statement.content_type)
     if fmt not in {SourceFormat.EXCEL, SourceFormat.CSV, SourceFormat.PDF}:
@@ -85,6 +102,7 @@ async def upload_bank_statement(
         storage_key=key,
         base_currency=validated_currency,
         statement=parsed,
+        account_id=resolved_account_id,
     )
 
     return BankStatementUploadResponse(

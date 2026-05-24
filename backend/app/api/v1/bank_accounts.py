@@ -237,11 +237,10 @@ async def get_account_ledger(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> LedgerPageResponse:
-    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
-    if await acc_repo.get(account_id) is None:
+    repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await repo.get(account_id) is None:
         raise HTTPException(status_code=404, detail="Bank account not found")
 
-    repo = BankAccountRepository(session, tenant_id=tenant_id)
     items, total = await repo.get_ledger(
         account_id, cleared=cleared, page=page, page_size=page_size
     )

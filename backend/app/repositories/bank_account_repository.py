@@ -83,23 +83,28 @@ class BankAccountRepository:
     # ─── Stats ───────────────────────────────────────────────────────────────
 
     async def get_stats(self, account_id: UUID | str) -> dict:
-        """Return statement_count, entry_count, uncleared_count for one account."""
-        stmt_q = select(func.count()).where(BankStatementORM.account_id == str(account_id))
-        entry_q = (
-            select(func.count())
-            .select_from(BankEntryORM)
-            .join(BankStatementORM, BankEntryORM.statement_id == BankStatementORM.id)
+        """Return statement_count, entry_count, uncleared_count in a single consistent query."""
+        from sqlalchemy import case
+
+        q = (
+            select(
+                func.count(BankStatementORM.id.distinct()).label("statement_count"),
+                func.count(BankEntryORM.id).label("entry_count"),
+                func.sum(
+                    case((BankEntryORM.cleared.is_(False), 1), else_=0)
+                ).label("uncleared_count"),
+            )
+            .select_from(BankStatementORM)
+            .outerjoin(BankEntryORM, BankEntryORM.statement_id == BankStatementORM.id)
             .where(BankStatementORM.account_id == str(account_id))
         )
-        uncleared_q = entry_q.where(BankEntryORM.cleared.is_(False))
         if self._tenant_id is not None:
-            stmt_q = stmt_q.where(BankStatementORM.tenant_id == self._tenant_id)
-            entry_q = entry_q.where(BankEntryORM.tenant_id == self._tenant_id)
-            uncleared_q = uncleared_q.where(BankEntryORM.tenant_id == self._tenant_id)
+            q = q.where(BankStatementORM.tenant_id == self._tenant_id)
+        row = (await self._s.execute(q)).one()
         return {
-            "statement_count": (await self._s.execute(stmt_q)).scalar_one(),
-            "entry_count": (await self._s.execute(entry_q)).scalar_one(),
-            "uncleared_count": (await self._s.execute(uncleared_q)).scalar_one(),
+            "statement_count": row.statement_count or 0,
+            "entry_count": row.entry_count or 0,
+            "uncleared_count": int(row.uncleared_count or 0),
         }
 
     # ─── Ledger view ─────────────────────────────────────────────────────────
