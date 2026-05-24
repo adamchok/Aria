@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { AuthRoute } from '@/components/AuthRoute';
+import { TenantRoleRoute } from '@/components/TenantRoleRoute';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { JobProgressPage } from '@/pages/JobProgressPage';
 import { JobsPage } from '@/pages/JobsPage';
@@ -17,7 +18,8 @@ export default function App() {
         path="/*"
         element={
           <AuthRoute>
-            <AppShell>
+            <TenantRoleRoute>
+              <AppShell>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
@@ -28,7 +30,8 @@ export default function App() {
                 <Route path="/upload" element={<UploadPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
-            </AppShell>
+              </AppShell>
+            </TenantRoleRoute>
           </AuthRoute>
         }
       />

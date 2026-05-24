@@ -2,16 +2,67 @@ import type {
   BankAccountResponse,
   BankStatementSummary,
   JobCreateResponse,
+  JobListItem,
+  JobListResponse,
   JobStatusResponse,
   LedgerEntryItem,
   LedgerPageResponse,
+  LoginResponse,
   MatchResult,
   ReconciliationReport,
+  UserResponse,
 } from '@/types/api';
+import { JobStatus } from '@/types/api';
 
 export const JOB_ID = '11111111-1111-1111-1111-111111111111';
 export const ACCOUNT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 export const STMT_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+export const USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+export const TENANT_ID = '00000000-0000-0000-0001-000000000001';
+
+export const tenantUserFixture: UserResponse = {
+  id: USER_ID,
+  email: 'finance@acme.test',
+  role: 'tenant_user',
+  tenant_id: TENANT_ID,
+  is_active: true,
+  created_at: '2026-05-01T08:00:00Z',
+};
+
+export const adminUserFixture: UserResponse = {
+  id: 'admin-admin-admin-admin-adminadmin',
+  email: 'admin@aria.local',
+  role: 'admin',
+  tenant_id: null,
+  is_active: true,
+  created_at: '2026-05-01T08:00:00Z',
+};
+
+export const loginResponseFixture: LoginResponse = {
+  access_token: 'test-jwt-token',
+  token_type: 'bearer',
+  user: tenantUserFixture,
+};
+
+export const jobListItemFixture: JobListItem = {
+  job_id: JOB_ID,
+  status: JobStatus.COMPLETED,
+  progress_pct: 100,
+  base_currency: 'MYR',
+  record_count: 2,
+  matched_count: 1,
+  uncertain_count: 1,
+  unmatched_count: 0,
+  created_at: '2026-05-23T08:00:00Z',
+  updated_at: '2026-05-23T08:00:30Z',
+};
+
+export const jobListFixture: JobListResponse = {
+  items: [jobListItemFixture],
+  total: 1,
+  page: 1,
+  page_size: 10,
+};
 
 export const bankAccountFixture: BankAccountResponse = {
   id: ACCOUNT_ID,

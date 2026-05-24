@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { seedTenantAuth } from './helpers';
 
 /**
  * Review-queue happy path — open an UNCERTAIN match, confirm it,
@@ -82,6 +83,7 @@ test('confirm uncertain match removes it from the queue', async ({ page }) => {
     });
   });
 
+  await seedTenantAuth(page);
   await page.goto(`/jobs/${JOB_ID}/review`);
   await expect(page.getByRole('heading', { name: /Human review queue/i })).toBeVisible();
   await expect(page.getByText('Acme US Inc')).toBeVisible();

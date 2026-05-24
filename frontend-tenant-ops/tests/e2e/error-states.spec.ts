@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { seedTenantAuth } from './helpers';
 
 test('invalid file type surfaces an inline error', async ({ page }) => {
+  await seedTenantAuth(page);
   await page.goto('/upload');
   await page
     .getByLabel(/Drop payment proofs file input/i)
@@ -10,6 +12,7 @@ test('invalid file type surfaces an inline error', async ({ page }) => {
 
 test('failed job status is shown with retry CTA', async ({ page }) => {
   const JOB_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+  await seedTenantAuth(page);
   await page.route(`**/api/v1/jobs/${JOB_ID}`, (route) =>
     route.fulfill({
       status: 500,

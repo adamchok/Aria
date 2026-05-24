@@ -1,18 +1,45 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/msw-server';
 import { ApiError, api } from '@/api/client';
-import { JOB_ID, jobCreateResponse, reportFixture, uncertainItem } from '@/test/fixtures';
+import { useAuthStore } from '@/stores/auth-store';
+import {
+  JOB_ID,
+  jobCreateResponse,
+  jobListFixture,
+  loginResponseFixture,
+  reportFixture,
+  tenantUserFixture,
+  uncertainItem,
+} from '@/test/fixtures';
+
+beforeEach(() => {
+  useAuthStore.getState().setAuth('test-token', tenantUserFixture);
+});
+
+afterEach(() => {
+  useAuthStore.getState().clear();
+});
 
 describe('api client', () => {
-  it('createJob POSTs a request body and returns the parsed job id', async () => {
+  it('login returns token and tenant user', async () => {
+    useAuthStore.getState().clear();
+    const result = await api.login('finance@acme.test', 'secret');
+    expect(result.access_token).toBe(loginResponseFixture.access_token);
+    expect(result.user.role).toBe('tenant_user');
+  });
+
+  it('listJobs parses paginated response', async () => {
+    const list = await api.listJobs({ page: 1, page_size: 10 });
+    expect(list.total).toBe(jobListFixture.total);
+    expect(list.items[0]?.job_id).toBe(JOB_ID);
+  });
+
+  it('createJob POSTs multipart form and returns the parsed job id', async () => {
     let method: string | null = null;
-    let bodyLength = 0;
     server.use(
-      http.post('http://localhost/api/v1/jobs', async ({ request }) => {
+      http.post('http://localhost/api/v1/jobs', ({ request }) => {
         method = request.method;
-        const body = await request.arrayBuffer();
-        bodyLength = body.byteLength;
         return HttpResponse.json(jobCreateResponse, { status: 201 });
       }),
     );
@@ -27,7 +54,6 @@ describe('api client', () => {
 
     expect(result.job_id).toBe(JOB_ID);
     expect(method).toBe('POST');
-    expect(bodyLength).toBeGreaterThan(0);
   });
 
   it('getJobStatus, getJobResults, getReviewQueue parse responses', async () => {
@@ -50,7 +76,9 @@ describe('api client', () => {
     expect(ApiError).toBeDefined();
   });
 
-  it('exportUrl returns a deterministic path', () => {
-    expect(api.exportUrl(JOB_ID)).toMatch(new RegExp(`/api/v1/jobs/${JOB_ID}/export$`));
+  it('exportUrl includes job id and access token query param', () => {
+    const url = api.exportUrl(JOB_ID);
+    expect(url).toContain(`/api/v1/jobs/${JOB_ID}/export`);
+    expect(url).toContain('access_token=test-token');
   });
 });

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { JobStatusBadge } from '@/components/JobStatusBadge';
 import { formatDate } from '@/lib/format';
@@ -70,7 +71,7 @@ function JobRow({ job }: { job: JobListItem }) {
 }
 
 export function DashboardPage() {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['jobs', 'list', { page: 1, page_size: 10 }],
     queryFn: () => api.listJobs({ page: 1, page_size: 10 }),
     refetchInterval: 15_000,
@@ -132,7 +133,14 @@ export function DashboardPage() {
             </div>
           )}
           {isError && (
-            <p className="p-4 text-sm text-rose-600">Failed to load jobs. Check your session or sign in again.</p>
+            <div className="p-4">
+              <p className="text-sm text-rose-600" role="alert">
+                Failed to load jobs. Check your session or sign in again.
+              </p>
+              <Button variant="secondary" className="mt-2" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </div>
           )}
           {!isLoading && !isError && items.length === 0 && (
             <p className="p-6 text-center text-sm text-slate-500">

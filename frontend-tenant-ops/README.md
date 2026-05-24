@@ -24,7 +24,7 @@ Sign in with a **tenant user** account created in the Admin UI (`frontend-admin`
 | `npm run dev` | Vite dev server with `/api` proxy to FastAPI |
 | `npm run build` | Type-check then production bundle in `dist/` |
 | `npm run typecheck` | Strict TypeScript build, no emit |
-| `npm test` | Vitest (unit + integration) |
+| `npm test` | Vitest — auth, API client, route guard, hooks, and ops page integration tests |
 | `npm run test:coverage` | Vitest with v8 coverage |
 | `npm run test:e2e` | Playwright e2e — boots Vite, runs Chromium |
 | `npm run test:e2e:install` | One-time Chromium install for Playwright |
@@ -43,7 +43,7 @@ Sign in with a **tenant user** account created in the Admin UI (`frontend-admin`
 
 ## Architecture notes
 
-- **Auth** — `auth-store` persists JWT; `AuthRoute` guards all routes except `/login`
+- **Auth** — `auth-store` persists JWT; `AuthRoute` + `TenantRoleRoute` guard all routes except `/login`
 - **API client** — Bearer token injection; types in `src/types/api.ts`
 - **State** — Zustand `upload-store` for upload draft; TanStack Query for server state
 - **SSE** — `useJobStream` passes token via `?access_token=` on EventSource

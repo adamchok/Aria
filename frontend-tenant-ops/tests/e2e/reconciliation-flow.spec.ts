@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { seedTenantAuth } from './helpers';
 
 /**
  * Happy path — upload → wait → view results → confirm export link.
@@ -63,6 +64,7 @@ test('upload → results → export', async ({ page }) => {
     }),
   );
 
+  await seedTenantAuth(page);
   await page.goto('/upload');
   await expect(page.getByRole('heading', { name: /New reconciliation job/i })).toBeVisible();
 
