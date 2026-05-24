@@ -28,6 +28,8 @@ dependencies = [
   "pillow>=10.4",
   "rapidfuzz>=3.9",
   "python-dateutil>=2.9",
+  "PyJWT>=2.9",
+  "bcrypt>=4.0",
 ]
 
 [project.optional-dependencies]

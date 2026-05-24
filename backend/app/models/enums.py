@@ -52,3 +52,8 @@ class WebhookDeliveryStatus(StrEnum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     DISABLED = "DISABLED"
+
+
+class UserRole(StrEnum):
+    ADMIN = "admin"
+    TENANT_USER = "tenant_user"

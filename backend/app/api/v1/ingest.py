@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.dependencies import get_db_session
 from app.core.logging import get_logger
-from app.core.middleware import require_tenant
+from app.core.middleware import require_admin, require_tenant
 from app.models.schemas import (
+    AdminQueueStatusResponse,
+    AdminQueueTenantStatus,
     QueueCorridorStatus,
     QueueStatusResponse,
     TransactionIngestRequest,
@@ -20,11 +22,39 @@ from app.models.schemas import (
 )
 from app.repositories.ingest_repository import IngestRepository
 from app.repositories.job_repository import JobRepository
+from app.repositories.tenant_repository import TenantRepository
 from app.services.storage import StorageService
 from app.workers.tasks import enqueue_job
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _compute_batch_trigger(
+    summary: list[dict],
+    *,
+    batch_size_threshold: int,
+    batch_time_window_minutes: int,
+) -> tuple[int, datetime | None, str]:
+    total_buffered = sum(r["count"] for r in summary)
+    oldest: datetime | None = None
+    if summary:
+        oldest_candidates = [r["oldest"] for r in summary if r["oldest"]]
+        oldest = min(oldest_candidates) if oldest_candidates else None
+
+    trigger = "none"
+    if total_buffered > 0 and oldest:
+        over_count = total_buffered >= batch_size_threshold
+        age_minutes = (datetime.utcnow() - oldest).total_seconds() / 60
+        over_time = age_minutes >= batch_time_window_minutes
+        if over_count and over_time:
+            trigger = "both"
+        elif over_count:
+            trigger = "count"
+        elif over_time:
+            trigger = "time"
+
+    return total_buffered, oldest, trigger
 
 
 @router.post("/transactions", response_model=TransactionIngestResponse, status_code=202)
@@ -76,23 +106,11 @@ async def get_queue_status(
     repo = IngestRepository(session)
     summary = await repo.get_queue_summary(tenant_id)
 
-    total_buffered = sum(r["count"] for r in summary)
-    oldest: datetime | None = None
-    if summary:
-        oldest_candidates = [r["oldest"] for r in summary if r["oldest"]]
-        oldest = min(oldest_candidates) if oldest_candidates else None
-
-    trigger = "none"
-    if total_buffered > 0 and oldest:
-        over_count = total_buffered >= settings.batch_size_threshold
-        age_minutes = (datetime.utcnow() - oldest).total_seconds() / 60
-        over_time = age_minutes >= settings.batch_time_window_minutes
-        if over_count and over_time:
-            trigger = "both"
-        elif over_count:
-            trigger = "count"
-        elif over_time:
-            trigger = "time"
+    total_buffered, _oldest, trigger = _compute_batch_trigger(
+        summary,
+        batch_size_threshold=settings.batch_size_threshold,
+        batch_time_window_minutes=settings.batch_time_window_minutes,
+    )
 
     return QueueStatusResponse(
         tenant_id=UUID(tenant_id),
@@ -120,3 +138,64 @@ async def flush_queue(
     batch_tenant_transactions.delay(tenant_id)
     logger.info("ingest.manual_flush", tenant_id=tenant_id)
     return {"status": "flush_queued", "tenant_id": tenant_id}
+
+
+@router.get("/admin/queue", response_model=AdminQueueStatusResponse)
+async def admin_queue_status(
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(require_admin),
+) -> AdminQueueStatusResponse:
+    settings = get_settings()
+    tenant_repo = TenantRepository(session)
+    ingest_repo = IngestRepository(session)
+    tenants = await tenant_repo.list_tenants()
+
+    tenant_statuses: list[AdminQueueTenantStatus] = []
+    total_system = 0
+
+    # N+1: one query per tenant — acceptable for demo scale.
+    for tenant in tenants:
+        summary = await ingest_repo.get_queue_summary(tenant.id)
+        total_buffered, _oldest, trigger = _compute_batch_trigger(
+            summary,
+            batch_size_threshold=settings.batch_size_threshold,
+            batch_time_window_minutes=settings.batch_time_window_minutes,
+        )
+        total_system += total_buffered
+        tenant_statuses.append(
+            AdminQueueTenantStatus(
+                tenant_id=UUID(tenant.id),
+                tenant_name=tenant.name,
+                total_buffered=total_buffered,
+                by_corridor=[
+                    QueueCorridorStatus(
+                        corridor=r["corridor"],
+                        buffered_count=r["count"],
+                        oldest_received_at=r["oldest"],
+                    )
+                    for r in summary
+                ],
+                next_batch_trigger=trigger,
+            )
+        )
+
+    return AdminQueueStatusResponse(
+        tenants=tenant_statuses,
+        total_buffered_system=total_system,
+    )
+
+
+@router.post("/admin/queue/flush/{tenant_id}", status_code=202)
+async def admin_flush_queue(
+    tenant_id: UUID,
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(require_admin),
+) -> dict:
+    tenant_repo = TenantRepository(session)
+    await tenant_repo.get(tenant_id)
+
+    from app.workers.tasks import batch_tenant_transactions
+
+    batch_tenant_transactions.delay(str(tenant_id))
+    logger.info("ingest.admin_flush", tenant_id=str(tenant_id))
+    return {"status": "flush_queued", "tenant_id": str(tenant_id)}

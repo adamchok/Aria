@@ -4,9 +4,27 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import analytics, bank_accounts, bank_statements, export, ingest, jobs, review, stream, tenants, webhooks
+from app.api.v1 import (
+    analytics,
+    auth,
+    bank_accounts,
+    bank_statements,
+    export,
+    ingest,
+    jobs,
+    review,
+    stream,
+    tenant_settings,
+    tenants,
+    users,
+    webhooks,
+)
 
 api_router = APIRouter(prefix="/api/v1")
+
+# Auth
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
 
 # Core reconciliation
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
@@ -16,6 +34,7 @@ api_router.include_router(stream.router, prefix="/jobs", tags=["stream"])
 
 # Platform
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
+api_router.include_router(tenant_settings.router, prefix="/tenant", tags=["tenant-settings"])
 api_router.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])

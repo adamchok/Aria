@@ -4,14 +4,31 @@ from __future__ import annotations
 
 from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _BACKEND_ROOT.parent
+
+
+def _settings_env_files() -> tuple[str, ...]:
+    """Repo root .env first, then backend/.env (later overrides earlier)."""
+    return tuple(
+        str(path)
+        for path in (_REPO_ROOT / ".env", _BACKEND_ROOT / ".env")
+        if path.is_file()
+    )
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_settings_env_files(),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # LLM
     anthropic_api_key: str = ""
@@ -57,6 +74,15 @@ class Settings(BaseSettings):
     # Auth / multi-tenancy
     admin_api_key: str = ""  # Bootstrap key; required in production
 
+    # JWT
+    jwt_secret_key: str = "aria-dev-jwt-secret-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24 hours
+
+    # Default admin user seeded on first startup
+    default_admin_email: str = "admin@aria.local"
+    default_admin_password: str = ""  # Required to enable auto-seed
+
     # Ingestion pipeline (Celery Beat auto-batching)
     batch_size_threshold: int = 50
     batch_time_window_minutes: int = 15
@@ -69,7 +95,7 @@ class Settings(BaseSettings):
     # App
     app_env: Literal["development", "test", "staging", "production"] = "development"
     log_level: str = "INFO"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175"
 
     @field_validator("cors_origins")
     @classmethod

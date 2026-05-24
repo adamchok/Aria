@@ -26,3 +26,9 @@ def test_decimal_buffer_parses_from_env(monkeypatch):
     monkeypatch.setenv("FX_VARIANCE_BUFFER_PCT", "0.02")
     s = Settings(_env_file=None)
     assert s.fx_variance_buffer_pct == Decimal("0.02")
+
+
+def test_admin_api_key_from_env(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_KEY", "my-admin-secret")
+    s = Settings(_env_file=None)
+    assert s.admin_api_key == "my-admin-secret"

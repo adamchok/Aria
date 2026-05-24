@@ -28,11 +28,39 @@ from app.core.exceptions import (
     WebhookNotFoundError,
 )
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import APIKeyMiddleware
+from app.core.middleware import AuthMiddleware
 
 settings = get_settings()
 configure_logging(settings.log_level)
 logger = get_logger(__name__)
+
+
+async def _seed_default_admin() -> None:
+    """Create platform admin user when DEFAULT_ADMIN_PASSWORD is set and no users exist."""
+    if not settings.default_admin_password:
+        return
+
+    from sqlalchemy import func, select
+
+    from app.core.database import session_scope
+    from app.core.security import hash_password
+    from app.models.database import UserORM
+    from app.models.enums import UserRole
+
+    async with session_scope() as session:
+        count = await session.scalar(select(func.count()).select_from(UserORM))
+        if count:
+            return
+
+        admin = UserORM(
+            email=settings.default_admin_email.lower().strip(),
+            hashed_password=hash_password(settings.default_admin_password),
+            role=UserRole.ADMIN,
+            tenant_id=None,
+        )
+        session.add(admin)
+        await session.commit()
+        logger.info("aria.admin_seeded", email=settings.default_admin_email)
 
 
 @asynccontextmanager
@@ -43,6 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    await _seed_default_admin()
     logger.info("aria.startup", env=settings.app_env, version=__version__)
     yield
     logger.info("aria.shutdown")
@@ -54,7 +83,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(APIKeyMiddleware)
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

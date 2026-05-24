@@ -1,0 +1,32 @@
+/* AG Grid theme — must precede @tailwind directives per CSS @import rules. */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-quartz.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Tabular numerals for amount columns. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus rings are visible by default for keyboard users. */
+:focus-visible {
+  outline: 2px solid theme('colors.blue.500');
+  outline-offset: 2px;
+}

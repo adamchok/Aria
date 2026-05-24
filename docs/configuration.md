@@ -40,11 +40,12 @@ description: "Environment variables, API keys, and tuning parameters"
 
 | File | Used by | Purpose |
 | --- | --- | --- |
-| `backend/.env` | Local Python, hybrid dev | Full backend configuration |
+| `backend/.env` | Local Python, hybrid dev | Full backend configuration (overrides repo root) |
 | `backend/.env.example` | Template | Copy to `.env` — safe to commit |
-| `frontend/.env` | Vite dev server | API proxy target |
-| `frontend/.env.example` | Template | Copy to `.env` |
-| `.env` (repo root) | Docker Compose | Passes vars to `api` and `worker` containers |
+| `frontend-tenant-ops/.env` | Ops app Vite dev | Port 5173 |
+| `frontend-admin/.env` | Admin app Vite dev | Port 5174 |
+| `frontend-tenant-mgmt/.env` | Mgmt app Vite dev | Port 5175 |
+| `.env` (repo root) | Docker Compose; hybrid backend | Compose substitution; also loaded by backend when running locally |
 
 {: .warning }
 > Never commit `.env` files containing secrets. They are listed in `.gitignore`.
@@ -139,7 +140,12 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ADMIN_API_KEY` | `aria-dev-admin` | Bootstrap key for admin-only endpoints (tenant/key management). **Rotate in production.** |
+| `ADMIN_API_KEY` | `aria-dev-admin` | Legacy bootstrap key for programmatic admin endpoints |
+| `JWT_SECRET_KEY` | *(dev default in code)* | HS256 signing secret — **change in production** |
+| `JWT_ALGORITHM` | `HS256` | JWT algorithm |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token lifetime (24h) |
+| `DEFAULT_ADMIN_EMAIL` | `admin@aria.local` | Platform admin email for auto-seed |
+| `DEFAULT_ADMIN_PASSWORD` | *(empty)* | If set, seeds admin user when `users` table is empty |
 
 ### Ingestion pipeline (Celery Beat)
 

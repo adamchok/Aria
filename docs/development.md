@@ -73,7 +73,7 @@ backend/tests/
 ### Frontend
 
 ```bash
-cd frontend
+cd frontend-tenant-ops   # or frontend-tenant-mgmt / frontend-admin
 npm install
 
 # Unit + integration (Vitest)

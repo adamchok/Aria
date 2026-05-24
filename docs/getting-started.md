@@ -95,7 +95,9 @@ Wait until all health checks pass and you see the API listening on port 8000.
 
 | Service | URL | Credentials |
 | --- | --- | --- |
-| **Web UI** | [http://localhost:5173](http://localhost:5173) | — |
+| **Web UI (ops)** | [http://localhost:5173](http://localhost:5173) | Reconciliation |
+| **Admin UI** | [http://localhost:5174](http://localhost:5174) | Platform admin |
+| **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant config |
 | **API Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | — |
 | **Health check** | [http://localhost:8000/health](http://localhost:8000/health) | — |
 | **MinIO console** | [http://localhost:9001](http://localhost:9001) | ariaadmin / ariaadmin |
@@ -208,18 +210,19 @@ celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
 {: .warning }
 > Without the Celery worker, jobs are enqueued but not processed unless Redis is down (in which case the API runs the pipeline inline as a fallback).
 
-### Step 4: Start the frontend
+### Step 4: Start the frontend apps
 
-In a **third terminal**:
+In **three terminals** (hybrid dev):
 
 ```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
+cd frontend-tenant-ops && npm install && cp .env.example .env && npm run dev   # :5173
+cd frontend-tenant-mgmt && npm install && cp .env.example .env && npm run dev  # :5175
+cd frontend-admin && npm install && cp .env.example .env && npm run dev        # :5174
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` requests to `http://localhost:8000`.
+Set `DEFAULT_ADMIN_PASSWORD` in `backend/.env`, restart API, then sign in to the admin app with `DEFAULT_ADMIN_EMAIL` / password. Create a tenant and tenant user from the admin console before using ops/mgmt apps.
+
+Open http://localhost:5173 (ops), http://localhost:5175 (mgmt), http://localhost:5174 (admin). Each app proxies `/api` to `http://localhost:8000`.
 
 ### Step 5: Verify the dev stack
 

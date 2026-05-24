@@ -286,18 +286,50 @@ curl -OJ http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/export
 
 ## Authentication
 
-All `/api/v1` endpoints (except `/health`, `/docs`, `/redoc`, `/openapi.json`) require an `X-API-Key` header.
+All `/api/v1` endpoints (except `/health`, `/docs`, `/redoc`, `/openapi.json`, `/api/v1/auth/login`) accept **either**:
+
+1. **JWT** — `Authorization: Bearer <token>` from `POST /api/v1/auth/login`
+2. **API key** (legacy/programmatic) — `X-API-Key: aria_…`
 
 ```bash
-curl -H "X-API-Key: aria_live_xxxxxxxx" http://localhost:8000/api/v1/jobs
+# Login
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@aria.local","password":"your-password"}'
+
+# Use token
+curl -H "Authorization: Bearer YOUR_JWT" http://localhost:8000/api/v1/jobs
 ```
 
 | Status | Cause |
 | --- | --- |
-| `401` | Missing or unrecognised key |
-| `403` | Key exists but lacks permission (e.g. non-admin on tenant management) |
+| `401` | Missing/invalid token or API key |
+| `403` | Valid auth but insufficient role |
 
-An **admin key** (`ADMIN_API_KEY` env var, default `aria-dev-admin`) bypasses tenant lookup and can manage tenants and API keys. In production, rotate this value.
+### Auth endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/auth/login` | Email + password → JWT |
+| `GET` | `/api/v1/auth/me` | Current user (Bearer required) |
+
+### Tenant settings (mgmt app, JWT tenant_user)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET/POST` | `/api/v1/tenant/keys` | List/create API keys |
+| `DELETE` | `/api/v1/tenant/keys/{id}` | Revoke key |
+| `GET/POST` | `/api/v1/tenant/users` | List/invite tenant users |
+
+### Admin-only
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/analytics/admin/summary` | Cross-tenant analytics |
+| `GET` | `/api/v1/ingest/admin/queue` | All tenant queue status |
+| `POST` | `/api/v1/ingest/admin/queue/flush/{tenant_id}` | Flush tenant buffer |
+
+Legacy **admin API key** (`ADMIN_API_KEY`) still works for programmatic tenant management.
 
 ---
 

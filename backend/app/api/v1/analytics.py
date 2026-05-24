@@ -9,10 +9,15 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
-from app.core.middleware import require_tenant
-from app.models.database import JobORM, MatchORM
+from app.core.middleware import require_admin, require_tenant
+from app.models.database import JobORM, MatchORM, TenantORM
 from app.models.enums import JobStatus, MatchStatus
-from app.models.schemas import AnalyticsCorridorBreakdown, AnalyticsSummary
+from app.models.schemas import (
+    AdminAnalyticsSummary,
+    AdminTenantAnalytics,
+    AnalyticsCorridorBreakdown,
+    AnalyticsSummary,
+)
 
 router = APIRouter()
 
@@ -119,4 +124,95 @@ async def analytics_summary(
         avg_processing_seconds=avg_processing_seconds,
         escalation_rate=escalation_rate,
         by_corridor=sorted(by_corridor, key=lambda c: c.record_count, reverse=True),
+    )
+
+
+@router.get("/admin/summary", response_model=AdminAnalyticsSummary)
+async def admin_analytics_summary(
+    period_start: date = Query(default=None),
+    period_end: date = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(require_admin),
+) -> AdminAnalyticsSummary:
+    today = date.today()
+    if period_end is None:
+        period_end = today
+    if period_start is None:
+        period_start = today - timedelta(days=30)
+
+    tenants_result = await session.execute(select(TenantORM))
+    tenants = {t.id: t for t in tenants_result.scalars().all()}
+
+    jobs_stmt = select(JobORM).where(
+        JobORM.status == JobStatus.COMPLETED.value,
+        func.date(JobORM.created_at) >= period_start,
+        func.date(JobORM.created_at) <= period_end,
+    )
+    jobs_result = await session.execute(jobs_stmt)
+    jobs = jobs_result.scalars().all()
+    job_ids = [j.id for j in jobs]
+
+    if not job_ids:
+        return AdminAnalyticsSummary(
+            period_start=period_start,
+            period_end=period_end,
+            total_tenants=len(tenants),
+            total_jobs=0,
+            total_records=0,
+            matched_records=0,
+            uncertain_records=0,
+            unmatched_records=0,
+            avg_match_rate=0.0,
+            escalation_rate=0.0,
+            by_tenant=[],
+        )
+
+    matches_result = await session.execute(select(MatchORM).where(MatchORM.job_id.in_(job_ids)))
+    all_matches = matches_result.scalars().all()
+
+    total_records = len(all_matches)
+    matched = sum(1 for m in all_matches if m.status == MatchStatus.MATCHED.value)
+    uncertain = sum(1 for m in all_matches if m.status == MatchStatus.UNCERTAIN.value)
+    unmatched = sum(1 for m in all_matches if m.status == MatchStatus.UNMATCHED.value)
+    avg_match_rate = matched / total_records if total_records > 0 else 0.0
+    escalation_rate = uncertain / total_records if total_records > 0 else 0.0
+
+    by_tenant: list[AdminTenantAnalytics] = []
+    jobs_by_tenant: dict[str, list[JobORM]] = {}
+    for j in jobs:
+        if j.tenant_id:
+            jobs_by_tenant.setdefault(j.tenant_id, []).append(j)
+
+    for tid, tjobs in jobs_by_tenant.items():
+        tjob_ids = {j.id for j in tjobs}
+        tmatches = [m for m in all_matches if m.job_id in tjob_ids]
+        tmatched = sum(1 for m in tmatches if m.status == MatchStatus.MATCHED.value)
+        tuncertain = sum(1 for m in tmatches if m.status == MatchStatus.UNCERTAIN.value)
+        trate = tmatched / len(tmatches) if tmatches else 0.0
+        terate = tuncertain / len(tmatches) if tmatches else 0.0
+        tenant = tenants.get(tid)
+        by_tenant.append(
+            AdminTenantAnalytics(
+                tenant_id=tid,  # type: ignore[arg-type]
+                tenant_name=tenant.name if tenant else tid,
+                total_jobs=len(tjobs),
+                total_records=len(tmatches),
+                matched_records=tmatched,
+                avg_match_rate=trate,
+                escalation_rate=terate,
+            )
+        )
+
+    return AdminAnalyticsSummary(
+        period_start=period_start,
+        period_end=period_end,
+        total_tenants=len(tenants),
+        total_jobs=len(jobs),
+        total_records=total_records,
+        matched_records=matched,
+        uncertain_records=uncertain,
+        unmatched_records=unmatched,
+        avg_match_rate=avg_match_rate,
+        escalation_rate=escalation_rate,
+        by_tenant=sorted(by_tenant, key=lambda t: t.total_records, reverse=True),
     )

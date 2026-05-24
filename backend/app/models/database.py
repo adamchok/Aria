@@ -15,6 +15,7 @@ from app.models.enums import (
     BufferStatus,
     JobStatus,
     MatchStatus,
+    UserRole,
     WebhookDeliveryStatus,
 )
 
@@ -58,6 +59,27 @@ class ApiKeyORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     tenant: Mapped[TenantORM] = relationship(back_populates="api_keys")
+
+
+class UserORM(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, native_enum=False, length=16),
+        nullable=False,
+        default=UserRole.TENANT_USER,
+    )
+    tenant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    tenant: Mapped[TenantORM | None] = relationship("TenantORM", foreign_keys=[tenant_id], lazy="noload")
 
 
 # ─── Core pipeline ───────────────────────────────────────────────────────────

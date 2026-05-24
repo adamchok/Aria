@@ -63,6 +63,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODE: ${LLM_MODE:-mock}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-aria-dev-admin}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-aria-dev-jwt-secret-change-in-production}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@aria.local}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
       BATCH_SIZE_THRESHOLD: ${BATCH_SIZE_THRESHOLD:-50}
       BATCH_TIME_WINDOW_MINUTES: ${BATCH_TIME_WINDOW_MINUTES:-15}
       CELERY_BEAT_INTERVAL_MINUTES: ${CELERY_BEAT_INTERVAL_MINUTES:-2}
@@ -126,12 +130,26 @@ services:
     command: celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
     restart: unless-stopped
 
-  frontend:
-    build: ./frontend
+  frontend-ops:
+    build: ./frontend-tenant-ops
     depends_on:
       - api
     ports:
       - "5173:80"
+
+  frontend-admin:
+    build: ./frontend-admin
+    depends_on:
+      - api
+    ports:
+      - "5174:80"
+
+  frontend-tenant-mgmt:
+    build: ./frontend-tenant-mgmt
+    depends_on:
+      - api
+    ports:
+      - "5175:80"
 
 volumes:
   aria_pg:

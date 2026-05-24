@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
-from app.models.enums import BufferStatus, JobStatus, MatchStatus, ReviewAction, SourceFormat, WebhookEvent
+from app.models.enums import BufferStatus, JobStatus, MatchStatus, ReviewAction, SourceFormat, UserRole, WebhookEvent
 
 MoneyStr = Annotated[Decimal, Field(..., description="Decimal amount; JSON-encoded as string")]
 
@@ -418,3 +418,77 @@ class AnalyticsSummary(_Base):
     avg_processing_seconds: float
     escalation_rate: float
     by_corridor: list[AnalyticsCorridorBreakdown]
+
+
+class AdminTenantAnalytics(_Base):
+    tenant_id: UUID
+    tenant_name: str
+    total_jobs: int
+    total_records: int
+    matched_records: int
+    avg_match_rate: float
+    escalation_rate: float
+
+
+class AdminAnalyticsSummary(_Base):
+    period_start: date
+    period_end: date
+    total_tenants: int
+    total_jobs: int
+    total_records: int
+    matched_records: int
+    uncertain_records: int
+    unmatched_records: int
+    avg_match_rate: float
+    escalation_rate: float
+    by_tenant: list[AdminTenantAnalytics]
+
+
+class AdminQueueTenantStatus(_Base):
+    tenant_id: UUID
+    tenant_name: str
+    total_buffered: int
+    by_corridor: list[QueueCorridorStatus]
+    next_batch_trigger: str
+
+
+class AdminQueueStatusResponse(_Base):
+    tenants: list[AdminQueueTenantStatus]
+    total_buffered_system: int
+
+
+# ─── User / auth ─────────────────────────────────────────────────────────────
+
+
+class LoginRequest(_Base):
+    email: str
+    password: str
+
+
+class UserResponse(_Base):
+    id: UUID
+    email: str
+    role: UserRole
+    tenant_id: UUID | None = None
+    is_active: bool
+    created_at: datetime
+
+
+class LoginResponse(_Base):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class UserCreate(_Base):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole = UserRole.TENANT_USER
+    tenant_id: UUID | None = None
+
+
+class TenantUserCreate(_Base):
+    """Create a tenant_user within the authenticated tenant (mgmt app)."""
+
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)

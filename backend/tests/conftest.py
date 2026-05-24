@@ -26,6 +26,10 @@ os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 # Fixed test credentials — seeded into the in-memory DB by api_client fixture.
 TEST_TENANT_ID = "00000000-0000-0000-0001-000000000001"
 TEST_RAW_API_KEY = "aria_testkey_integration"
+TEST_ADMIN_EMAIL = "admin@aria.test"
+TEST_ADMIN_PASSWORD = "adminpass123"
+TEST_TENANT_USER_EMAIL = "user@tenant.test"
+TEST_TENANT_USER_PASSWORD = "userpass123"
 
 import pytest
 import pytest_asyncio
@@ -80,9 +84,10 @@ async def api_client(db_engine):
     """ASGI client wired to the in-memory test DB with a pre-seeded tenant + API key."""
     from app.core import database as db_module
     from app.core.dependencies import get_db_session
-    from app.core.security import hash_key
+    from app.core.security import hash_key, hash_password
     from app.main import app
-    from app.models.database import ApiKeyORM, TenantORM
+    from app.models.database import ApiKeyORM, TenantORM, UserORM
+    from app.models.enums import UserRole
 
     test_factory = async_sessionmaker(
         db_engine, expire_on_commit=False, class_=AsyncSession
@@ -102,6 +107,18 @@ async def api_client(db_engine):
             label="test",
             enabled=True,
         ))
+        s.add(UserORM(
+            email=TEST_ADMIN_EMAIL,
+            hashed_password=hash_password(TEST_ADMIN_PASSWORD),
+            role=UserRole.ADMIN,
+            tenant_id=None,
+        ))
+        s.add(UserORM(
+            email=TEST_TENANT_USER_EMAIL,
+            hashed_password=hash_password(TEST_TENANT_USER_PASSWORD),
+            role=UserRole.TENANT_USER,
+            tenant_id=TEST_TENANT_ID,
+        ))
         await s.commit()
 
     async def _override_session():
@@ -120,6 +137,34 @@ async def api_client(db_engine):
 
     app.dependency_overrides.clear()
     db_module._session_factory = original_factory
+
+
+@pytest_asyncio.fixture
+async def jwt_admin_client(api_client):
+    """API client authenticated with platform admin JWT."""
+    resp = await api_client.post(
+        "/api/v1/auth/login",
+        json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
+    )
+    assert resp.status_code == 200
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    api_client.headers.pop("X-API-Key", None)
+    return api_client
+
+
+@pytest_asyncio.fixture
+async def jwt_tenant_client(api_client):
+    """API client authenticated with tenant user JWT."""
+    resp = await api_client.post(
+        "/api/v1/auth/login",
+        json={"email": TEST_TENANT_USER_EMAIL, "password": TEST_TENANT_USER_PASSWORD},
+    )
+    assert resp.status_code == 200
+    token = resp.json()["access_token"]
+    api_client.headers["Authorization"] = f"Bearer {token}"
+    api_client.headers.pop("X-API-Key", None)
+    return api_client
 
 
 # ─── Reusable schema fixtures ──────────────────────────────────────────────

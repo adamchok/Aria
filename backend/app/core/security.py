@@ -1,4 +1,4 @@
-"""Cryptographic utilities: API key generation, hashing, HMAC signing."""
+"""Cryptographic utilities: API key generation, hashing, HMAC signing, JWT auth."""
 
 from __future__ import annotations
 
@@ -6,10 +6,52 @@ import hashlib
 import hmac
 import secrets
 import time
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
+import bcrypt
+import jwt
 
 _KEY_PREFIX = "aria_"
 _KEY_BYTES = 32  # 256-bit raw key
+
+
+# ─── Password helpers ────────────────────────────────────────────────────────
+
+
+def hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+# ─── JWT helpers ─────────────────────────────────────────────────────────────
+
+
+def create_access_token(
+    *,
+    user_id: str,
+    role: str,
+    tenant_id: str | None,
+    secret: str,
+    algorithm: str = "HS256",
+    expires_minutes: int = 1440,
+) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    payload: dict[str, Any] = {
+        "sub": user_id,
+        "role": role,
+        "tenant_id": tenant_id,
+        "exp": expire,
+    }
+    return jwt.encode(payload, secret, algorithm=algorithm)
+
+
+def decode_access_token(token: str, secret: str, algorithm: str = "HS256") -> dict[str, Any]:
+    """Decode and verify JWT. Raises jwt.PyJWTError on failure."""
+    return jwt.decode(token, secret, algorithms=[algorithm])
 
 
 def generate_api_key() -> tuple[str, str]:

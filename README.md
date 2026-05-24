@@ -29,7 +29,9 @@ docker compose up --build
 
 | Service | URL |
 | --- | --- |
-| Web UI | http://localhost:5173 |
+| Ops UI (reconciliation) | http://localhost:5173 |
+| Admin UI (platform) | http://localhost:5174 |
+| Tenant mgmt UI | http://localhost:5175 |
 | API (Swagger) | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 
@@ -68,9 +70,11 @@ Supported corridors: **USD/MYR · EUR/MYR · GBP/MYR · SGD/MYR**
 
 ```text
 Aria/
-├── backend/          Python FastAPI + LangGraph agents
-├── frontend/         React 18 + TypeScript SPA
-├── docs/             GitHub Pages documentation
+├── backend/                 Python FastAPI + LangGraph agents
+├── frontend-tenant-ops/     Reconciliation ops app (port 5173)
+├── frontend-admin/          Platform admin app (port 5174)
+├── frontend-tenant-mgmt/    Tenant configuration app (port 5175)
+├── docs/                    GitHub Pages documentation
 ├── docker-compose.yml
 └── ARIA_Technical_Specification.md
 ```
@@ -81,8 +85,10 @@ Aria/
 # Backend tests (no Docker required)
 cd backend && pip install -e ".[dev]" && pytest -q
 
-# Frontend tests
-cd frontend && npm install && npm test
+# Frontend tests (per app)
+cd frontend-tenant-ops && npm install && npm test
+cd frontend-tenant-mgmt && npm install && npm test
+cd frontend-admin && npm install && npm test
 ```
 
 See [Development](docs/development.md) for hybrid local setup, migrations, and conventions.

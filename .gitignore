@@ -2,7 +2,7 @@
 CLAUDE.md
 ARIA_Project_Overview.md
 ARIA_Technical_Specification.md
-ARIA_Platform_Architecture.md.
+ARIA_Platform_Architecture.md
 
 # Secrets
 .env
@@ -42,6 +42,8 @@ Thumbs.db
 .vscode/
 .cursor/
 .claude/
+.cursorrules
+AGENTS.md
 
 # Added by code-review-graph
 .code-review-graph/
