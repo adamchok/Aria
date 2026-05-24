@@ -25,11 +25,13 @@ class BankLedgerRepository:
         storage_key: str | None,
         base_currency: str,
         statement: BankStatement,
+        account_id: str | None = None,
     ) -> BankStatementORM:
         stmt_id = str(uuid4())
         orm = BankStatementORM(
             id=stmt_id,
             tenant_id=self._tenant_id,
+            account_id=account_id,
             filename=filename,
             storage_key=storage_key,
             base_currency=base_currency,

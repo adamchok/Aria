@@ -73,6 +73,14 @@ function KeyIcon() {
   );
 }
 
+function BankIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" />
+    </svg>
+  );
+}
+
 function WebhookIcon() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -102,6 +110,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: <LayoutIcon /> },
       { to: '/jobs', label: 'Jobs', icon: <BriefcaseIcon /> },
+      { to: '/bank-accounts', label: 'Bank Accounts', icon: <BankIcon /> },
       { to: '/queue', label: 'Transaction Queue', icon: <InboxIcon /> },
     ],
   },

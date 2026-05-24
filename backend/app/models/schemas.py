@@ -297,6 +297,7 @@ class BankStatementUploadResponse(_Base):
     id: UUID
     filename: str
     entry_count: int
+    account_id: UUID | None = None
     statement_period_start: date | None = None
     statement_period_end: date | None = None
 
@@ -335,6 +336,54 @@ class BankStatementDetail(_Base):
     uncleared_count: int
     created_at: datetime
     entries: list[BankEntryItem] = Field(default_factory=list)
+
+
+# ─── Bank accounts ───────────────────────────────────────────────────────────
+
+class BankAccountCreate(_Base):
+    name: str = Field(min_length=1, max_length=255)
+    bank_name: str = Field(min_length=1, max_length=255)
+    account_number_masked: str = Field(min_length=1, max_length=50)
+    currency: str = Field(min_length=3, max_length=3, description="ISO 4217")
+
+    @field_validator("currency")
+    @classmethod
+    def _upper_currency(cls, v: str) -> str:
+        return v.upper()
+
+
+class BankAccountResponse(_Base):
+    id: UUID
+    tenant_id: UUID | None = None
+    name: str
+    bank_name: str
+    account_number_masked: str
+    currency: str
+    created_at: datetime
+    statement_count: int = 0
+    entry_count: int = 0
+    uncleared_count: int = 0
+
+
+class LedgerEntryItem(_Base):
+    id: UUID
+    statement_id: UUID
+    statement_filename: str
+    value_date: date
+    amount: Decimal
+    currency: str
+    description: str = ""
+    reference: str | None = None
+    counterparty: str | None = None
+    cleared: bool = False
+    cleared_by_job_id: UUID | None = None
+
+
+class LedgerPageResponse(_Base):
+    items: list[LedgerEntryItem]
+    total: int
+    page: int
+    page_size: int
 
 
 # ─── SSE event ───────────────────────────────────────────────────────────────

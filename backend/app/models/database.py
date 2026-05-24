@@ -42,6 +42,7 @@ class TenantORM(Base):
     transaction_buffer: Mapped[list[TransactionBufferORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     webhooks: Mapped[list[WebhookORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     bank_statements: Mapped[list[BankStatementORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
+    bank_accounts: Mapped[list[BankAccountORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
 
 
 class ApiKeyORM(Base):
@@ -203,7 +204,26 @@ class WebhookDeliveryORM(Base):
     job: Mapped[JobORM] = relationship(back_populates="webhook_deliveries")
 
 
-# ─── Bank statement ledger ────────────────────────────────────────────────────
+# ─── Bank account ledger ─────────────────────────────────────────────────────
+
+
+class BankAccountORM(Base):
+    __tablename__ = "bank_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    tenant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    bank_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_number_masked: Mapped[str] = mapped_column(String(50), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="MYR")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    tenant: Mapped[TenantORM | None] = relationship(back_populates="bank_accounts")
+    statements: Mapped[list[BankStatementORM]] = relationship(
+        back_populates="account", cascade="all, delete-orphan", lazy="noload"
+    )
 
 
 class BankStatementORM(Base):
@@ -212,6 +232,9 @@ class BankStatementORM(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     tenant_id: Mapped[str | None] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("bank_accounts.id", ondelete="SET NULL"), index=True, nullable=True
     )
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -222,6 +245,7 @@ class BankStatementORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     tenant: Mapped[TenantORM | None] = relationship(back_populates="bank_statements")
+    account: Mapped[BankAccountORM | None] = relationship(back_populates="statements")
     entries: Mapped[list[BankEntryORM]] = relationship(
         back_populates="statement", cascade="all, delete-orphan", lazy="noload"
     )

@@ -266,6 +266,70 @@ export interface StreamEvent {
   data: SSEEventData;
 }
 
+// ─── Bank accounts ───────────────────────────────────────────────────────────
+
+export interface BankAccountCreate {
+  name: string;
+  bank_name: string;
+  account_number_masked: string;
+  currency: string;
+}
+
+export interface BankAccountResponse {
+  id: UUID;
+  tenant_id: UUID | null;
+  name: string;
+  bank_name: string;
+  account_number_masked: string;
+  currency: string;
+  created_at: ISODateTime;
+  statement_count: number;
+  entry_count: number;
+  uncleared_count: number;
+}
+
+export interface BankStatementSummary {
+  id: UUID;
+  tenant_id: UUID | null;
+  filename: string;
+  base_currency: string;
+  statement_period_start: ISODate | null;
+  statement_period_end: ISODate | null;
+  entry_count: number;
+  uncleared_count: number;
+  created_at: ISODateTime;
+}
+
+export interface BankStatementUploadResponse {
+  id: UUID;
+  filename: string;
+  entry_count: number;
+  account_id: UUID | null;
+  statement_period_start: ISODate | null;
+  statement_period_end: ISODate | null;
+}
+
+export interface LedgerEntryItem {
+  id: UUID;
+  statement_id: UUID;
+  statement_filename: string;
+  value_date: ISODate;
+  amount: MoneyStr;
+  currency: string;
+  description: string;
+  reference: string | null;
+  counterparty: string | null;
+  cleared: boolean;
+  cleared_by_job_id: UUID | null;
+}
+
+export interface LedgerPageResponse {
+  items: LedgerEntryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 // ─── Analytics ───────────────────────────────────────────────────────────────
 
 export interface AnalyticsCorridorBreakdown {

@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { BankAccountDetailPage } from '@/pages/BankAccountDetailPage';
+import { BankAccountsPage } from '@/pages/BankAccountsPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { JobProgressPage } from '@/pages/JobProgressPage';
 import { JobsPage } from '@/pages/JobsPage';
@@ -21,6 +23,8 @@ export default function App() {
         <Route path="/jobs/:jobId" element={<JobProgressPage />} />
         <Route path="/jobs/:jobId/results" element={<ResultsPage />} />
         <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
+        <Route path="/bank-accounts" element={<BankAccountsPage />} />
+        <Route path="/bank-accounts/:accountId" element={<BankAccountDetailPage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings/keys" element={<ApiKeysPage />} />

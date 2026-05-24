@@ -1,9 +1,14 @@
 import type {
   AnalyticsSummary,
   ApiKeyResponse,
+  BankAccountCreate,
+  BankAccountResponse,
+  BankStatementSummary,
+  BankStatementUploadResponse,
   JobCreateResponse,
   JobListResponse,
   JobStatusResponse,
+  LedgerPageResponse,
   MatchResult,
   QueueStatusResponse,
   ReconciliationReport,
@@ -161,6 +166,47 @@ export const api = {
 
   listWebhookDeliveries: (webhookId: UUID): Promise<WebhookDeliveryResponse[]> =>
     request<WebhookDeliveryResponse[]>(`/api/v1/webhooks/${webhookId}/deliveries`),
+
+  // ─── Bank accounts ─────────────────────────────────────────────────────────
+
+  listBankAccounts: (): Promise<BankAccountResponse[]> =>
+    request<BankAccountResponse[]>('/api/v1/bank-accounts'),
+
+  getBankAccount: (accountId: UUID): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>(`/api/v1/bank-accounts/${accountId}`),
+
+  createBankAccount: (payload: BankAccountCreate): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>('/api/v1/bank-accounts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteBankAccount: (accountId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}`, { method: 'DELETE' }),
+
+  listAccountStatements: (accountId: UUID): Promise<BankStatementSummary[]> =>
+    request<BankStatementSummary[]>(`/api/v1/bank-accounts/${accountId}/statements`),
+
+  uploadAccountStatement: (accountId: UUID, file: File): Promise<BankStatementUploadResponse> => {
+    const form = new FormData();
+    form.append('bank_statement', file, file.name);
+    return request<BankStatementUploadResponse>(`/api/v1/bank-accounts/${accountId}/statements`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+
+  getAccountLedger: (
+    accountId: UUID,
+    params?: { cleared?: boolean; page?: number; page_size?: number },
+  ): Promise<LedgerPageResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.cleared !== undefined) qs.set('cleared', String(params.cleared));
+    if (params?.page !== undefined) qs.set('page', String(params.page));
+    if (params?.page_size !== undefined) qs.set('page_size', String(params.page_size));
+    const query = qs.toString();
+    return request<LedgerPageResponse>(`/api/v1/bank-accounts/${accountId}/ledger${query ? `?${query}` : ''}`);
+  },
 
   // ─── Analytics ─────────────────────────────────────────────────────────────
 

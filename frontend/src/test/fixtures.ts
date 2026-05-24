@@ -1,11 +1,63 @@
 import type {
+  BankAccountResponse,
+  BankStatementSummary,
   JobCreateResponse,
   JobStatusResponse,
+  LedgerEntryItem,
+  LedgerPageResponse,
   MatchResult,
   ReconciliationReport,
 } from '@/types/api';
 
 export const JOB_ID = '11111111-1111-1111-1111-111111111111';
+export const ACCOUNT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+export const STMT_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+export const bankAccountFixture: BankAccountResponse = {
+  id: ACCOUNT_ID,
+  tenant_id: '00000000-0000-0000-0001-000000000001',
+  name: 'Main Operating Account',
+  bank_name: 'Maybank',
+  account_number_masked: '****1234',
+  currency: 'MYR',
+  created_at: '2026-05-01T08:00:00Z',
+  statement_count: 1,
+  entry_count: 2,
+  uncleared_count: 2,
+};
+
+export const statementFixture: BankStatementSummary = {
+  id: STMT_ID,
+  tenant_id: '00000000-0000-0000-0001-000000000001',
+  filename: 'may_2026.csv',
+  base_currency: 'MYR',
+  statement_period_start: '2026-05-01',
+  statement_period_end: '2026-05-31',
+  entry_count: 2,
+  uncleared_count: 2,
+  created_at: '2026-05-02T08:00:00Z',
+};
+
+export const ledgerEntryFixture: LedgerEntryItem = {
+  id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+  statement_id: STMT_ID,
+  statement_filename: 'may_2026.csv',
+  value_date: '2026-05-01',
+  amount: '1000.00',
+  currency: 'MYR',
+  description: 'Payment from Acme',
+  reference: 'INV-001',
+  counterparty: null,
+  cleared: false,
+  cleared_by_job_id: null,
+};
+
+export const ledgerPageFixture: LedgerPageResponse = {
+  items: [ledgerEntryFixture],
+  total: 1,
+  page: 1,
+  page_size: 50,
+};
 
 export const jobCreateResponse: JobCreateResponse = {
   job_id: JOB_ID,

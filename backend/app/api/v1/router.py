@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import analytics, bank_statements, export, ingest, jobs, review, stream, tenants, webhooks
+from app.api.v1 import analytics, bank_accounts, bank_statements, export, ingest, jobs, review, stream, tenants, webhooks
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -20,3 +20,4 @@ api_router.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(bank_statements.router, prefix="/bank-statements", tags=["bank-statements"])
+api_router.include_router(bank_accounts.router, prefix="/bank-accounts", tags=["bank-accounts"])
