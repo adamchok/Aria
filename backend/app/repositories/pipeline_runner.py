@@ -1,13 +1,14 @@
-"""Glue between the LangGraph pipeline and persistent storage."""
+"""Glue between the OpenAI Agents SDK pipeline and persistent storage."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID
 
+from app.agents.audit import make_audit_entry
 from app.core.database import session_scope
 from app.core.logging import bind_job_id, get_logger
-from app.graph.builder import arun_pipeline
+from app.agents.sdk.runner import run_reconciliation
 from app.graph.state import DocumentInput, ReconciliationState
 from app.models.enums import JobStatus, MatchStatus
 from app.repositories.bank_ledger_repository import BankLedgerRepository
@@ -15,6 +16,41 @@ from app.repositories.job_repository import JobRepository
 from app.services.storage import StorageService
 
 logger = get_logger(__name__)
+
+_STAGE_PROGRESS_PCT: dict[str, float] = {
+    "ingestion": 25.0,
+    "normalisation": 50.0,
+    "matching": 75.0,
+    "report": 95.0,
+}
+
+
+async def _publish_stage_progress(
+    job_id: UUID | str,
+    tenant_id: str | None,
+    state: ReconciliationState,
+    agent: str,
+) -> None:
+    """Persist and broadcast pipeline stage completion for live progress UI."""
+    progress_pct = _STAGE_PROGRESS_PCT.get(agent, 0.0)
+    agents = list(state.agents_completed)
+    async with session_scope() as session:
+        repo = JobRepository(session)
+        await repo.update_status(
+            job_id,
+            status=state.status,
+            progress_pct=progress_pct,
+            agents_completed=agents,
+        )
+    payload = {
+        "status": state.status,
+        "progress_pct": progress_pct,
+        "agents_completed": agents,
+        "agent": agent,
+    }
+    await _emit(str(job_id), tenant_id, "agent_complete", payload)
+    await _emit(str(job_id), tenant_id, "status_change", payload)
+    await _emit(str(job_id), tenant_id, "progress_update", {"progress_pct": progress_pct})
 
 
 async def _emit(job_id: str, tenant_id: str | None, event: str, data: dict) -> None:
@@ -48,6 +84,7 @@ async def execute_job(job_id: UUID | str) -> None:
     # and attribute access raises DetachedInstanceError on lazy-loaded columns.
     tenant_id: str | None = None
     bank_statement_id_str: str | None = None
+    bank_account_id_str: str | None = None
     base_currency: str = "MYR"
     payment_proof_keys: list[str] = []
     bank_statement_key: str | None = None
@@ -57,6 +94,7 @@ async def execute_job(job_id: UUID | str) -> None:
         job = await repo.get(job_id)
         tenant_id = job.tenant_id
         bank_statement_id_str = job.bank_statement_id
+        bank_account_id_str = job.bank_account_id
         base_currency = job.base_currency
         payment_proof_keys = list(job.payment_proof_keys or [])
         bank_statement_key = job.bank_statement_key
@@ -93,30 +131,64 @@ async def execute_job(job_id: UUID | str) -> None:
             state.bank_statement_input.storage_key
         )
 
-    # If a ledger statement is referenced, load its uncleared entries into state
-    # so the matching agent works with persistent bank data instead of a one-off file.
-    if bank_statement_id_str:
+    # If a ledger reference is set, load uncleared entries into state so matching
+    # works with persistent bank data instead of a one-off uploaded file.
+    if bank_account_id_str or bank_statement_id_str:
         async with session_scope() as session:
-            # tenant_id scopes the repo so cross-tenant reads are impossible.
             ledger = BankLedgerRepository(session, tenant_id=tenant_id)
-            state.bank_statement = await ledger.get_uncleared_as_bank_statement(
-                bank_statement_id_str, base_currency
-            )
+            if bank_account_id_str:
+                state.bank_statement = await ledger.get_account_uncleared_as_bank_statement(
+                    bank_account_id_str, base_currency
+                )
+                ledger_ref = bank_account_id_str
+                ledger_kind = "account"
+            else:
+                state.bank_statement = await ledger.get_uncleared_as_bank_statement(
+                    bank_statement_id_str, base_currency
+                )
+                ledger_ref = bank_statement_id_str
+                ledger_kind = "statement"
         entry_count = len(state.bank_statement.entries) if state.bank_statement else 0
         logger.info(
             "pipeline.ledger_loaded",
-            statement_id=bank_statement_id_str,
+            ledger_kind=ledger_kind,
+            ledger_ref=ledger_ref,
             entries=entry_count,
+        )
+        state.audit_log.append(
+            make_audit_entry(
+                job_id=UUID(job_id_str),
+                agent="bank_statement_ingestion",
+                action="ledger_loaded",
+                input_snapshot={
+                    "ledger_kind": ledger_kind,
+                    "ledger_ref": ledger_ref,
+                },
+                output_snapshot={"entry_count": entry_count},
+                reasoning=(
+                    f"Loaded {entry_count} pending ledger "
+                    f"{'entries' if entry_count != 1 else 'entry'} from database "
+                    f"for {ledger_kind} {ledger_ref}."
+                ),
+            )
         )
         if entry_count == 0:
             logger.warning(
                 "pipeline.ledger_empty",
-                statement_id=bank_statement_id_str,
+                ledger_kind=ledger_kind,
+                ledger_ref=ledger_ref,
                 detail="All entries already cleared — all payment records will be UNMATCHED.",
             )
 
     try:
-        state = await arun_pipeline(state)
+        async def on_stage_complete(state: ReconciliationState, agent: str) -> None:
+            await _publish_stage_progress(job_id, tenant_id, state, agent)
+
+        state = await run_reconciliation(
+            state,
+            on_stage_complete=on_stage_complete,
+            tenant_id=tenant_id,
+        )
     except Exception as exc:  # noqa: BLE001 — log and persist
         logger.exception("pipeline.failed", error=str(exc))
         async with session_scope() as session:
@@ -146,7 +218,7 @@ async def execute_job(job_id: UUID | str) -> None:
 
     # Mark ledger entries as cleared for all auto-confirmed matches.
     # tenant_id scopes the repo — only entries belonging to this tenant are touched.
-    if bank_statement_id_str and state.match_results:
+    if (bank_statement_id_str or bank_account_id_str) and state.match_results:
         matched_entry_ids = [
             m.bank_entry.id
             for m in state.match_results

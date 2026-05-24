@@ -21,6 +21,7 @@ from app.models.schemas import (
     MatchResult,
     ReconciliationReport,
 )
+from app.repositories.bank_account_repository import BankAccountRepository
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
 from app.services.report_hydration import hydrate_report
@@ -92,11 +93,20 @@ async def create_job(
     payment_proofs: Annotated[list[UploadFile], File(description="Payment proofs (multi-file)")],
     bank_statement: Annotated[
         UploadFile | None,
-        File(description="Bank statement file (XLSX, CSV, or PDF). Omit if bank_statement_id is set."),
+        File(description="Bank statement file (XLSX, CSV, or PDF). Omit when using ledger references."),
     ] = None,
     bank_statement_id: Annotated[
         str | None,
         Form(description="ID of a previously uploaded bank statement from /bank-statements."),
+    ] = None,
+    bank_account_id: Annotated[
+        str | None,
+        Form(
+            description=(
+                "ID of a registered bank account. Uses all pending (uncleared) ledger "
+                "entries across every statement for that account."
+            ),
+        ),
     ] = None,
     base_currency: Annotated[str, Form()] = "MYR",
     session: AsyncSession = Depends(get_db_session),
@@ -107,21 +117,29 @@ async def create_job(
     if not payment_proofs:
         raise HTTPException(status_code=400, detail="At least one payment proof is required")
 
-    # Normalise bank_statement_id: treat whitespace-only as absent.
+    # Normalise optional ledger references.
     bank_statement_id = (bank_statement_id or "").strip() or None
+    bank_account_id = (bank_account_id or "").strip() or None
 
-    if bank_statement is None and not bank_statement_id:
+    bank_sources = [
+        bank_statement is not None,
+        bool(bank_statement_id),
+        bool(bank_account_id),
+    ]
+    if not any(bank_sources):
         raise HTTPException(
             status_code=400,
-            detail="Provide either a bank_statement file or a bank_statement_id.",
+            detail=(
+                "Provide exactly one of: bank_statement file, bank_statement_id, "
+                "or bank_account_id."
+            ),
         )
-    if bank_statement is not None and bank_statement_id:
+    if sum(bank_sources) > 1:
         raise HTTPException(
             status_code=400,
-            detail="Provide bank_statement file OR bank_statement_id, not both.",
+            detail="Provide only one bank source: file, bank_statement_id, or bank_account_id.",
         )
 
-    # Validate UUID format and ownership before creating the job.
     if bank_statement_id:
         try:
             stmt_uuid = UUID(bank_statement_id)
@@ -135,6 +153,28 @@ async def create_job(
             raise HTTPException(
                 status_code=404,
                 detail="bank_statement_id not found or does not belong to this tenant.",
+            )
+
+    if bank_account_id:
+        try:
+            account_uuid = UUID(bank_account_id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"bank_account_id is not a valid UUID: {bank_account_id!r}",
+            ) from exc
+        account_repo = BankAccountRepository(session, tenant_id=tenant_id)
+        account = await account_repo.get(account_uuid)
+        if account is None:
+            raise HTTPException(
+                status_code=404,
+                detail="bank_account_id not found or does not belong to this tenant.",
+            )
+        stats = await account_repo.get_stats(account_uuid)
+        if stats["uncleared_count"] == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No pending ledger entries for this bank account.",
             )
 
     storage = StorageService()
@@ -170,12 +210,18 @@ async def create_job(
         payment_proof_keys=proof_keys,
         bank_statement_key=stmt_key,
         bank_statement_id=bank_statement_id,
+        bank_account_id=bank_account_id,
         tenant_id=tenant_id,
     )
 
     bind_job_id(job.id)
     await enqueue_job(job.id)
-    logger.info("job.created", proofs=len(proof_keys), ledger_stmt=bool(bank_statement_id))
+    logger.info(
+        "job.created",
+        proofs=len(proof_keys),
+        ledger_stmt=bool(bank_statement_id),
+        ledger_account=bool(bank_account_id),
+    )
 
     return JobCreateResponse(
         job_id=UUID(job.id), status=JobStatus(job.status), created_at=job.created_at

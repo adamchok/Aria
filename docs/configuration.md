@@ -62,6 +62,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in values as needed.
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | *(empty)* | Anthropic API key — required when `LLM_MODE=live` |
 | `LLM_MODE` | `mock` | `mock` = deterministic in-process responses; `live` = real Claude calls |
+| `AGENTS_SDK_TRACING` | `false` | Enable OpenAI Agents SDK built-in tracing (optional; LangSmith also available) |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for ingestion, matching, report |
 | `HAIKU_MODEL` | `claude-haiku-4-5` | Model for normalisation tool-use |
 

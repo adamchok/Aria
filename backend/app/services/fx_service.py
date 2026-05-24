@@ -109,11 +109,17 @@ class FXService:
         self._cache: dict[tuple[str, str, str], tuple[Decimal, float]] = {}
         if providers is None:
             client = httpx.AsyncClient()
-            providers = [
-                ExchangeRateAPIProvider(self._settings.exchangerate_api_key, client),
-                OpenExchangeRatesProvider(self._settings.openexchangerates_app_id, client),
-                StaticFallbackProvider(),
-            ]
+            providers = []
+            # Prefer Open Exchange Rates — ExchangeRate-API free tier lacks historical endpoints.
+            if self._settings.openexchangerates_app_id:
+                providers.append(
+                    OpenExchangeRatesProvider(self._settings.openexchangerates_app_id, client),
+                )
+            if self._settings.exchangerate_api_key:
+                providers.append(
+                    ExchangeRateAPIProvider(self._settings.exchangerate_api_key, client),
+                )
+            providers.append(StaticFallbackProvider())
         self._providers = providers
 
     async def get_rate(self, source: str, target: str, on_date: date) -> Decimal:

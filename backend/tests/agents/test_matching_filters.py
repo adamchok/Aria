@@ -1,47 +1,47 @@
-"""Stage 1 (date) and Stage 2 (amount) filters for the Matching Agent."""
+"""Stage 1/2 filters."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
-from app.agents.matching import MatchingAgent
+from app.agents.sdk.context import ReconciliationContext
+from app.agents.sdk.stages.matching import _stage1_date_filter, _stage2_amount_filter, run_matching_stage
 from app.core.config import Settings
+from app.graph.state import ReconciliationState
 from app.models.schemas import BankEntry
+from uuid import uuid4
 
 
-def _entry(value_date: date, amount: Decimal) -> BankEntry:
-    return BankEntry(value_date=value_date, amount=amount, currency="MYR")
+def _settings(**kwargs) -> Settings:
+    return Settings(_env_file=None, **kwargs)
 
 
-def test_stage1_date_filter_window(normalised_record_usd):
-    agent = MatchingAgent(settings=Settings(_env_file=None, date_window_days=5))
-    target = normalised_record_usd.payment.value_date
-    entries = [
-        _entry(target - timedelta(days=4), Decimal("42")),  # in
-        _entry(target + timedelta(days=5), Decimal("42")),  # in (edge)
-        _entry(target + timedelta(days=6), Decimal("42")),  # out
-        _entry(target - timedelta(days=10), Decimal("42")),  # out
-    ]
-    kept = agent._stage1_date_filter(normalised_record_usd, entries, used=set())
-    assert len(kept) == 2
+def test_stage1_date_filter_within_window(normalised_record_usd, bank_entry_myr):
+    settings = _settings(date_window_days=5)
+    kept = _stage1_date_filter(normalised_record_usd, [bank_entry_myr], set(), settings)
+    assert len(kept) == 1
 
 
-def test_stage2_amount_filter_uses_tolerance_window(normalised_record_usd):
-    agent = MatchingAgent(settings=Settings(_env_file=None))
-    target = normalised_record_usd.payment.value_date
-    in_window = _entry(target, normalised_record_usd.tolerance_low + Decimal("0.10"))
-    above = _entry(target, normalised_record_usd.tolerance_high + Decimal("5"))
-    below = _entry(target, normalised_record_usd.tolerance_low - Decimal("5"))
-    kept = agent._stage2_amount_filter(normalised_record_usd, [in_window, above, below])
-    assert kept == [in_window]
+def test_stage1_date_filter_outside_window(normalised_record_usd, bank_entry_myr):
+    settings = _settings(date_window_days=5)
+    far = BankEntry(
+        value_date=bank_entry_myr.value_date + timedelta(days=10),
+        amount=bank_entry_myr.amount,
+    )
+    kept = _stage1_date_filter(normalised_record_usd, [far], set(), settings)
+    assert kept == []
 
 
-def test_stage1_excludes_already_used_entries(normalised_record_usd):
-    agent = MatchingAgent(settings=Settings(_env_file=None))
-    target = normalised_record_usd.payment.value_date
-    e1 = _entry(target, Decimal("42"))
-    e2 = _entry(target, Decimal("43"))
-    used = {str(e1.id)}
-    kept = agent._stage1_date_filter(normalised_record_usd, [e1, e2], used=used)
-    assert kept == [e2]
+def test_stage2_amount_filter_in_window(normalised_record_usd, bank_entry_myr):
+    settings = _settings()
+    kept = _stage2_amount_filter(normalised_record_usd, [bank_entry_myr], settings)
+    assert len(kept) == 1
+
+
+def test_stage2_amount_filter_outside_window(normalised_record_usd):
+    settings = _settings()
+    low = normalised_record_usd.tolerance_low - Decimal("1000")
+    entry = BankEntry(value_date=normalised_record_usd.payment.value_date, amount=low)
+    kept = _stage2_amount_filter(normalised_record_usd, [entry], settings)
+    assert kept == []

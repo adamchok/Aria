@@ -159,6 +159,23 @@ export const handlers = [
   http.get(`http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/ledger`, () =>
     HttpResponse.json(ledgerPageFixture),
   ),
+
+  http.patch(
+    `http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/ledger/:entryId`,
+    async ({ params, request }) => {
+      const body = (await request.json()) as Partial<typeof ledgerPageFixture.items[0]>;
+      const entry = ledgerPageFixture.items[0];
+      return HttpResponse.json({ ...entry, id: String(params.entryId), ...body });
+    },
+  ),
+
+  http.delete(`http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/ledger/:entryId`, () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
+
+  http.delete(`http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/statements/:statementId`, () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
 ];
 
 export function resetHandlerState() {

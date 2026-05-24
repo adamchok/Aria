@@ -322,3 +322,103 @@ async def test_account_stats_update_after_upload(api_client):
     assert detail_after.json()["entry_count"] == 2
     assert detail_after.json()["uncleared_count"] == 2
     assert detail_after.json()["statement_count"] == 1
+
+
+# ─── DELETE statement ─────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_delete_statement_removes_entries(api_client):
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+
+    upload = await api_client.post(
+        f"/api/v1/bank-accounts/{acc_id}/statements",
+        files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+    )
+    stmt_id = upload.json()["id"]
+
+    delete_resp = await api_client.delete(f"/api/v1/bank-accounts/{acc_id}/statements/{stmt_id}")
+    assert delete_resp.status_code == 204
+
+    list_resp = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/statements")
+    assert list_resp.json() == []
+
+    ledger_resp = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger")
+    assert ledger_resp.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_statement_404_wrong_account(api_client):
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+    other = await api_client.post("/api/v1/bank-accounts", json={**_CREATE_PAYLOAD, "name": "Other"})
+    other_id = other.json()["id"]
+
+    upload = await api_client.post(
+        f"/api/v1/bank-accounts/{acc_id}/statements",
+        files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+    )
+    stmt_id = upload.json()["id"]
+
+    resp = await api_client.delete(f"/api/v1/bank-accounts/{other_id}/statements/{stmt_id}")
+    assert resp.status_code == 404
+
+
+# ─── PATCH / DELETE ledger entry ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_ledger_entry(api_client):
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+    await api_client.post(
+        f"/api/v1/bank-accounts/{acc_id}/statements",
+        files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+    )
+    ledger = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger")
+    entry_id = ledger.json()["items"][0]["id"]
+
+    patch = await api_client.patch(
+        f"/api/v1/bank-accounts/{acc_id}/ledger/{entry_id}",
+        json={"description": "Updated description", "reference": "INV-999"},
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["description"] == "Updated description"
+    assert patch.json()["reference"] == "INV-999"
+
+
+@pytest.mark.asyncio
+async def test_delete_ledger_entry(api_client):
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+    await api_client.post(
+        f"/api/v1/bank-accounts/{acc_id}/statements",
+        files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+    )
+    ledger = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger")
+    entry_id = ledger.json()["items"][0]["id"]
+
+    delete_resp = await api_client.delete(f"/api/v1/bank-accounts/{acc_id}/ledger/{entry_id}")
+    assert delete_resp.status_code == 204
+
+    ledger_after = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger")
+    assert ledger_after.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cannot_delete_cleared_ledger_entry(api_client, db_session):
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+    upload = await api_client.post(
+        f"/api/v1/bank-accounts/{acc_id}/statements",
+        files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+    )
+    stmt_id = upload.json()["id"]
+
+    ledger_repo = BankLedgerRepository(db_session, tenant_id=TEST_TENANT_ID)
+    entries = await ledger_repo.get_entries(stmt_id)
+    await ledger_repo.clear_entries([UUID(entries[0].id)], job_id=uuid4())
+
+    delete_resp = await api_client.delete(
+        f"/api/v1/bank-accounts/{acc_id}/ledger/{entries[0].id}"
+    )
+    assert delete_resp.status_code == 409

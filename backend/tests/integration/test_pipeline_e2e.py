@@ -1,4 +1,4 @@
-"""End-to-end pipeline test against the synchronous LangGraph driver.
+"""End-to-end pipeline test against run_reconciliation (Agents SDK driver).
 
 Marked ``slow`` because it exercises every agent + service in-process. Mock
 LLM keeps it deterministic and under a second.

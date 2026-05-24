@@ -17,7 +17,7 @@ description: "System design, agent pipeline, and technology stack"
 
 ## System overview
 
-ARIA is an **AI-first reconciliation platform**. The LangGraph pipeline is the authoritative reconciliation engine; multiple SME frontends — custom-built or the reference UI — connect to it through an authenticated, multi-tenant API. Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
+ARIA is an **AI-first reconciliation platform**. The OpenAI Agents SDK orchestrator runs a deterministic multi-stage pipeline with Anthropic Claude specialists; multiple SME frontends connect through an authenticated, multi-tenant API. Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
 
 ```mermaid
 flowchart TB
@@ -41,7 +41,7 @@ flowchart TB
     BEAT[Beat Scheduler]
     WH_TASK[Webhook Delivery]
   end
-  subgraph intelligence [Intelligence — LangGraph]
+  subgraph intelligence [Intelligence — OpenAI Agents SDK]
     LG[4-Agent Pipeline]
     LLM[Claude Sonnet / Haiku]
     FX[FX + SWIFT tools]
@@ -67,13 +67,15 @@ flowchart TB
 
 ## Agent pipeline
 
-Four specialised agents execute sequentially with shared typed state (`ReconciliationState`):
+A **ReconciliationOrchestrator** manager agent coordinates specialist stages with shared typed state (`ReconciliationState`). Orchestration is deterministic Python (confidence routing enforced in code); specialists call Anthropic via `LLMService` with RTCIOC-structured prompts.
 
 ```mermaid
 flowchart TD
-  IN[Agent 1: Ingestion<br/>Sonnet · vision] --> NO[Agent 2: Normalisation<br/>Haiku · FX tools]
-  NO --> MA[Agent 3: Matching<br/>Sonnet · fuzzy + LLM]
-  MA --> RE[Agent 4: Report<br/>Sonnet · Excel export]
+  ORCH[ReconciliationOrchestrator] --> IN[IngestionSpecialist]
+  ORCH --> BS[BankStatementSpecialist]
+  ORCH --> NO[NormalisationStage]
+  ORCH --> MA[MatchingSpecialist]
+  ORCH --> RE[ReportSpecialist]
   IN -->|confidence &lt; 0.5| HR[Human review queue]
   HR --> RE
   MA -->|0.5 ≤ conf &lt; 0.75| HR
@@ -90,12 +92,13 @@ flowchart TD
 
 | Agent | Model | Responsibility |
 | --- | --- | --- |
-| **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text); parse bank statements from XLSX, CSV, or PDF |
+| **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text) |
+| **Bank statement ingestion** | Sonnet (PDF document) | Extract ledger `BankEntry` rows from statement PDFs (LLM-first; pdfplumber fallback); XLSX/CSV via structured parsers |
 | **Normalisation** | Haiku | FX conversion to base currency; tolerance window calculation |
 | **Matching** | Sonnet | FX-aware fuzzy match + confidence scoring + explanations |
 | **Report** | Sonnet | Summary synthesis, exception narratives, Excel export |
 
-### LangGraph routing
+### Pipeline routing (deterministic)
 
 | From | To | Condition |
 | --- | --- | --- |
@@ -106,7 +109,13 @@ flowchart TD
 | Matching | Report | Always |
 | Report | END | Pipeline complete |
 
-Implementation: `backend/app/graph/builder.py`, `backend/app/graph/routing.py`.
+Implementation: `backend/app/agents/sdk/runner.py`, `backend/app/agents/sdk/routing.py`, `backend/app/agents/sdk/orchestrator.py`.
+
+### RTCIOC prompting
+
+All specialist `Agent.instructions` follow a fixed six-section template (Role, Task, Input, Output, Constraints, Capabilities and reminders). Prompts live under `backend/app/agents/sdk/prompts/`. Critical rules are repeated at the bottom of each prompt (recency bias).
+
+See [Development]({{ '/development' | relative_url }}) for contributor guidance.
 
 ## Matching logic
 
@@ -190,7 +199,7 @@ Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/a
 | Component | Technology |
 | --- | --- |
 | API | FastAPI (Python 3.11+, async) |
-| Agents | LangGraph `StateGraph` |
+| Agents | OpenAI Agents SDK + Anthropic Claude (`LLMService`) |
 | LLM | Anthropic Claude (Sonnet + Haiku) |
 | Task queue | Celery + Redis |
 | Database | PostgreSQL 16 (SQLAlchemy 2.x async) |
@@ -268,7 +277,7 @@ backend/
 │   │   ├── analytics.py     Tenant + admin analytics
 │   │   ├── bank_accounts.py Bank accounts, statements, ledger
 │   │   └── bank_statements.py Standalone statement upload/list
-│   ├── agents/              LangGraph node implementations
+│   ├── agents/sdk/          OpenAI Agents SDK orchestrator, stages, prompts, LLMService
 │   ├── graph/               StateGraph, routing, state model
 │   ├── models/              Pydantic + SQLAlchemy models
 │   ├── repositories/        DB access layers

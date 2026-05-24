@@ -37,7 +37,7 @@ permalink: /
   <span class="aria-pipeline__step">Human review</span>
 </div>
 
-ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance teams upload payment proofs (screenshots, PDFs, Excel) and a bank statement. A four-agent LangGraph pipeline extracts structured data, converts amounts to a base currency with live FX rates, matches transactions with explainable confidence scoring, and exports an audit-ready Excel report.
+ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance teams upload payment proofs (screenshots, PDFs, Excel) and a bank statement. An OpenAI Agents SDK pipeline with Anthropic Claude specialists extracts structured data, converts amounts to a base currency with live FX rates, matches transactions with explainable confidence scoring, and exports an audit-ready Excel report.
 
 ## Key metrics
 
@@ -141,7 +141,7 @@ Low-confidence items are **never** auto-confirmed — a deliberate compliance co
 
 ```text
 Aria/
-├── backend/                  FastAPI, LangGraph agents, Celery worker
+├── backend/                  FastAPI, Agents SDK pipeline, Celery worker
 ├── frontend-tenant-ops/      Reconciliation ops app (port 5173)
 ├── frontend-admin/           Platform admin app (port 5174)
 ├── frontend-tenant-mgmt/     Tenant configuration app (port 5175)

@@ -35,6 +35,9 @@ export function ResultsPage() {
     );
   }
   const report = results.data;
+  const { summary } = report;
+  const hasReview = summary.uncertain_count > 0;
+  const hasUnmatched = summary.unmatched_count > 0;
 
   const handleAction = (action: ReviewAction, payload: { bankEntryId?: string; note?: string }) => {
     if (!jobId || !active) return;
@@ -73,6 +76,36 @@ export function ResultsPage() {
           </Link>
         </div>
       </header>
+
+      {(hasReview || hasUnmatched) && (
+        <div className="flex flex-col gap-3">
+          {hasReview && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+              role="status"
+            >
+              <p className="text-sm text-amber-900">
+                {summary.uncertain_count} item{summary.uncertain_count === 1 ? '' : 's'} need human review
+                (confidence 50–75%).
+              </p>
+              <Link to={`/jobs/${report.job_id}/review`}>
+                <Button variant="secondary">Review queue</Button>
+              </Link>
+            </div>
+          )}
+          {hasUnmatched && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3"
+              role="status"
+            >
+              <p className="text-sm text-rose-900">
+                {summary.unmatched_count} unmatched item{summary.unmatched_count === 1 ? '' : 's'} — filter the
+                grid below or open the detail drawer for ARIA&apos;s explanation.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {report.narrative ? (
         <Card>

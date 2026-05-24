@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.ingestion import IngestionAgent
+from app.agents.sdk.stages.bank_statement import extract_bank_statement
 from app.core.dependencies import get_db_session
 from app.core.middleware import require_tenant
 from app.graph.state import DocumentInput
@@ -25,6 +25,7 @@ from app.models.schemas import (
     BankStatementSummary,
     BankStatementUploadResponse,
     LedgerEntryItem,
+    LedgerEntryUpdate,
     LedgerPageResponse,
 )
 from app.repositories.bank_account_repository import BankAccountRepository
@@ -32,7 +33,25 @@ from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.services.storage import StorageService
 from app.tools.file_parsers import detect_source_format
 
+from decimal import Decimal
+
 router = APIRouter()
+
+
+def _ledger_item(entry, filename: str) -> LedgerEntryItem:
+    return LedgerEntryItem(
+        id=UUID(entry.id),
+        statement_id=UUID(entry.statement_id),
+        statement_filename=filename,
+        value_date=entry.value_date,
+        amount=Decimal(str(entry.amount)),
+        currency=entry.currency,
+        description=entry.description or "",
+        reference=entry.reference,
+        counterparty=entry.counterparty,
+        cleared=entry.cleared,
+        cleared_by_job_id=UUID(entry.cleared_by_job_id) if entry.cleared_by_job_id else None,
+    )
 
 
 # ─── Account CRUD ─────────────────────────────────────────────────────────────
@@ -157,7 +176,6 @@ async def upload_statement_to_account(
     data = await bank_statement.read()
     filename = bank_statement.filename or "statement"
 
-    agent = IngestionAgent()
     doc = DocumentInput(
         storage_key="",
         filename=filename,
@@ -165,7 +183,12 @@ async def upload_statement_to_account(
         bytes_data=data,
     )
     try:
-        parsed = await asyncio.to_thread(agent._parse_bank_statement, doc, currency)
+        result = await asyncio.to_thread(
+            extract_bank_statement,
+            doc,
+            currency,
+        )
+        statement = result.statement
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not parse bank statement: {exc}") from exc
 
@@ -178,7 +201,7 @@ async def upload_statement_to_account(
         filename=filename,
         storage_key=key,
         base_currency=currency,
-        statement=parsed,
+        statement=statement,
         account_id=str(account_id),
     )
 
@@ -187,8 +210,8 @@ async def upload_statement_to_account(
         filename=orm.filename,
         entry_count=orm.entry_count,
         account_id=account_id,
-        statement_period_start=parsed.statement_period_start,
-        statement_period_end=parsed.statement_period_end,
+        statement_period_start=statement.statement_period_start,
+        statement_period_end=statement.statement_period_end,
     )
 
 
@@ -225,6 +248,30 @@ async def list_account_statements(
     return results
 
 
+@router.delete(
+    "/{account_id}/statements/{statement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_account_statement(
+    account_id: UUID,
+    statement_id: UUID,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> None:
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await acc_repo.get(account_id) is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+    stmt = await ledger_repo.get_statement_for_account(statement_id, account_id)
+    if stmt is None:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+
+    deleted = await ledger_repo.delete_statement(statement_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+
+
 # ─── Ledger view ──────────────────────────────────────────────────────────────
 
 
@@ -245,3 +292,62 @@ async def get_account_ledger(
         account_id, cleared=cleared, page=page, page_size=page_size
     )
     return LedgerPageResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.patch("/{account_id}/ledger/{entry_id}", response_model=LedgerEntryItem)
+async def update_ledger_entry(
+    account_id: UUID,
+    entry_id: UUID,
+    payload: LedgerEntryUpdate,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> LedgerEntryItem:
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await acc_repo.get(account_id) is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+    row = await ledger_repo.get_entry_for_account(entry_id, account_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Ledger entry not found")
+
+    entry, stmt = row
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    try:
+        updated = await ledger_repo.update_entry(entry.id, **updates)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    assert updated is not None
+    return _ledger_item(updated, stmt.filename)
+
+
+@router.delete(
+    "/{account_id}/ledger/{entry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_ledger_entry(
+    account_id: UUID,
+    entry_id: UUID,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> None:
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await acc_repo.get(account_id) is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+    row = await ledger_repo.get_entry_for_account(entry_id, account_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Ledger entry not found")
+
+    try:
+        deleted = await ledger_repo.delete_entry(entry_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Ledger entry not found")

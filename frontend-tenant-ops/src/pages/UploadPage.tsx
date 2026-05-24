@@ -1,10 +1,13 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { UploadDropzone } from '@/components/UploadDropzone';
 import { FileList } from '@/components/FileList';
 import { useUploadStore } from '@/stores/upload-store';
 import { useCreateJob } from '@/hooks/useCreateJob';
+import type { BankStatementSource } from '@/stores/upload-store';
 
 const CURRENCIES = ['MYR', 'USD', 'EUR', 'GBP', 'SGD'];
 
@@ -16,26 +19,54 @@ const BANK_STATEMENT_MIME = new Set([
   'application/pdf',
 ]);
 
+const SOURCE_OPTIONS: { value: BankStatementSource; label: string }[] = [
+  { value: 'upload', label: 'Upload file' },
+  { value: 'ledger', label: 'From bank account' },
+];
+
 export function UploadPage() {
   const navigate = useNavigate();
   const {
     paymentProofs,
     bankStatement,
+    bankStatementSource,
+    selectedAccountId,
     baseCurrency,
     addPaymentProofs,
     removePaymentProof,
     setBankStatement,
+    setBankStatementSource,
+    setSelectedAccountId,
     setBaseCurrency,
     reset,
   } = useUploadStore();
   const createJob = useCreateJob();
 
-  const canSubmit = paymentProofs.length > 0 && bankStatement !== null && !createJob.isPending;
+  const { data: accounts, isLoading: accountsLoading } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api.listBankAccounts(),
+    enabled: bankStatementSource === 'ledger',
+  });
+
+  const selectedAccount = accounts?.find((acc) => acc.id === selectedAccountId);
+
+  const hasBankData =
+    bankStatementSource === 'upload'
+      ? bankStatement !== null
+      : !!selectedAccountId && (selectedAccount?.uncleared_count ?? 0) > 0;
+
+  const canSubmit = paymentProofs.length > 0 && hasBankData && !createJob.isPending;
 
   const onSubmit = () => {
-    if (!bankStatement) return;
+    if (!hasBankData) return;
     createJob.mutate(
-      { paymentProofs, bankStatement, baseCurrency },
+      {
+        paymentProofs,
+        bankStatement: bankStatementSource === 'upload' ? bankStatement ?? undefined : undefined,
+        bankAccountId:
+          bankStatementSource === 'ledger' ? selectedAccountId ?? undefined : undefined,
+        baseCurrency,
+      },
       {
         onSuccess: (data) => {
           reset();
@@ -45,13 +76,19 @@ export function UploadPage() {
     );
   };
 
+  function handleAccountSelect(accountId: string) {
+    setSelectedAccountId(accountId || null);
+    const account = accounts?.find((acc) => acc.id === accountId);
+    if (account) setBaseCurrency(account.currency);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-2xl font-semibold text-slate-900">New reconciliation job</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Upload payment proofs and a bank statement. ARIA extracts, normalises, and matches
-          transactions automatically — low-confidence items are routed to your review queue.
+          Upload payment proofs and attach bank data — upload a statement file or select a
+          registered bank account to reconcile against all pending ledger entries.
         </p>
       </header>
 
@@ -81,19 +118,124 @@ export function UploadPage() {
             <CardTitle>Bank statement</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <UploadDropzone
-              testId="bank-statement-dropzone"
-              label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
-              onFiles={(files) => setBankStatement(files[0] ?? null)}
-              helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
-              acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
-              acceptedMimeTypes={BANK_STATEMENT_MIME}
-            />
-            <FileList
-              files={bankStatement ? [bankStatement] : []}
-              onRemove={() => setBankStatement(null)}
-              emptyLabel="No bank statement uploaded."
-            />
+            <div
+              className="flex gap-1 rounded-lg bg-slate-100 p-1"
+              role="radiogroup"
+              aria-label="Bank statement source"
+            >
+              {SOURCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={bankStatementSource === opt.value}
+                  onClick={() => setBankStatementSource(opt.value)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    bankStatementSource === opt.value
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {bankStatementSource === 'upload' ? (
+              <>
+                <UploadDropzone
+                  testId="bank-statement-dropzone"
+                  label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
+                  onFiles={(files) => setBankStatement(files[0] ?? null)}
+                  helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
+                  acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
+                  acceptedMimeTypes={BANK_STATEMENT_MIME}
+                />
+                <FileList
+                  files={bankStatement ? [bankStatement] : []}
+                  onRemove={() => setBankStatement(null)}
+                  emptyLabel="No bank statement uploaded."
+                />
+              </>
+            ) : (
+              <div className="space-y-4">
+                {accountsLoading ? (
+                  <p className="text-sm text-slate-500">Loading bank accounts…</p>
+                ) : accounts?.length === 0 ? (
+                  <p className="text-sm text-slate-600">
+                    No bank accounts registered yet. Add an account and upload statements in{' '}
+                    <span className="font-medium">Tenant mgmt</span> (port 5175), then return here.
+                  </p>
+                ) : (
+                  <>
+                    <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                      Bank account
+                      <select
+                        value={selectedAccountId ?? ''}
+                        onChange={(e) => handleAccountSelect(e.target.value)}
+                        aria-label="Bank account"
+                        className="rounded border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                      >
+                        <option value="">Select an account…</option>
+                        {accounts?.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} · {acc.bank_name} ({acc.currency})
+                            {acc.uncleared_count > 0
+                              ? ` — ${acc.uncleared_count} pending`
+                              : ' — no pending entries'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {selectedAccount && (
+                      <>
+                        <p className="text-sm text-slate-600">
+                          ARIA will match payment proofs against{' '}
+                          <span className="font-medium tabular-nums">
+                            {selectedAccount.uncleared_count}
+                          </span>{' '}
+                          pending ledger{' '}
+                          {selectedAccount.uncleared_count === 1 ? 'entry' : 'entries'} across{' '}
+                          <span className="font-medium tabular-nums">
+                            {selectedAccount.statement_count}
+                          </span>{' '}
+                          {selectedAccount.statement_count === 1 ? 'statement' : 'statements'}.
+                        </p>
+
+                        {selectedAccount.uncleared_count === 0 && (
+                          <p className="text-sm text-amber-700" role="status">
+                            All ledger entries for this account are already cleared. Upload a new
+                            statement in Tenant mgmt or choose another account.
+                          </p>
+                        )}
+
+                        <dl className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-slate-500">Statements</dt>
+                            <dd className="tabular-nums font-medium text-slate-900">
+                              {selectedAccount.statement_count}
+                            </dd>
+                          </div>
+                          <div className="mt-1 flex justify-between gap-4">
+                            <dt className="text-slate-500">Pending entries</dt>
+                            <dd
+                              className={`tabular-nums font-medium ${
+                                selectedAccount.uncleared_count > 0
+                                  ? 'text-amber-700'
+                                  : 'text-emerald-700'
+                              }`}
+                            >
+                              {selectedAccount.uncleared_count}
+                            </dd>
+                          </div>
+                        </dl>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

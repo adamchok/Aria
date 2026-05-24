@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.schemas import BankStatement, BankEntry
+from app.repositories.bank_account_repository import BankAccountRepository
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from tests.conftest import TEST_TENANT_ID
 
@@ -155,3 +156,114 @@ async def test_create_job_rejects_other_tenant_statement_id(api_client, db_sessi
         data={"base_currency": "MYR", "bank_statement_id": orm.id},
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_job_accepts_bank_account_id(api_client, db_session, fixtures_dir: Path):
+    """Job creation uses all pending ledger entries across statements for the account."""
+    account_repo = BankAccountRepository(db_session, tenant_id=TEST_TENANT_ID)
+    acc = await account_repo.create(
+        name="Main Operating Account",
+        bank_name="Maybank",
+        account_number_masked="****1234",
+        currency="MYR",
+    )
+    ledger = BankLedgerRepository(db_session, tenant_id=TEST_TENANT_ID)
+    stmt = BankStatement(
+        base_currency="MYR",
+        entries=[BankEntry(value_date=date(2026, 5, 1), amount=Decimal("100"), currency="MYR")],
+    )
+    await ledger.create_statement(
+        filename="ledger.csv",
+        storage_key=None,
+        base_currency="MYR",
+        statement=stmt,
+        account_id=acc.id,
+    )
+
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={"payment_proofs": files["payment_proofs"]},
+        data={"base_currency": "MYR", "bank_account_id": acc.id},
+    )
+    assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_job_rejects_account_with_no_pending_entries(
+    api_client, db_session, fixtures_dir: Path
+):
+    account_repo = BankAccountRepository(db_session, tenant_id=TEST_TENANT_ID)
+    acc = await account_repo.create(
+        name="Empty Ledger",
+        bank_name="Maybank",
+        account_number_masked="****9999",
+        currency="MYR",
+    )
+
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={"payment_proofs": files["payment_proofs"]},
+        data={"base_currency": "MYR", "bank_account_id": acc.id},
+    )
+    assert resp.status_code == 400
+    assert "pending" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_job_rejects_other_tenant_bank_account_id(
+    api_client, db_session, fixtures_dir: Path
+):
+    account_repo = BankAccountRepository(db_session, tenant_id="other-tenant")
+    acc = await account_repo.create(
+        name="Other",
+        bank_name="Bank",
+        account_number_masked="****0000",
+        currency="MYR",
+    )
+
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={"payment_proofs": files["payment_proofs"]},
+        data={"base_currency": "MYR", "bank_account_id": acc.id},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_job_rejects_both_statement_id_and_account_id(
+    api_client, db_session, fixtures_dir: Path
+):
+    account_repo = BankAccountRepository(db_session, tenant_id=TEST_TENANT_ID)
+    acc = await account_repo.create(
+        name="Main",
+        bank_name="Maybank",
+        account_number_masked="****1234",
+        currency="MYR",
+    )
+    ledger = BankLedgerRepository(db_session, tenant_id=TEST_TENANT_ID)
+    orm = await ledger.create_statement(
+        filename="ledger.csv",
+        storage_key=None,
+        base_currency="MYR",
+        statement=BankStatement(
+            base_currency="MYR",
+            entries=[BankEntry(value_date=date(2026, 5, 1), amount=Decimal("100"), currency="MYR")],
+        ),
+        account_id=acc.id,
+    )
+
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={"payment_proofs": files["payment_proofs"]},
+        data={
+            "base_currency": "MYR",
+            "bank_statement_id": orm.id,
+            "bank_account_id": acc.id,
+        },
+    )
+    assert resp.status_code == 400

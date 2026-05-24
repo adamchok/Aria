@@ -29,7 +29,16 @@ describe('BankAccountDetailPage', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: /main operating account/i })).toBeInTheDocument());
     expect(screen.getByText(/Payment from Acme/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit entry inv-001/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /statements/i }));
     await waitFor(() => expect(screen.getByText('may_2026.csv')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /delete statement may_2026.csv/i })).toBeInTheDocument();
+  });
+
+  it('opens edit modal for a pending ledger entry', async () => {
+    renderWithProviders(<Harness />, { initialEntries: [`/bank-accounts/${ACCOUNT_ID}`] });
+    await waitFor(() => expect(screen.getByRole('button', { name: /edit entry inv-001/i })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: /edit entry inv-001/i }));
+    expect(screen.getByRole('heading', { name: /edit ledger entry/i })).toBeInTheDocument();
   });
 });

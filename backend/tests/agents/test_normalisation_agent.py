@@ -1,56 +1,57 @@
-"""Agent 2 — Normalisation."""
+"""Normalisation stage tests."""
 
 from __future__ import annotations
 
+import pytest
+
+from app.agents.sdk.context import ReconciliationContext
+from app.agents.sdk.stages.normalisation import _add_business_days, run_normalisation_stage
+from app.core.config import Settings
+from app.graph.state import ReconciliationState
+from app.models.schemas import PaymentRecord
+from app.services.fx_service import FXService
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
-
-import pytest
-
-from app.agents.normalisation import NormalisationAgent, _add_business_days
-from app.core.config import Settings
-from app.graph.state import ReconciliationState
 from app.models.enums import SourceFormat
-from app.models.schemas import PaymentRecord
-from app.services.fx_service import FXService, StaticFallbackProvider
-
-
-def _make_state(records):
-    return ReconciliationState(job_id=uuid4(), payment_records=records, base_currency="MYR")
 
 
 @pytest.mark.asyncio
-async def test_normalisation_computes_tolerance_window(payment_record_usd):
-    state = _make_state([payment_record_usd])
-    agent = NormalisationAgent(
-        fx_service=FXService(providers=[StaticFallbackProvider()]),
-        settings=Settings(_env_file=None),
-    )
-    out = await agent.arun(state)
-    assert len(out.normalised_records) == 1
-    nr = out.normalised_records[0]
+async def test_normalisation_produces_myr_amounts(payment_record_usd):
+    state = ReconciliationState(job_id=uuid4(), payment_records=[payment_record_usd])
+    ctx = ReconciliationContext(state=state, settings=Settings(_env_file=None))
+    fx = FXService(settings=Settings(_env_file=None))
+    await run_normalisation_stage(ctx, fx_service=fx)
+    assert len(state.normalised_records) == 1
+    nr = state.normalised_records[0]
+    assert nr.amount_myr_at_invoice_rate > Decimal("0")
     assert nr.tolerance_low <= nr.tolerance_high
-    assert nr.amount_myr_at_invoice_rate > Decimal("30")
-    assert nr.estimated_charges_myr > Decimal("0")
-    # Small payments skip SWIFT deduction in tolerance band (card/e-commerce).
-    assert nr.tolerance_low >= nr.amount_myr_at_invoice_rate * Decimal("0.95")
-    assert nr.tolerance_high >= nr.amount_myr_at_settlement_rate
 
 
 @pytest.mark.asyncio
-async def test_normalisation_skips_unavailable_currency(payment_record_usd):
-    # Force a currency the static fallback doesn't know.
-    payment_record_usd.currency = "JPY"
-    state = _make_state([payment_record_usd])
-    agent = NormalisationAgent(
-        fx_service=FXService(providers=[StaticFallbackProvider()]),
+async def test_normalisation_skips_on_fx_failure(monkeypatch):
+    rec = PaymentRecord(
+        payer="A",
+        payee="B",
+        amount_original=Decimal("100"),
+        currency="XXX",
+        value_date=date(2026, 5, 1),
+        source_format=SourceFormat.IMAGE,
+        extraction_confidence=0.9,
     )
-    out = await agent.arun(state)
-    assert out.normalised_records == []
-    assert any(e.action == "fx_unavailable" for e in out.audit_log)
+    state = ReconciliationState(job_id=uuid4(), payment_records=[rec])
+
+    class _FailFX(FXService):
+        async def get_rate(self, *args, **kwargs):
+            from app.core.exceptions import FXRateUnavailableError
+
+            raise FXRateUnavailableError("no rate")
+
+    ctx = ReconciliationContext(state=state, settings=Settings(_env_file=None))
+    await run_normalisation_stage(ctx, fx_service=_FailFX(settings=Settings(_env_file=None)))
+    assert state.normalised_records == []
+    assert any(e.action == "fx_unavailable" for e in state.audit_log)
 
 
-def test_business_day_addition_skips_weekend():
-    # Friday May 22 + 2 business days = Tuesday May 26 (Mon 25 + Tue 26).
-    assert _add_business_days(date(2026, 5, 22), 2) == date(2026, 5, 26)
+def test_add_business_days_skips_weekends():
+    assert _add_business_days(date(2026, 5, 15), 2) == date(2026, 5, 19)

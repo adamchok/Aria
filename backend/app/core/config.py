@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     langsmith_project: str = "aria"
     langsmith_tracing: bool = False
     llm_mode: Literal["mock", "live"] = "mock"
+    agents_sdk_tracing: bool = False
     sonnet_model: str = "claude-sonnet-4-6"
     haiku_model: str = "claude-haiku-4-5-20251001"
     opus_model: str = "claude-opus-4-7"

@@ -5,9 +5,56 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatAmount, formatDate } from '@/lib/format';
-import type { LedgerEntryItem, UUID } from '@/types/api';
+import type { LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
 
 const PAGE_SIZE = 50;
+
+function invalidateAccountQueries(qc: ReturnType<typeof useQueryClient>, accountId: string) {
+  qc.invalidateQueries({ queryKey: ['bank-account', accountId] });
+  qc.invalidateQueries({ queryKey: ['bank-account-statements', accountId] });
+  qc.invalidateQueries({ queryKey: ['bank-account-ledger', accountId] });
+  qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+}
+
+// ─── Confirm dialog ───────────────────────────────────────────────────────────
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  loading,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: React.ReactNode;
+  confirmLabel: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+    >
+      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+        <h2 id="confirm-dialog-title" className="text-lg font-semibold text-slate-900">
+          {title}
+        </h2>
+        <div className="mt-2 text-sm text-slate-600">{message}</div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" loading={loading} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Upload statement modal ───────────────────────────────────────────────────
 
@@ -19,18 +66,11 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
   const upload = useMutation({
     mutationFn: () => api.uploadAccountStatement(accountId, file!),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank-account', accountId] });
-      qc.invalidateQueries({ queryKey: ['bank-account-statements', accountId] });
-      qc.invalidateQueries({ queryKey: ['bank-account-ledger', accountId] });
+      invalidateAccountQueries(qc, accountId);
       onClose();
     },
     onError: (e: Error) => setError(e.message),
   });
-
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    setError(null);
-    setFile(e.target.files?.[0] ?? null);
-  }
 
   return (
     <div
@@ -45,9 +85,6 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
         </h2>
 
         <label className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-slate-400">
-          <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4-4 4M12 4v12" />
-          </svg>
           {file ? (
             <span className="text-sm font-medium text-slate-900">{file.name}</span>
           ) : (
@@ -60,7 +97,10 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
             type="file"
             accept=".xlsx,.xls,.csv,.pdf"
             className="sr-only"
-            onChange={handleFile}
+            onChange={(e) => {
+              setError(null);
+              setFile(e.target.files?.[0] ?? null);
+            }}
           />
         </label>
 
@@ -68,11 +108,7 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
 
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button
-            loading={upload.isPending}
-            disabled={!file}
-            onClick={() => upload.mutate()}
-          >
+          <Button loading={upload.isPending} disabled={!file} onClick={() => upload.mutate()}>
             Upload
           </Button>
         </div>
@@ -81,25 +117,170 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
   );
 }
 
+// ─── Edit ledger entry modal ──────────────────────────────────────────────────
+
+function EditLedgerEntryModal({
+  accountId,
+  entry,
+  onClose,
+}: {
+  accountId: UUID;
+  entry: LedgerEntryItem;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    value_date: entry.value_date,
+    amount: entry.amount,
+    currency: entry.currency,
+    description: entry.description,
+    reference: entry.reference ?? '',
+    counterparty: entry.counterparty ?? '',
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () => {
+      const payload: LedgerEntryUpdate = {
+        value_date: form.value_date,
+        amount: form.amount,
+        currency: form.currency,
+        description: form.description,
+        reference: form.reference.trim() || null,
+        counterparty: form.counterparty.trim() || null,
+      };
+      return api.updateLedgerEntry(accountId, entry.id, payload);
+    },
+    onSuccess: () => {
+      invalidateAccountQueries(qc, accountId);
+      onClose();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  function field(key: keyof typeof form) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-entry-title"
+    >
+      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+        <h2 id="edit-entry-title" className="mb-4 text-lg font-semibold text-slate-900">
+          Edit ledger entry
+        </h2>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Value date
+            <input
+              type="date"
+              value={form.value_date}
+              onChange={field('value_date')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Currency
+            <input
+              value={form.currency}
+              onChange={field('currency')}
+              maxLength={3}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm uppercase"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            Amount
+            <input
+              value={form.amount}
+              onChange={field('amount')}
+              inputMode="decimal"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm tabular-nums"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            Description
+            <input
+              value={form.description}
+              onChange={field('description')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Reference
+            <input
+              value={form.reference}
+              onChange={field('reference')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Counterparty
+            <input
+              value={form.counterparty}
+              onChange={field('counterparty')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+
+        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Ledger entry row ─────────────────────────────────────────────────────────
 
-function LedgerRow({ entry }: { entry: LedgerEntryItem }) {
+function LedgerRow({
+  entry,
+  onEdit,
+  onDelete,
+}: {
+  entry: LedgerEntryItem;
+  onEdit: (entry: LedgerEntryItem) => void;
+  onDelete: (entry: LedgerEntryItem) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <>
-      <tr
-        className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
-        onClick={() => setExpanded((e) => !e)}
-        aria-expanded={expanded}
-      >
-        <td className="py-3 pl-4 pr-3 text-xs text-slate-500">{formatDate(entry.value_date)}</td>
-        <td className="px-3 py-3 text-sm tabular-nums text-slate-900 text-right">
+      <tr className="border-t border-slate-100 hover:bg-slate-50">
+        <td
+          className="cursor-pointer py-3 pl-4 pr-3 text-xs text-slate-500"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {formatDate(entry.value_date)}
+        </td>
+        <td
+          className="cursor-pointer px-3 py-3 text-sm tabular-nums text-slate-900 text-right"
+          onClick={() => setExpanded((e) => !e)}
+        >
           {formatAmount(entry.amount, entry.currency)}
         </td>
-        <td className="px-3 py-3 text-sm text-slate-700 max-w-xs truncate">{entry.description || '—'}</td>
-        <td className="px-3 py-3 text-xs text-slate-500">{entry.reference ?? '—'}</td>
-        <td className="py-3 pl-3 pr-4 text-center">
+        <td
+          className="cursor-pointer px-3 py-3 text-sm text-slate-700 max-w-xs truncate"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {entry.description || '—'}
+        </td>
+        <td
+          className="cursor-pointer px-3 py-3 text-xs text-slate-500"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {entry.reference ?? '—'}
+        </td>
+        <td className="py-3 pl-3 pr-2 text-center">
           <span
             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
               entry.cleared
@@ -110,10 +291,36 @@ function LedgerRow({ entry }: { entry: LedgerEntryItem }) {
             {entry.cleared ? 'Cleared' : 'Pending'}
           </span>
         </td>
+        <td className="py-3 pl-2 pr-4 text-right">
+          {entry.cleared ? (
+            <span className="text-xs text-slate-400" title="Cleared entries cannot be edited">
+              Locked
+            </span>
+          ) : (
+            <div className="flex justify-end gap-1">
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label={`Edit entry ${entry.reference ?? entry.id.slice(0, 8)}`}
+                onClick={() => onEdit(entry)}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                aria-label={`Delete entry ${entry.reference ?? entry.id.slice(0, 8)}`}
+                onClick={() => onDelete(entry)}
+              >
+                Delete
+              </Button>
+            </div>
+          )}
+        </td>
       </tr>
       {expanded && (
         <tr className="border-t border-slate-100 bg-slate-50">
-          <td colSpan={5} className="px-4 py-3">
+          <td colSpan={6} className="px-4 py-3">
             <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs sm:grid-cols-4">
               <div>
                 <dt className="text-slate-500">Entry ID</dt>
@@ -132,9 +339,7 @@ function LedgerRow({ entry }: { entry: LedgerEntryItem }) {
               {entry.cleared_by_job_id && (
                 <div>
                   <dt className="text-slate-500">Cleared by job</dt>
-                  <dd className="font-mono text-slate-700" title="View job in Ops app">
-                    {entry.cleared_by_job_id.slice(0, 8)}…
-                  </dd>
+                  <dd className="font-mono text-slate-700">{entry.cleared_by_job_id.slice(0, 8)}…</dd>
                 </div>
               )}
             </dl>
@@ -161,10 +366,13 @@ export function BankAccountDetailPage() {
   const qc = useQueryClient();
 
   const [showUpload, setShowUpload] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [clearedFilter, setClearedFilter] = useState<ClearedFilter>('all');
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<'ledger' | 'statements'>('ledger');
+  const [editingEntry, setEditingEntry] = useState<LedgerEntryItem | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<LedgerEntryItem | null>(null);
+  const [deletingStatementId, setDeletingStatementId] = useState<UUID | null>(null);
 
   const { data: account, isLoading: accLoading, isError: accError } = useQuery({
     queryKey: ['bank-account', accountId],
@@ -175,7 +383,7 @@ export function BankAccountDetailPage() {
   const { data: statements, isLoading: stmtsLoading } = useQuery({
     queryKey: ['bank-account-statements', accountId],
     queryFn: () => api.listAccountStatements(accountId!),
-    enabled: !!accountId && activeTab === 'statements',
+    enabled: !!accountId,
   });
 
   const clearedParam = clearedFilter === 'all' ? undefined : clearedFilter === 'cleared';
@@ -193,6 +401,24 @@ export function BankAccountDetailPage() {
       navigate('/bank-accounts');
     },
   });
+
+  const deleteEntry = useMutation({
+    mutationFn: (entryId: UUID) => api.deleteLedgerEntry(accountId!, entryId),
+    onSuccess: () => {
+      invalidateAccountQueries(qc, accountId!);
+      setDeletingEntry(null);
+    },
+  });
+
+  const deleteStatement = useMutation({
+    mutationFn: (statementId: UUID) => api.deleteAccountStatement(accountId!, statementId),
+    onSuccess: () => {
+      invalidateAccountQueries(qc, accountId!);
+      setDeletingStatementId(null);
+    },
+  });
+
+  const deletingStatement = statements?.find((s) => s.id === deletingStatementId);
 
   if (accLoading) {
     return (
@@ -218,7 +444,6 @@ export function BankAccountDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -235,13 +460,12 @@ export function BankAccountDetailPage() {
           <Button variant="secondary" onClick={() => setShowUpload(true)}>
             Upload statement
           </Button>
-          <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+          <Button variant="danger" onClick={() => setShowDeleteAccountConfirm(true)}>
             Delete
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Statements', value: account.statement_count },
@@ -263,7 +487,6 @@ export function BankAccountDetailPage() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200">
         {(['ledger', 'statements'] as const).map((t) => (
           <button
@@ -280,7 +503,6 @@ export function BankAccountDetailPage() {
         ))}
       </div>
 
-      {/* Ledger tab */}
       {activeTab === 'ledger' && (
         <>
           <div className="flex gap-1">
@@ -302,9 +524,7 @@ export function BankAccountDetailPage() {
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle>Ledger entries</CardTitle>
-              {ledger && (
-                <span className="text-sm text-slate-500">{ledger.total} total</span>
-              )}
+              {ledger && <span className="text-sm text-slate-500">{ledger.total} total</span>}
             </CardHeader>
             <CardContent className="p-0">
               {ledgerLoading && (
@@ -331,12 +551,18 @@ export function BankAccountDetailPage() {
                           <th className="px-3 py-3 text-xs font-medium text-slate-500 text-right">Amount</th>
                           <th className="px-3 py-3 text-xs font-medium text-slate-500">Description</th>
                           <th className="px-3 py-3 text-xs font-medium text-slate-500">Reference</th>
-                          <th className="py-3 pl-3 pr-4 text-xs font-medium text-slate-500 text-center">Status</th>
+                          <th className="py-3 pl-3 pr-2 text-xs font-medium text-slate-500 text-center">Status</th>
+                          <th className="py-3 pl-2 pr-4 text-xs font-medium text-slate-500 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {ledger.items.map((entry) => (
-                          <LedgerRow key={entry.id} entry={entry} />
+                          <LedgerRow
+                            key={entry.id}
+                            entry={entry}
+                            onEdit={setEditingEntry}
+                            onDelete={setDeletingEntry}
+                          />
                         ))}
                       </tbody>
                     </table>
@@ -372,7 +598,6 @@ export function BankAccountDetailPage() {
         </>
       )}
 
-      {/* Statements tab */}
       {activeTab === 'statements' && (
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -388,9 +613,7 @@ export function BankAccountDetailPage() {
               </div>
             )}
             {!stmtsLoading && statements?.length === 0 && (
-              <p className="p-8 text-center text-sm text-slate-500">
-                No statements uploaded yet.
-              </p>
+              <p className="p-8 text-center text-sm text-slate-500">No statements uploaded yet.</p>
             )}
             {!stmtsLoading && statements && statements.length > 0 && (
               <div className="overflow-x-auto">
@@ -401,7 +624,8 @@ export function BankAccountDetailPage() {
                       <th className="px-3 py-3 text-xs font-medium text-slate-500">Period</th>
                       <th className="px-3 py-3 text-xs font-medium text-slate-500 text-right">Entries</th>
                       <th className="px-3 py-3 text-xs font-medium text-slate-500 text-right">Uncleared</th>
-                      <th className="py-3 pl-3 pr-4 text-xs font-medium text-slate-500">Uploaded</th>
+                      <th className="px-3 py-3 text-xs font-medium text-slate-500">Uploaded</th>
+                      <th className="py-3 pl-3 pr-4 text-xs font-medium text-slate-500 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -419,8 +643,18 @@ export function BankAccountDetailPage() {
                             {s.uncleared_count}
                           </span>
                         </td>
-                        <td className="py-3 pl-3 pr-4 text-xs text-slate-500">
+                        <td className="px-3 py-3 text-xs text-slate-500">
                           {formatDate(s.created_at.slice(0, 10))}
+                        </td>
+                        <td className="py-3 pl-3 pr-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            aria-label={`Delete statement ${s.filename}`}
+                            onClick={() => setDeletingStatementId(s.id)}
+                          >
+                            Delete
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -432,36 +666,65 @@ export function BankAccountDetailPage() {
         </Card>
       )}
 
-      {/* Upload modal */}
       {showUpload && (
         <UploadStatementModal accountId={accountId!} onClose={() => setShowUpload(false)} />
       )}
 
-      {/* Delete confirmation */}
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-slate-900">Delete account?</h2>
-            <p className="mt-2 text-sm text-slate-600">
+      {editingEntry && (
+        <EditLedgerEntryModal
+          accountId={accountId!}
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+        />
+      )}
+
+      {deletingEntry && (
+        <ConfirmDialog
+          title="Delete ledger entry?"
+          message={
+            <>
+              Remove <strong>{deletingEntry.description || deletingEntry.reference || 'this entry'}</strong>{' '}
+              ({formatAmount(deletingEntry.amount, deletingEntry.currency)}) from the ledger? This cannot be undone.
+            </>
+          }
+          confirmLabel="Delete entry"
+          loading={deleteEntry.isPending}
+          onConfirm={() => deleteEntry.mutate(deletingEntry.id)}
+          onClose={() => setDeletingEntry(null)}
+        />
+      )}
+
+      {deletingStatement && (
+        <ConfirmDialog
+          title="Delete statement?"
+          message={
+            <>
+              Delete <strong>{deletingStatement.filename}</strong> and all{' '}
+              {deletingStatement.entry_count} ledger {deletingStatement.entry_count === 1 ? 'entry' : 'entries'}?
+              Cleared entries will also be removed from this account&apos;s ledger.
+            </>
+          }
+          confirmLabel="Delete statement"
+          loading={deleteStatement.isPending}
+          onConfirm={() => deleteStatement.mutate(deletingStatement.id)}
+          onClose={() => setDeletingStatementId(null)}
+        />
+      )}
+
+      {showDeleteAccountConfirm && (
+        <ConfirmDialog
+          title="Delete account?"
+          message={
+            <>
               This will permanently delete <strong>{account.name}</strong> and all its statements
               and ledger entries. This cannot be undone.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-              <Button
-                variant="danger"
-                loading={deleteAccount.isPending}
-                onClick={() => deleteAccount.mutate()}
-              >
-                Delete account
-              </Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel="Delete account"
+          loading={deleteAccount.isPending}
+          onConfirm={() => deleteAccount.mutate()}
+          onClose={() => setShowDeleteAccountConfirm(false)}
+        />
       )}
     </div>
   );

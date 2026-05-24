@@ -17,10 +17,24 @@ const TERMINAL_EVENTS = new Set(['completed', 'review_required', 'error']);
 
 export interface UseJobStreamOptions {
   onEvent?: (e: StreamEvent) => void;
-  onComplete?: () => void;
-  onReviewRequired?: () => void;
+  onComplete?: (data: SSEEventData) => void;
+  onReviewRequired?: (data: SSEEventData) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
+}
+
+function patchJobStatus(
+  old: JobStatusResponse | undefined,
+  data: SSEEventData,
+): JobStatusResponse | undefined {
+  if (!old) return old;
+  return {
+    ...old,
+    status: (data.status as JobStatusResponse['status']) ?? old.status,
+    progress_pct: data.progress_pct ?? old.progress_pct,
+    agents_completed: data.agents_completed ?? old.agents_completed,
+    error: data.error ?? old.error,
+  };
 }
 
 /**
@@ -42,6 +56,16 @@ export function useJobStream(jobId: UUID | null, options: UseJobStreamOptions = 
 
     let es: EventSource | null = null;
 
+    function applyPatch(data: SSEEventData) {
+      qc.setQueryData<JobStatusResponse>(['job', jobId, 'status'], (old) => {
+        if (!old) {
+          void qc.invalidateQueries({ queryKey: ['job', jobId, 'status'] });
+          return old;
+        }
+        return patchJobStatus(old, data);
+      });
+    }
+
     function open() {
       if (!mountedRef.current) return;
 
@@ -58,22 +82,17 @@ export function useJobStream(jobId: UUID | null, options: UseJobStreamOptions = 
 
             cbs.onEvent?.({ event, data });
 
-            if (data.status) {
-              qc.setQueryData<JobStatusResponse>(['job', jobId, 'status'], (old) =>
-                old
-                  ? {
-                      ...old,
-                      status: (data.status as JobStatusResponse['status']) ?? old.status,
-                      progress_pct: data.progress_pct ?? old.progress_pct,
-                      agents_completed: data.agents_completed ?? old.agents_completed,
-                      error: data.error ?? old.error,
-                    }
-                  : old,
-              );
+            if (
+              data.status !== undefined ||
+              data.progress_pct !== undefined ||
+              data.agents_completed !== undefined ||
+              data.error !== undefined
+            ) {
+              applyPatch(data);
             }
 
-            if (event === 'completed') cbs.onComplete?.();
-            if (event === 'review_required') cbs.onReviewRequired?.();
+            if (event === 'completed') cbs.onComplete?.(data);
+            if (event === 'review_required') cbs.onReviewRequired?.(data);
             if (event === 'error') cbs.onError?.(data.error ?? 'Pipeline failed');
 
             if (TERMINAL_EVENTS.has(event)) {

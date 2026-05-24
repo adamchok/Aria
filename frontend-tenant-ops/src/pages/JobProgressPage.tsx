@@ -12,20 +12,16 @@ export function JobProgressPage() {
   const navigate = useNavigate();
 
   // SSE stream — hydrates the cache; polling is the fallback
-  useJobStream(jobId ?? null, {
-    onComplete: () => navigate(`/jobs/${jobId}/results`, { replace: true }),
-    onReviewRequired: () => navigate(`/jobs/${jobId}/review`, { replace: true }),
-  });
+  useJobStream(jobId ?? null);
 
   // Polling: stops automatically once the cache reaches a terminal status
   const status = useJobStatus(jobId ?? null);
 
   useEffect(() => {
-    if (status.data?.status === 'COMPLETED') {
+    if (!jobId || !status.data) return;
+    if (status.data.status === 'COMPLETED' || status.data.status === 'AWAITING_REVIEW') {
+      // Always land on results so matched, uncertain, and unmatched are visible together.
       navigate(`/jobs/${jobId}/results`, { replace: true });
-    }
-    if (status.data?.status === 'AWAITING_REVIEW') {
-      navigate(`/jobs/${jobId}/review`, { replace: true });
     }
   }, [status.data, jobId, navigate]);
 
@@ -74,7 +70,7 @@ export function JobProgressPage() {
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full rounded-full bg-blue-600 transition-all"
+              className="h-full rounded-full bg-blue-600 transition-all duration-500"
               style={{ width: `${Math.min(100, Math.max(0, data.progress_pct))}%` }}
               role="progressbar"
               aria-valuenow={data.progress_pct}
@@ -84,16 +80,18 @@ export function JobProgressPage() {
           </div>
           <JobStepper status={data.status} agentsCompleted={data.agents_completed} error={data.error} />
           {terminal ? (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button onClick={() => navigate(`/jobs/${jobId}/results`)}>
                 View results
               </Button>
-              <Link
-                to={`/jobs/${jobId}/review`}
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                Open review queue
-              </Link>
+              {data.status === 'AWAITING_REVIEW' && (
+                <Link
+                  to={`/jobs/${jobId}/review`}
+                  className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                >
+                  Open review queue
+                </Link>
+              )}
             </div>
           ) : (
             <p className="text-sm text-slate-500">

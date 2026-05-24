@@ -35,7 +35,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     let detail: unknown = null;
-    try { detail = await response.json(); } catch { detail = await response.text(); }
+    const bodyText = await response.text();
+    try {
+      detail = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      detail = bodyText;
+    }
     if (response.status === 401) useAuthStore.getState().clear();
     throw new ApiError(response.status, detail);
   }

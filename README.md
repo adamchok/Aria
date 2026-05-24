@@ -14,7 +14,7 @@ Upload payment proofs in any format, match them against bank statements with FX-
 - **FX-aware matching** — Per-transaction tolerance windows using live and historical rates
 - **Explainable decisions** — Natural-language variance explanations and full audit chains
 - **Human-in-the-loop** — Review queue for uncertain matches (confidence 0.5–0.75)
-- **Four-agent pipeline** — LangGraph orchestration: Ingestion → Normalisation → Matching → Report
+- **Five-stage pipeline** — OpenAI Agents SDK orchestration: Ingestion → Bank Statement → Normalisation → Matching → Report
 - **Multi-tenant platform** — JWT login, role-based UIs, bank account ledger, webhooks, and programmatic API keys
 - **Production stack** — FastAPI · Celery · PostgreSQL · MinIO · React 18
 
@@ -71,7 +71,7 @@ For live Claude extraction, see [Configuration](docs/configuration.md).
 ## Architecture at a glance
 
 ```text
-Ops / Admin / Mgmt UIs  →  FastAPI (JWT + API key)  →  Celery Worker  →  LangGraph Pipeline
+Ops / Admin / Mgmt UIs  →  FastAPI (JWT + API key)  →  Celery Worker  →  Agents SDK Pipeline
                                     │                              │
                                PostgreSQL                    Claude LLMs
                                Redis                         FX APIs
@@ -84,7 +84,7 @@ Supported corridors: **USD/MYR · EUR/MYR · GBP/MYR · SGD/MYR**
 
 ```text
 Aria/
-├── backend/                 Python FastAPI + LangGraph agents
+├── backend/                 Python FastAPI + OpenAI Agents SDK pipeline
 ├── frontend-tenant-ops/     Reconciliation ops app (port 5173)
 ├── frontend-admin/          Platform admin app (port 5174)
 ├── frontend-tenant-mgmt/    Tenant configuration app (port 5175)

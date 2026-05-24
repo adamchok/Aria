@@ -58,6 +58,30 @@ def auto_batch_transactions() -> None:
     asyncio.run(_auto_batch_async())
 
 
+async def _resolve_batch_bank_account_id(session, tenant_id: str) -> str | None:
+    """Pick a bank account with pending ledger entries for auto-batched jobs."""
+    from app.repositories.bank_account_repository import BankAccountRepository
+
+    account_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    accounts, _ = await account_repo.list(page=1, page_size=100)
+    candidates: list[tuple[str, int]] = []
+    for acc in accounts:
+        stats = await account_repo.get_stats(acc.id)
+        if stats["uncleared_count"] > 0:
+            candidates.append((acc.id, stats["uncleared_count"]))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    if len(candidates) > 1:
+        logger.info(
+            "batch.bank_account_ambiguous",
+            tenant_id=tenant_id,
+            chosen_account_id=candidates[0][0],
+            candidate_count=len(candidates),
+        )
+    return candidates[0][0]
+
+
 async def _auto_batch_async() -> None:
     from app.core.database import session_scope
     from app.models.enums import JobStatus
@@ -101,12 +125,22 @@ async def _auto_batch_async() -> None:
                 if tx.payload.get("storage_key")
             ]
             base_currency = buffered[0].payload.get("base_currency", "MYR")
+            bank_account_id = await _resolve_batch_bank_account_id(session, tenant_id)
+            if bank_account_id is None:
+                logger.warning(
+                    "batch.skipped_no_ledger",
+                    tenant_id=tenant_id,
+                    count=len(buffered),
+                    detail="No bank account with pending ledger entries — cannot match proofs.",
+                )
+                continue
 
             job_repo = JobRepository(session, tenant_id=tenant_id)
             job = await job_repo.create_job(
                 base_currency=base_currency,
                 payment_proof_keys=proof_keys,
                 bank_statement_key=None,
+                bank_account_id=bank_account_id,
                 tenant_id=tenant_id,
             )
 
@@ -144,12 +178,21 @@ async def _batch_one_tenant(tenant_id: str) -> None:
             if tx.payload.get("storage_key")
         ]
         base_currency = buffered[0].payload.get("base_currency", "MYR")
+        bank_account_id = await _resolve_batch_bank_account_id(session, tenant_id)
+        if bank_account_id is None:
+            logger.warning(
+                "batch.manual_flush.skipped_no_ledger",
+                tenant_id=tenant_id,
+                count=len(buffered),
+            )
+            return
 
         job_repo = JobRepository(session, tenant_id=tenant_id)
         job = await job_repo.create_job(
             base_currency=base_currency,
             payment_proof_keys=proof_keys,
             bank_statement_key=None,
+            bank_account_id=bank_account_id,
             tenant_id=tenant_id,
         )
         await ingest_repo.mark_batched([tx.id for tx in buffered], job.id)

@@ -27,6 +27,7 @@ class JobRepository:
         payment_proof_keys: list[str],
         bank_statement_key: str | None,
         bank_statement_id: str | None = None,
+        bank_account_id: str | None = None,
         tenant_id: str | None = None,
     ) -> JobORM:
         job = JobORM(
@@ -35,6 +36,7 @@ class JobRepository:
             payment_proof_keys=payment_proof_keys,
             bank_statement_key=bank_statement_key,
             bank_statement_id=bank_statement_id,
+            bank_account_id=bank_account_id,
             tenant_id=tenant_id or self._tenant_id,
         )
         self._s.add(job)

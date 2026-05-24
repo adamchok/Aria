@@ -66,7 +66,9 @@ Returns service status and version.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `payment_proofs` | file[] | Yes | One or more payment proof files |
-| `bank_statement` | file | Yes | Bank statement (XLSX, CSV, or PDF) |
+| `bank_statement` | file | One of three sources | Bank statement (XLSX, CSV, or PDF). Omit when using ledger references. |
+| `bank_statement_id` | string (UUID) | One of three sources | Single uploaded statement from `/bank-accounts/{id}/statements` or `/bank-statements`. Uses uncleared entries only. |
+| `bank_account_id` | string (UUID) | One of three sources | Registered bank account. Aggregates **all pending (uncleared) ledger entries** across every statement for that account. |
 | `base_currency` | string | No | ISO 4217 code (default: `MYR`) |
 
 **Accepted MIME types for proofs:** `image/jpeg`, `image/png`, `image/webp`, `application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `text/csv`, `application/csv`
@@ -85,7 +87,7 @@ Returns service status and version.
 
 | Status | Cause |
 | --- | --- |
-| `400` | Missing proofs or bank statement |
+| `400` | Missing proofs, conflicting bank sources, or account has no pending ledger entries |
 | `502` | Storage upload failure |
 
 **Example**
@@ -654,6 +656,8 @@ Aggregated reconciliation statistics for the authenticated tenant.
 
 Tenants register named bank accounts, upload monthly statements, and browse a persistent ledger. Entries are marked **cleared** when matched by a reconciliation job.
 
+**Ledger amount convention:** positive = deposit/credit (money in), negative = withdrawal/debit (money out). PDF parsers read separate Withdrawal/Deposit columns when present (e.g. CIMB) and never store the running balance as the transaction amount.
+
 <div class="aria-endpoint">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
@@ -683,7 +687,10 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 | `DELETE` | `/api/v1/bank-accounts/{id}` | Delete account |
 | `POST` | `/api/v1/bank-accounts/{id}/statements` | Upload statement (multipart) to account |
 | `GET` | `/api/v1/bank-accounts/{id}/statements` | List statements for account |
+| `DELETE` | `/api/v1/bank-accounts/{id}/statements/{statement_id}` | Delete statement and all its ledger entries |
 | `GET` | `/api/v1/bank-accounts/{id}/ledger` | Paginated ledger entries (`cleared` filter optional) |
+| `PATCH` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Edit a pending ledger entry |
+| `DELETE` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Delete a pending ledger entry (409 if cleared) |
 
 <div class="aria-endpoint">
   <div class="aria-endpoint__header">
@@ -727,7 +734,7 @@ stateDiagram-v2
 ```
 
 1. **Submit** — files uploaded to MinIO; job row created; Celery task enqueued
-2. **Process** — worker runs LangGraph pipeline; progress updated per agent
+2. **Process** — worker runs OpenAI Agents SDK pipeline; progress updated per stage
 3. **Complete** — report stored; status set to `COMPLETED` or `AWAITING_REVIEW`
 4. **Review** (optional) — human confirms or rejects uncertain matches; results and export update immediately
 5. **Export** — Excel generated from the hydrated report (includes review outcomes)

@@ -23,14 +23,14 @@ describe('JobProgressPage', () => {
     await waitFor(() => expect(screen.getByTestId('results-page')).toBeInTheDocument());
   });
 
-  it('navigates to review when AWAITING_REVIEW', async () => {
+  it('navigates to results when AWAITING_REVIEW', async () => {
     server.use(
       http.get(`http://localhost/api/v1/jobs/${JOB_ID}`, () =>
         HttpResponse.json({ ...jobStatusCompleted, status: 'AWAITING_REVIEW' }),
       ),
     );
     renderWithProviders(<Harness />, { initialEntries: [`/jobs/${JOB_ID}`] });
-    await waitFor(() => expect(screen.getByTestId('review-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('results-page')).toBeInTheDocument());
   });
 
   it('renders an error and retry on failure', async () => {

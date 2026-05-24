@@ -323,6 +323,15 @@ export interface LedgerEntryItem {
   cleared_by_job_id: UUID | null;
 }
 
+export interface LedgerEntryUpdate {
+  value_date?: ISODate;
+  amount?: MoneyStr;
+  currency?: string;
+  description?: string;
+  reference?: string | null;
+  counterparty?: string | null;
+}
+
 export interface LedgerPageResponse {
   items: LedgerEntryItem[];
   total: number;

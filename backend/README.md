@@ -1,6 +1,6 @@
 # ARIA Backend
 
-FastAPI + LangGraph reconciliation pipeline for cross-border SME payments.
+FastAPI + OpenAI Agents SDK reconciliation pipeline for cross-border SME payments.
 See the project root for `CLAUDE.md`, the technical spec, and project overview.
 
 ## Quick start (local, no Docker)

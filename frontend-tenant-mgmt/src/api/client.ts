@@ -5,6 +5,8 @@ import type {
   BankAccountResponse,
   BankStatementSummary,
   BankStatementUploadResponse,
+  LedgerEntryItem,
+  LedgerEntryUpdate,
   LedgerPageResponse,
   LoginResponse,
   QueueStatusResponse,
@@ -43,10 +45,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     let detail: unknown = null;
+    const bodyText = await response.text();
     try {
-      detail = await response.json();
+      detail = bodyText ? JSON.parse(bodyText) : null;
     } catch {
-      detail = await response.text();
+      detail = bodyText;
     }
     if (response.status === 401) useAuthStore.getState().clear();
     const message =
@@ -157,4 +160,22 @@ export const api = {
     const query = qs.toString();
     return request<LedgerPageResponse>(`/api/v1/bank-accounts/${accountId}/ledger${query ? `?${query}` : ''}`);
   },
+
+  updateLedgerEntry: (
+    accountId: UUID,
+    entryId: UUID,
+    payload: LedgerEntryUpdate,
+  ): Promise<LedgerEntryItem> =>
+    request<LedgerEntryItem>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteLedgerEntry: (accountId: UUID, entryId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, { method: 'DELETE' }),
+
+  deleteAccountStatement: (accountId: UUID, statementId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}/statements/${statementId}`, {
+      method: 'DELETE',
+    }),
 };

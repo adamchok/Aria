@@ -1,4 +1,4 @@
-"""LangGraph state — typed, Pydantic-backed."""
+"""Pipeline state — typed, Pydantic-backed."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class DocumentInput(BaseModel):
 
 
 class ReconciliationState(BaseModel):
-    """Shared state passed through the LangGraph pipeline."""
+    """Shared state passed through the reconciliation pipeline."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

@@ -63,6 +63,21 @@ async def test_cache_avoids_second_call():
 
 
 @pytest.mark.asyncio
+async def test_openexchangerates_preferred_over_exchangerate_api():
+    """Open Exchange Rates is tried before ExchangeRate-API (free tier lacks history)."""
+    oer = _CountingProvider(Decimal("4.20"))
+    oer.name = "openexchangerates"
+    er = _CountingProvider(Decimal("9.99"))
+    er.name = "exchangerate-api"
+
+    svc = FXService(providers=[oer, er, StaticFallbackProvider()])
+    rate = await svc.get_rate("USD", "MYR", date(2026, 5, 1))
+    assert rate == Decimal("4.20")
+    assert oer.calls == 1
+    assert er.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_all_failures_raise():
     svc = FXService(providers=[_FailingProvider(), _FailingProvider()])
     with pytest.raises(FXRateUnavailableError):

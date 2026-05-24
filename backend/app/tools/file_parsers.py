@@ -116,27 +116,82 @@ def _to_date(value: Any) -> date | None:
     return None
 
 
-_DATE_KEYS = {"date", "value date", "valuedate", "posting date", "transaction date", "txn date"}
-_AMOUNT_KEYS = {
-    "amount",
-    "credit",
-    "credit amount",
-    "deposit",
-    "money in",
-    "amount (myr)",
-    "amount myr",
-}
-_DESC_KEYS = {"description", "narrative", "details", "particulars"}
-_REF_KEYS = {"reference", "ref", "reference no", "ref no", "txn ref"}
+_DATE_KEYS = {"date", "value date", "valuedate", "posting date", "transaction date", "txn date", "tarikh"}
+_WITHDRAWAL_KEYS = {"withdrawal", "pengeluaran", "debit", "money out", "withdrawals"}
+_DEPOSIT_KEYS = {"deposit", "deposits", "credit", "money in", "credits"}
+_BALANCE_KEYS = {"balance", "baki", "running balance"}
+_AMOUNT_KEYS = {"amount", "amount (myr)", "amount myr"}
+_DESC_KEYS = {"description", "narrative", "details", "particulars", "diskripsi"}
+_REF_KEYS = {"reference", "ref", "reference no", "ref no", "txn ref", "no. rujukan", "rujukan"}
 _COUNTERPARTY_KEYS = {"counterparty", "payer", "remitter", "sender"}
+
+_DEBIT_DESC_RE = re.compile(
+    r"\b(POS DEBIT|DEBIT|WITHDRAWAL|DUITNOW TO|PAYMENT TO|TRANSFER TO|FUND TRANSFER TO|CHARGE|FEE)\b",
+    re.IGNORECASE,
+)
+_CREDIT_DESC_RE = re.compile(
+    r"\b(CREDIT|DEPOSIT|DUITNOW FROM|TRANSFER FROM|INWARD|RECEIVED|PROFIT|HIBAH|INTEREST|SALARY)\b",
+    re.IGNORECASE,
+)
+_SKIP_DESC_RE = re.compile(r"\b(OPENING BALANCE|CLOSING BALANCE|BAKI PENUTUP)\b", re.IGNORECASE)
+
+
+def _header_tokens(header: str) -> set[str]:
+    """Split multi-line PDF table headers into matchable tokens."""
+    parts = re.split(r"[\n/\(\)\[\]]+", str(header).lower())
+    return {p.strip() for p in parts if p.strip()}
 
 
 def _pick(row: dict[str, Any], keys: set[str]) -> Any:
     for k, v in row.items():
         if k is None:
             continue
-        if k.strip().lower() in keys:
+        if k.strip().lower() in keys or _header_tokens(k) & keys:
             return v
+    return None
+
+
+def _find_column_value(row: dict[str, Any], *needles: str) -> Any:
+    for k, v in row.items():
+        if k is None:
+            continue
+        tokens = _header_tokens(k)
+        if any(n.lower() in tokens or n.lower() in str(k).lower() for n in needles):
+            return v
+    return None
+
+
+def _resolve_entry_amount(row: dict[str, Any], description: str = "") -> Decimal | None:
+    """Derive signed transaction amount from withdrawal/deposit columns.
+
+    Malaysian bank PDFs (e.g. CIMB) expose separate Withdrawal, Deposit, and
+    Balance columns. The balance must never be stored as the transaction amount.
+    Withdrawals are negative; deposits/credits are positive.
+    """
+    desc = description or str(_find_column_value(row, "description", "diskripsi", "particulars") or "")
+    if _SKIP_DESC_RE.search(desc):
+        return None
+
+    withdrawal = _to_decimal(_find_column_value(row, "withdrawal", "pengeluaran", "debit"))
+    deposit = _to_decimal(_find_column_value(row, "deposit", "deposits", "credit"))
+    single_amount = _to_decimal(_find_column_value(row, "amount"))
+
+    outgoing = bool(_DEBIT_DESC_RE.search(desc))
+    incoming = bool(_CREDIT_DESC_RE.search(desc))
+
+    if withdrawal is not None and withdrawal > 0:
+        return -abs(withdrawal)
+    if deposit is not None and deposit > 0:
+        # Some PDF table extractions mis-place outgoing transfers in the deposit column.
+        if outgoing and not incoming:
+            return -abs(deposit)
+        return abs(deposit)
+    if single_amount is not None:
+        if outgoing and not incoming and single_amount > 0:
+            return -abs(single_amount)
+        if incoming and not outgoing and single_amount < 0:
+            return abs(single_amount)
+        return single_amount
     return None
 
 
@@ -160,17 +215,7 @@ def parse_bank_statement_csv(data: bytes, base_currency: str = "MYR") -> BankSta
 
 def parse_bank_statement_text(text: str, base_currency: str = "MYR") -> BankStatement:
     """Parse CSV-shaped or line-oriented text extracted from PDFs."""
-    stripped = text.strip()
-    if not stripped:
-        return BankStatement(base_currency=base_currency)
-
-    if "," in stripped.splitlines()[0].lower():
-        reader = csv.DictReader(io.StringIO(stripped))
-        stmt = _build_statement(list(reader), base_currency)
-        if stmt.entries:
-            return stmt
-
-    return _build_statement(_parse_pdf_text_lines(stripped), base_currency)
+    return _parse_bank_statement_from_text(text, base_currency)
 
 
 def parse_bank_statement_pdf(data: bytes, base_currency: str = "MYR") -> BankStatement:
@@ -205,34 +250,162 @@ def parse_bank_statement_pdf(data: bytes, base_currency: str = "MYR") -> BankSta
         return stmt
 
     combined_text = "\n".join(text_chunks)
-    return parse_bank_statement_text(combined_text, base_currency=base_currency)
+    return _parse_bank_statement_from_text(combined_text, base_currency=base_currency)
+
+
+def _parse_bank_statement_from_text(text: str, base_currency: str = "MYR") -> BankStatement:
+    """Parse extracted PDF/statement text with column-aware block heuristics."""
+    stripped = text.strip()
+    if not stripped:
+        return BankStatement(base_currency=base_currency)
+
+    if "," in stripped.splitlines()[0].lower():
+        reader = csv.DictReader(io.StringIO(stripped))
+        stmt = _build_statement(list(reader), base_currency)
+        if stmt.entries:
+            return stmt
+
+    block_rows = _parse_pdf_transaction_blocks(stripped)
+    if block_rows:
+        return _build_statement(block_rows, base_currency)
+
+    return _build_statement(_parse_pdf_text_lines(stripped), base_currency)
 
 
 _DATE_LINE_RE = re.compile(
     r"\b(\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b",
     re.IGNORECASE,
 )
+_DATE_START_RE = re.compile(r"^(\d{1,2}/\d{1,2}/\d{4})")
 _AMOUNT_LINE_RE = re.compile(r"(?<!\d)(-?\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})(?!\d)")
+_TRAILING_TXN_RE = re.compile(
+    r"^(?:T(?P<ref>\d+)\s+)?(?P<txn>\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s+"
+    r"(?P<balance>\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$"
+)
+_SKIP_LINE_RE = re.compile(
+    r"^(Page /|Statement Date|Account No|MM/S |Important Notice|You can transfer|"
+    r"Date$|Tarikh$|Description$|Withdrawal$|Deposits$|Balance$|Tax$|Ref No$|"
+    r"CIMB |Savings Account|Protected by PIDM|\*\*\*)",
+    re.IGNORECASE,
+)
+
+
+def _parse_pdf_transaction_blocks(text: str) -> list[dict[str, Any]]:
+    """Group multi-line PDF rows (CIMB-style) into structured transaction dicts."""
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    lines = [line for line in lines if line and not _SKIP_LINE_RE.match(line)]
+
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        if _SKIP_DESC_RE.search(line):
+            if current:
+                blocks.append(current)
+                current = []
+            continue
+        if _DATE_START_RE.match(line):
+            if current:
+                blocks.append(current)
+            current = [line]
+        elif current:
+            current.append(line)
+        elif line.upper().startswith("OPENING BALANCE"):
+            continue
+    if current:
+        blocks.append(current)
+
+    rows: list[dict[str, Any]] = []
+    for block in blocks:
+        parsed = _parse_transaction_block(block)
+        if parsed:
+            rows.append(parsed)
+    return rows
+
+
+def _parse_transaction_block(block: list[str]) -> dict[str, Any] | None:
+    first = block[0]
+    date_match = _DATE_START_RE.match(first)
+    if not date_match:
+        return None
+
+    full_text = " ".join(block)
+    if _SKIP_DESC_RE.search(full_text):
+        return None
+
+    value_date = date_match.group(1)
+    ref: str | None = None
+    withdrawal: Decimal | None = None
+    deposit: Decimal | None = None
+    balance: Decimal | None = None
+
+    last = block[-1]
+    tail = _TRAILING_TXN_RE.match(last)
+    if tail and len(block) > 1:
+        ref = f"T{tail.group('ref')}" if tail.group("ref") else None
+        txn = _to_decimal(tail.group("txn"))
+        balance = _to_decimal(tail.group("balance"))
+        if txn is None:
+            return None
+        if _DEBIT_DESC_RE.search(full_text):
+            withdrawal = abs(txn)
+        elif _CREDIT_DESC_RE.search(full_text):
+            deposit = abs(txn)
+        else:
+            withdrawal = abs(txn)
+    else:
+        amounts = [_to_decimal(a) for a in _AMOUNT_LINE_RE.findall(first)]
+        amounts = [a for a in amounts if a is not None]
+        if len(amounts) >= 2:
+            txn, balance = amounts[-2], amounts[-1]
+            if _CREDIT_DESC_RE.search(full_text):
+                deposit = abs(txn)
+            elif _DEBIT_DESC_RE.search(full_text):
+                withdrawal = abs(txn)
+            else:
+                deposit = abs(txn)
+        elif len(amounts) == 1:
+            deposit = abs(amounts[0])
+        else:
+            return None
+
+    row: dict[str, Any] = {
+        "Date": value_date,
+        "Description": full_text,
+        "Reference": ref,
+    }
+    if withdrawal is not None:
+        row["Withdrawal"] = str(withdrawal)
+    if deposit is not None:
+        row["Deposits"] = str(deposit)
+    if balance is not None:
+        row["Balance"] = str(balance)
+    return row
 
 
 def _parse_pdf_text_lines(text: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for line in text.splitlines():
         cleaned = " ".join(line.split())
-        if not cleaned or cleaned.lower().startswith(("date ", "total", "balance", "opening", "closing")):
+        if not cleaned or _SKIP_DESC_RE.search(cleaned):
             continue
         date_match = _DATE_LINE_RE.search(cleaned)
         amounts = _AMOUNT_LINE_RE.findall(cleaned)
-        if not date_match or not amounts:
+        if not date_match or len(amounts) < 2:
             continue
-        amount_raw = amounts[-1]
-        rows.append(
-            {
-                "Date": date_match.group(1),
-                "Amount": amount_raw,
-                "Description": cleaned,
-            }
-        )
+        txn_raw = amounts[-2]
+        row = {
+            "Date": date_match.group(1),
+            "Description": cleaned,
+        }
+        if _CREDIT_DESC_RE.search(cleaned):
+            row["Deposits"] = txn_raw
+        elif _DEBIT_DESC_RE.search(cleaned):
+            row["Withdrawal"] = txn_raw
+        else:
+            row["Deposits"] = txn_raw
+        if len(amounts) >= 2:
+            row["Balance"] = amounts[-1]
+        rows.append(row)
     return rows
 
 
@@ -240,18 +413,22 @@ def _build_statement(rows: list[dict[str, Any]], base_currency: str) -> BankStat
     entries: list[BankEntry] = []
     dates: list[date] = []
     for raw in rows:
-        d = _to_date(_pick(raw, _DATE_KEYS))
-        amt = _to_decimal(_pick(raw, _AMOUNT_KEYS))
+        desc = str(_find_column_value(raw, "description", "diskripsi", "particulars") or _pick(raw, _DESC_KEYS) or "")
+        if _SKIP_DESC_RE.search(desc):
+            continue
+        d = _to_date(_find_column_value(raw, "date", "tarikh") or _pick(raw, _DATE_KEYS))
+        amt = _resolve_entry_amount(raw, desc)
         if d is None or amt is None:
             continue
         dates.append(d)
+        ref_val = _find_column_value(raw, "reference", "ref", "rujukan") or _pick(raw, _REF_KEYS)
         entries.append(
             BankEntry(
                 value_date=d,
                 amount=amt,
                 currency=base_currency,
-                description=str(_pick(raw, _DESC_KEYS) or ""),
-                reference=str(_pick(raw, _REF_KEYS)) if _pick(raw, _REF_KEYS) else None,
+                description=desc,
+                reference=str(ref_val) if ref_val else None,
                 counterparty=str(_pick(raw, _COUNTERPARTY_KEYS))
                 if _pick(raw, _COUNTERPARTY_KEYS)
                 else None,

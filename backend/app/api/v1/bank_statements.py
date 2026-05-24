@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.ingestion import IngestionAgent
+from app.agents.sdk.stages.bank_statement import extract_bank_statement
 from app.core.dependencies import get_db_session
 from app.core.middleware import require_tenant
 from app.graph.state import DocumentInput
@@ -79,16 +79,15 @@ async def upload_bank_statement(
     data = await bank_statement.read()
     filename = bank_statement.filename or "statement"
 
-    agent = IngestionAgent()
     doc = DocumentInput(
         storage_key="",
         filename=filename,
         content_type=bank_statement.content_type,
         bytes_data=data,
     )
-    # Run in a thread — pdfplumber + optional LLM call are blocking operations.
     try:
-        parsed = await asyncio.to_thread(agent._parse_bank_statement, doc, validated_currency)
+        result = await asyncio.to_thread(extract_bank_statement, doc, validated_currency)
+        statement = result.statement
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not parse bank statement: {exc}") from exc
 
@@ -101,7 +100,7 @@ async def upload_bank_statement(
         filename=filename,
         storage_key=key,
         base_currency=validated_currency,
-        statement=parsed,
+        statement=statement,
         account_id=resolved_account_id,
     )
 
@@ -109,8 +108,8 @@ async def upload_bank_statement(
         id=UUID(orm.id),
         filename=orm.filename,
         entry_count=orm.entry_count,
-        statement_period_start=parsed.statement_period_start,
-        statement_period_end=parsed.statement_period_end,
+        statement_period_start=statement.statement_period_start,
+        statement_period_end=statement.statement_period_end,
     )
 
 

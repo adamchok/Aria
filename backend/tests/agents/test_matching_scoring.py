@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
-from app.agents.matching import _W_AMOUNT, _W_DATE, _W_PAYER, _W_REF, MatchingAgent
+from app.agents.sdk.stages.matching import _W_AMOUNT, _W_DATE, _W_PAYER, _W_REF, _score
 from app.core.config import Settings
-from app.models.schemas import BankEntry
+from app.models.enums import SourceFormat
+from app.models.schemas import BankEntry, NormalisedRecord, PaymentRecord
+
+
+def _settings(**kwargs) -> Settings:
+    return Settings(_env_file=None, **kwargs)
 
 
 def test_weights_sum_to_one():
@@ -21,30 +26,23 @@ def test_score_perfect_match_caps_high(normalised_record_usd):
         reference=normalised_record_usd.payment.reference,
         counterparty=normalised_record_usd.payment.payer,
     )
-    agent = MatchingAgent(settings=Settings(_env_file=None))
-    score = agent._score(normalised_record_usd, entry)
+    score = _score(normalised_record_usd, entry, _settings())
     assert score.amount_match_score == 1.0
     assert score.date_proximity_score == 1.0
     assert score.composite > 0.9
 
 
 def test_score_amount_at_window_edge_zero(normalised_record_usd):
-    edge = normalised_record_usd.tolerance_low  # far below settlement target
+    edge = normalised_record_usd.tolerance_low
     entry = BankEntry(
         value_date=normalised_record_usd.payment.value_date,
         amount=edge,
     )
-    score = MatchingAgent(settings=Settings(_env_file=None))._score(normalised_record_usd, entry)
+    score = _score(normalised_record_usd, entry, _settings())
     assert score.amount_match_score < 0.5
 
 
 def test_score_prefers_card_debit_with_foreign_amount_and_payee():
-    """USD receipt vs MYR POS debit — e.g. Anthropic USD 20 / MYR 80.78."""
-    from datetime import date
-
-    from app.models.enums import SourceFormat
-    from app.models.schemas import NormalisedRecord, PaymentRecord
-
     payment = PaymentRecord(
         payer="Ho Tak Technology",
         payee="Anthropic, PBC",
@@ -80,9 +78,8 @@ def test_score_prefers_card_debit_with_foreign_amount_and_payee():
         reference="T26854",
         counterparty="CURSOR USAGE SAN FRA",
     )
-    agent = MatchingAgent(settings=Settings(_env_file=None))
-    anthropic_score = agent._score(nr, anthropic)
-    cursor_score = agent._score(nr, cursor)
+    anthropic_score = _score(nr, anthropic, _settings())
+    cursor_score = _score(nr, cursor, _settings())
     assert anthropic_score.composite > cursor_score.composite
     assert anthropic_score.composite >= 0.5
 
@@ -92,7 +89,5 @@ def test_score_date_drift_decays(normalised_record_usd):
         value_date=normalised_record_usd.payment.value_date + timedelta(days=5),
         amount=normalised_record_usd.amount_myr_at_settlement_rate,
     )
-    score = MatchingAgent(settings=Settings(_env_file=None, date_window_days=5))._score(
-        normalised_record_usd, entry
-    )
+    score = _score(normalised_record_usd, entry, _settings(date_window_days=5))
     assert score.date_proximity_score == 0.0

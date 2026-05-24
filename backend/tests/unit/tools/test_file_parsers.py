@@ -76,10 +76,48 @@ def test_parse_bank_statement_text_from_csv_shape():
 
 
 def test_parse_bank_statement_text_from_freeform_lines():
-    text = "2026-05-20 4179.24 Inward Telegraphic Transfer INV-001 ACME US INC"
+    text = "2026-05-20 4179.24 4200.00 Inward Telegraphic Transfer INV-001 ACME US INC"
     stmt = parse_bank_statement_text(text)
     assert len(stmt.entries) == 1
     assert stmt.entries[0].value_date == date(2026, 5, 20)
+    assert stmt.entries[0].amount == Decimal("4179.24")
+
+
+def test_parse_cimb_pdf_withdrawal_deposit_balance_columns():
+    from pathlib import Path
+
+    from app.tools.file_parsers import parse_bank_statement_pdf
+
+    data = Path(__file__).resolve().parents[2] / "fixtures/bank_statements/cimb_savings_apr2026.pdf"
+    stmt = parse_bank_statement_pdf(data.read_bytes(), base_currency="MYR")
+    assert len(stmt.entries) == 6
+
+    pos_debit = next(e for e in stmt.entries if "POS DEBIT" in e.description and "GRAMMARLY" in e.description)
+    assert pos_debit.amount == Decimal("-242.36")
+    assert pos_debit.reference == "T89545"
+
+    duitnow = next(e for e in stmt.entries if "DUITNOW TO ACCOUNT" in e.description)
+    assert duitnow.amount == Decimal("-200.00")
+
+    credit = next(e for e in stmt.entries if "CREDIT PROFIT/HIBAH" in e.description)
+    assert credit.amount == Decimal("0.06")
+
+    # Balances must not appear as transaction amounts.
+    assert all(e.amount not in {Decimal("85.33"), Decimal("144.01"), Decimal("244.93")} for e in stmt.entries)
+
+
+def test_parse_cimb_text_blocks_when_table_missing():
+    text = """
+24/04/2026 POS DEBIT
+GRAMMARLY CO SAN FAN
+T89545 242.36 85.33
+30/04/2026 CREDIT PROFIT/HIBAH 0.06 144.01
+CLOSING BALANCE 144.01
+"""
+    stmt = parse_bank_statement_text(text)
+    assert len(stmt.entries) == 2
+    assert stmt.entries[0].amount == Decimal("-242.36")
+    assert stmt.entries[1].amount == Decimal("0.06")
 
 
 def test_preprocess_image_returns_jpeg():

@@ -17,7 +17,7 @@ description: "ARIA's value proposition and key differentiators"
 
 ## ARIA in one sentence
 
-**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the LangGraph pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Three role-scoped web apps provide ops, platform admin, and tenant configuration UIs.
+**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the OpenAI Agents SDK pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Three role-scoped web apps provide ops, platform admin, and tenant configuration UIs.
 
 ## Core value proposition
 
@@ -95,7 +95,7 @@ flowchart LR
 
 | Step | Screen | Action |
 | --- | --- | --- |
-| 1 | `/upload` | Drag payment proofs + bank statement; select base currency (MYR) |
+| 1 | `/upload` | Drag payment proofs; attach bank data (upload file **or** select bank account — all pending ledger entries are included automatically); select base currency (MYR) |
 | 2 | `/jobs/{id}` | Watch four-agent stepper; SSE delivers live progress |
 | 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
 | 4 | `/jobs/{id}/review` | Confirm or reject uncertain items (side-by-side proof vs bank line) |

@@ -166,9 +166,30 @@ See `CLAUDE.md` §6 for full conventions.
 | `mock` | CI, local dev, demos without API cost | `LLM_MODE=mock` (default) |
 | `live` | Real extraction and matching | `LLM_MODE=live` + `ANTHROPIC_API_KEY` |
 
-Mock mode returns deterministic, schema-shaped responses from `backend/app/services/llm_client.py`. The full pipeline runs identically — only the intelligence layer changes.
+Mock mode returns deterministic, schema-shaped responses from `backend/app/agents/sdk/mock_responses.py` via `LLMService`. The full pipeline runs identically — only the intelligence layer changes.
+
+Optional: `AGENTS_SDK_TRACING=true` enables OpenAI Agents SDK built-in tracing (see [Configuration]({{ '/configuration' | relative_url }})).
 
 **Live vision notes:** Image proofs (PNG/JPG) are sent to Claude as multimodal input. PNGs are downscaled and re-encoded as JPEG before upload — MIME type is detected from bytes, not the filename. PDF payment proofs use extracted text, not vision.
+
+---
+
+## RTCIOC prompting (agent instructions)
+
+All specialist and orchestrator prompts under `backend/app/agents/sdk/prompts/` use a fixed six-section template:
+
+| Section | Purpose |
+| --- | --- |
+| **Role** | Persona and tonality |
+| **Task** | What the agent must do |
+| **Input** | Available data/context |
+| **Output** | Deliverable shape (Pydantic / JSON fields) |
+| **Constraints** | What the agent must **not** do |
+| **Capabilities and reminders** | Tools + **critical rules last** (recency bias) |
+
+Use `build_instructions()` from `prompts/base.py` — never inline prompt strings in stage modules.
+
+When adding or editing a specialist prompt, add a test in `tests/agents/sdk/test_prompts_rtcico.py` asserting all sections are present.
 
 ---
 
@@ -181,10 +202,10 @@ Aria/
 │   │   ├── main.py
 │   │   ├── api/v1/          auth, users, jobs, tenants, tenant_settings,
 │   │   │                    ingest, webhooks, analytics, bank_accounts, …
-│   │   ├── agents/          ingestion, normalisation, matching, report
-│   │   ├── graph/           builder.py, routing.py, state.py
+│   │   ├── agents/sdk/      orchestrator, stages, prompts, LLMService
+│   │   ├── graph/           state.py, builder.py (pipeline alias)
 │   │   ├── models/          Pydantic schemas + SQLAlchemy ORM
-│   │   ├── services/        fx_service, llm_client, storage, excel_export
+│   │   ├── services/        fx_service, storage, excel_export
 │   │   ├── tools/           file_parsers, fx_tools, swift_tools
 │   │   ├── workers/         celery_app.py, tasks.py
 │   │   └── core/            config, security, middleware, logging

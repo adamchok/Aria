@@ -382,6 +382,25 @@ class LedgerEntryItem(_Base):
     cleared_by_job_id: UUID | None = None
 
 
+class LedgerEntryUpdate(_Base):
+    value_date: date | None = None
+    amount: Decimal | None = None
+    currency: str | None = None
+    description: str | None = None
+    reference: str | None = None
+    counterparty: str | None = None
+
+    @field_validator("currency")
+    @classmethod
+    def _upper_currency(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        upper = v.strip().upper()
+        if not upper.isalpha() or len(upper) != 3:
+            raise ValueError("currency must be a 3-letter ISO 4217 code")
+        return upper
+
+
 class LedgerPageResponse(_Base):
     items: list[LedgerEntryItem]
     total: int

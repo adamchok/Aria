@@ -1,4 +1,6 @@
 import type {
+  BankAccountResponse,
+  BankStatementSummary,
   JobCreateResponse,
   JobListResponse,
   JobStatusResponse,
@@ -39,10 +41,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     let detail: unknown = null;
+    const bodyText = await response.text();
     try {
-      detail = await response.json();
+      detail = bodyText ? JSON.parse(bodyText) : null;
     } catch {
-      detail = await response.text();
+      detail = bodyText;
     }
     if (response.status === 401) {
       useAuthStore.getState().clear();
@@ -59,7 +62,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface CreateJobInput {
   paymentProofs: File[];
-  bankStatement: File;
+  bankStatement?: File;
+  bankStatementId?: UUID;
+  bankAccountId?: UUID;
   baseCurrency: string;
 }
 
@@ -75,10 +80,22 @@ export const api = {
   createJob: async (input: CreateJobInput): Promise<JobCreateResponse> => {
     const form = new FormData();
     for (const file of input.paymentProofs) form.append('payment_proofs', file, file.name);
-    form.append('bank_statement', input.bankStatement, input.bankStatement.name);
+    if (input.bankAccountId) {
+      form.append('bank_account_id', input.bankAccountId);
+    } else if (input.bankStatementId) {
+      form.append('bank_statement_id', input.bankStatementId);
+    } else if (input.bankStatement) {
+      form.append('bank_statement', input.bankStatement, input.bankStatement.name);
+    }
     form.append('base_currency', input.baseCurrency);
     return request<JobCreateResponse>('/api/v1/jobs', { method: 'POST', body: form });
   },
+
+  listBankAccounts: (): Promise<BankAccountResponse[]> =>
+    request<BankAccountResponse[]>('/api/v1/bank-accounts'),
+
+  listAccountStatements: (accountId: UUID): Promise<BankStatementSummary[]> =>
+    request<BankStatementSummary[]>(`/api/v1/bank-accounts/${accountId}/statements`),
 
   listJobs: (params?: { status?: string; page?: number; page_size?: number }): Promise<JobListResponse> => {
     const qs = new URLSearchParams();

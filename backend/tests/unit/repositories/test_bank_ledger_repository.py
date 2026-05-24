@@ -130,6 +130,43 @@ async def test_get_entries_tenant_defense_in_depth(db_session):
     assert entries == []
 
 
+# ─── get_account_uncleared_as_bank_statement ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_account_uncleared_aggregates_across_statements(db_session):
+    from app.repositories.bank_account_repository import BankAccountRepository
+
+    account_repo = BankAccountRepository(db_session, tenant_id=TENANT_A)
+    acc = await account_repo.create(
+        name="Main",
+        bank_name="Maybank",
+        account_number_masked="****1234",
+        currency="MYR",
+    )
+    repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
+    await repo.create_statement(
+        filename="may.csv",
+        storage_key=None,
+        base_currency="MYR",
+        statement=_stmt(2),
+        account_id=acc.id,
+    )
+    stmt2 = await repo.create_statement(
+        filename="jun.csv",
+        storage_key=None,
+        base_currency="MYR",
+        statement=_stmt(1),
+        account_id=acc.id,
+    )
+    entries = await repo.get_entries(stmt2.id)
+    await repo.clear_entries([UUID(entries[0].id)], job_id=uuid4())
+
+    result = await repo.get_account_uncleared_as_bank_statement(acc.id, "MYR")
+    assert len(result.entries) == 2
+    assert result.statement_period_start == date(2026, 5, 1)
+    assert result.statement_period_end == date(2026, 5, 2)
+
+
 # ─── get_uncleared_as_bank_statement ─────────────────────────────────────────
 
 @pytest.mark.asyncio

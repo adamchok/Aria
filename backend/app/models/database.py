@@ -107,10 +107,16 @@ class JobORM(Base):
     bank_statement_id: Mapped[str | None] = mapped_column(
         ForeignKey("bank_statements.id", ondelete="SET NULL"), nullable=True
     )
+    bank_account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("bank_accounts.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
     tenant: Mapped[TenantORM | None] = relationship(back_populates="jobs")
     bank_statement: Mapped[BankStatementORM | None] = relationship(
         "BankStatementORM", foreign_keys="JobORM.bank_statement_id", lazy="noload"
+    )
+    bank_account: Mapped[BankAccountORM | None] = relationship(
+        "BankAccountORM", foreign_keys="JobORM.bank_account_id", lazy="noload"
     )
     matches: Mapped[list[MatchORM]] = relationship(
         back_populates="job", cascade="all, delete-orphan", lazy="selectin"
