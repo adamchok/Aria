@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
 from app.core.exceptions import MatchNotFoundError
+from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, ReviewAction
 from app.models.schemas import MatchResult, ReviewActionRequest, ReviewActionResponse
 from app.repositories.job_repository import JobRepository
@@ -26,8 +27,9 @@ async def submit_review_action(
     match_id: UUID,
     payload: ReviewActionRequest,
     session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
 ) -> ReviewActionResponse:
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     try:
         match = await repo.get_match(job_id, match_id)
     except MatchNotFoundError as exc:
