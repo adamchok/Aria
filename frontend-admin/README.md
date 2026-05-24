@@ -24,7 +24,7 @@ Sign in with the seeded platform admin (`DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_P
 | `npm run dev` | Vite dev server with `/api` proxy |
 | `npm run build` | Type-check + production bundle |
 | `npm run typecheck` | Strict TypeScript |
-| `npm test` | Vitest unit tests |
+| `npm test` | Vitest — auth, API client, and admin page integration tests |
 
 ## Routes
 

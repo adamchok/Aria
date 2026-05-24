@@ -109,7 +109,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex h-14 items-center justify-between border-b border-slate-200 px-3">
           {sidebarOpen && (
             <Link
-              to="/dashboard"
+              to="/tenants"
               className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <img

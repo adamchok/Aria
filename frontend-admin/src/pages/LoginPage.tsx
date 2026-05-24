@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -21,7 +21,11 @@ export function LoginPage() {
       setAuth(data.access_token, data.user);
     },
     onError: (err: Error) => {
-      setError(err.message);
+      if (err instanceof ApiError && err.detail && typeof err.detail === 'object' && 'detail' in err.detail) {
+        setError(String((err.detail as { detail: string }).detail));
+      } else {
+        setError(err.message || 'Sign in failed. Check your credentials and try again.');
+      }
     },
   });
 
@@ -67,7 +71,11 @@ export function LoginPage() {
                 className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
-            {error && <p className="text-sm text-rose-600">{error}</p>}
+            {error && (
+              <p className="text-sm text-rose-600" role="alert">
+                {error}
+              </p>
+            )}
             <Button type="submit" disabled={loginMutation.isPending}>
               {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
             </Button>
