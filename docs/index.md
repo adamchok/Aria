@@ -101,23 +101,30 @@ ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance 
 
 ## Quick start
 
-The fastest path to a running stack — **mock LLM**, no API keys required:
+The fastest path to a running stack — **mock LLM**, no Anthropic API keys required (authentication still required):
 
 ```bash
 git clone https://github.com/adamchok/Aria.git
 cd Aria
+cp .env.example .env
+# Set DEFAULT_ADMIN_PASSWORD=your-password in .env
 docker compose up --build
 ```
 
 | Service | URL | Notes |
 | --- | --- | --- |
-| Web UI | [localhost:5173](http://localhost:5173) | Upload → progress → results → review |
+| Ops UI | [localhost:5173](http://localhost:5173) | Reconciliation — tenant user login |
+| Admin UI | [localhost:5174](http://localhost:5174) | Platform admin — seed credentials |
+| Tenant mgmt UI | [localhost:5175](http://localhost:5175) | Keys, webhooks, bank accounts |
 | API (Swagger) | [localhost:8000/docs](http://localhost:8000/docs) | Interactive OpenAPI |
 | Health | [localhost:8000/health](http://localhost:8000/health) | Liveness check |
 | MinIO console | [localhost:9001](http://localhost:9001) | `ariaadmin` / `ariaadmin` |
 
 {: .tip }
-> **Progressive disclosure:** Start with mock mode to explore the full pipeline at zero API cost. Switch to live Claude extraction when you are ready — see [Configuration]({{ '/configuration' | relative_url }}).
+> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user, then sign in to Ops (:5173) or Tenant mgmt (:5175). See [Getting Started]({{ '/getting-started' | relative_url }}).
+
+{: .tip }
+> **Progressive disclosure:** Mock mode explores the full pipeline at zero LLM cost. Switch to live Claude extraction when ready — see [Configuration]({{ '/configuration' | relative_url }}).
 
 ## Confidence routing
 
@@ -134,8 +141,10 @@ Low-confidence items are **never** auto-confirmed — a deliberate compliance co
 
 ```text
 Aria/
-├── backend/          FastAPI, LangGraph agents, Celery worker
-├── frontend/         React 18 SPA (Vite, TanStack Query, AG Grid)
-├── docs/             This documentation site
+├── backend/                  FastAPI, LangGraph agents, Celery worker
+├── frontend-tenant-ops/      Reconciliation ops app (port 5173)
+├── frontend-admin/           Platform admin app (port 5174)
+├── frontend-tenant-mgmt/     Tenant configuration app (port 5175)
+├── docs/                     This documentation site
 └── docker-compose.yml
 ```

@@ -1,56 +1,53 @@
-# ARIA Frontend
+# ARIA Tenant Management
 
-React 18 + TypeScript SPA for ARIA. Vite, Tailwind, TanStack Query,
-Zustand, and AG Grid Community per `CLAUDE.md` §3.3.
+Tenant configuration app — API keys, webhooks, bank accounts, analytics, ingest queue, and tenant users.
+
+React 18 + TypeScript · Vite · Tailwind · TanStack Query · JWT auth (tenant user role).
+
+**Port:** 5175
 
 ## Quick start
 
 ```bash
-cd frontend
+cd frontend-tenant-mgmt
 npm install
 cp .env.example .env
-npm run dev          # → http://localhost:5173 (proxies /api to :8000)
+npm run dev          # → http://localhost:5175
 ```
+
+Sign in with a **tenant user** account (created in Admin UI or invited here by a tenant admin).
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Vite dev server with `/api` proxy to FastAPI |
-| `npm run build` | Type-check then produce a production bundle in `dist/` |
-| `npm run typecheck` | Strict TypeScript build, no emit |
-| `npm test` | Vitest (unit + integration) — 49 specs |
-| `npm run test:coverage` | Vitest with v8 coverage |
-| `npm run test:e2e` | Playwright e2e — boots Vite, runs Chromium |
-| `npm run test:e2e:install` | One-time Chromium install for Playwright |
+| `npm run dev` | Vite dev server with `/api` proxy |
+| `npm run build` | Type-check + production bundle |
+| `npm run typecheck` | Strict TypeScript |
+| `npm test` | Vitest unit tests |
 
 ## Routes
 
 ```
-/upload                     New reconciliation job
-/jobs/:id                   Live progress (polls every 2s until terminal)
-/jobs/:id/results           Dashboard with AG Grid + Excel export
-/jobs/:id/review            Human review queue for UNCERTAIN items
+/login                      Sign in (tenant user JWT)
+/dashboard                  Tenant overview
+/keys                       Generate and revoke API keys
+/webhooks                   Webhook registration and delivery history
+/bank-accounts              Register bank accounts
+/bank-accounts/:accountId   Statements and ledger for one account
+/analytics                  Tenant-scoped reconciliation statistics
+/queue                      Transaction buffer status + manual flush
+/users                      Invite tenant users
 ```
 
 ## Architecture notes
 
-- **API client** (`src/api/client.ts`) — Fetch-based, typed against the
-  backend Pydantic schemas in `src/types/api.ts`. Monetary values are
-  preserved as Decimal strings.
-- **State** — Zustand store for the upload draft; TanStack Query for all
-  server state with optimistic updates on review actions.
-- **Polling** — `useJobStatus` polls every 2s until the job hits a
-  terminal status (COMPLETED / AWAITING_REVIEW / FAILED).
-- **Tests** — MSW intercepts `fetch`; jsdom URL is pinned to
-  `http://localhost/` so handlers and requests share an origin.
-- **Build** — Vite emits a static bundle served by nginx in production;
-  see `Dockerfile` and `nginx.conf`. nginx reverse-proxies `/api/` to the
-  backend container.
+- **Auth** — `TenantRoleRoute` requires `tenant_user` role with `tenant_id` in JWT
+- **API client** — Tenant-scoped routes under `/api/v1/tenant/*`, `/api/v1/bank-accounts`, `/api/v1/webhooks`, etc.
 
-## Production via Docker Compose
+## Docker Compose
 
 ```bash
-docker compose up --build      # api + worker + postgres + redis + minio + frontend
-# → frontend on http://localhost:5173
+docker compose up --build frontend-tenant-mgmt
+# → http://localhost:5175
 ```

@@ -256,6 +256,10 @@ The root `.env` file is read by Docker Compose for variable substitution. The fo
 ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 LLM_MODE: ${LLM_MODE:-mock}
 ADMIN_API_KEY: ${ADMIN_API_KEY:-aria-dev-admin}
+JWT_SECRET_KEY: ${JWT_SECRET_KEY:-aria-dev-jwt-secret-change-in-production}
+DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@aria.local}
+DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
 BATCH_SIZE_THRESHOLD: ${BATCH_SIZE_THRESHOLD:-50}
 BATCH_TIME_WINDOW_MINUTES: ${BATCH_TIME_WINDOW_MINUTES:-15}
 CELERY_BEAT_INTERVAL_MINUTES: ${CELERY_BEAT_INTERVAL_MINUTES:-2}

@@ -1,56 +1,50 @@
-# ARIA Frontend
+# ARIA Platform Admin
 
-React 18 + TypeScript SPA for ARIA. Vite, Tailwind, TanStack Query,
-Zustand, and AG Grid Community per `CLAUDE.md` §3.3.
+Platform administration app — tenants, users, cross-tenant analytics, and ingest queue management.
+
+React 18 + TypeScript · Vite · Tailwind · TanStack Query · JWT auth (admin role only).
+
+**Port:** 5174
 
 ## Quick start
 
 ```bash
-cd frontend
+cd frontend-admin
 npm install
 cp .env.example .env
-npm run dev          # → http://localhost:5173 (proxies /api to :8000)
+npm run dev          # → http://localhost:5174
 ```
+
+Sign in with the seeded platform admin (`DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` in backend `.env`).
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Vite dev server with `/api` proxy to FastAPI |
-| `npm run build` | Type-check then produce a production bundle in `dist/` |
-| `npm run typecheck` | Strict TypeScript build, no emit |
-| `npm test` | Vitest (unit + integration) — 49 specs |
-| `npm run test:coverage` | Vitest with v8 coverage |
-| `npm run test:e2e` | Playwright e2e — boots Vite, runs Chromium |
-| `npm run test:e2e:install` | One-time Chromium install for Playwright |
+| `npm run dev` | Vite dev server with `/api` proxy |
+| `npm run build` | Type-check + production bundle |
+| `npm run typecheck` | Strict TypeScript |
+| `npm test` | Vitest unit tests |
 
 ## Routes
 
 ```
-/upload                     New reconciliation job
-/jobs/:id                   Live progress (polls every 2s until terminal)
-/jobs/:id/results           Dashboard with AG Grid + Excel export
-/jobs/:id/review            Human review queue for UNCERTAIN items
+/login                      Sign in (platform admin)
+/tenants                    List and create tenants
+/tenants/:tenantId          Tenant detail + admin API keys
+/users                      Create/list platform and tenant users
+/analytics                  Cross-tenant reconciliation statistics
+/queue                      All tenants' ingest buffer status + flush
 ```
 
 ## Architecture notes
 
-- **API client** (`src/api/client.ts`) — Fetch-based, typed against the
-  backend Pydantic schemas in `src/types/api.ts`. Monetary values are
-  preserved as Decimal strings.
-- **State** — Zustand store for the upload draft; TanStack Query for all
-  server state with optimistic updates on review actions.
-- **Polling** — `useJobStatus` polls every 2s until the job hits a
-  terminal status (COMPLETED / AWAITING_REVIEW / FAILED).
-- **Tests** — MSW intercepts `fetch`; jsdom URL is pinned to
-  `http://localhost/` so handlers and requests share an origin.
-- **Build** — Vite emits a static bundle served by nginx in production;
-  see `Dockerfile` and `nginx.conf`. nginx reverse-proxies `/api/` to the
-  backend container.
+- **Auth** — `AdminRoleRoute` rejects non-admin JWT roles
+- **API client** — Admin endpoints under `/api/v1/tenants`, `/api/v1/users`, `/api/v1/analytics/admin/*`, `/api/v1/ingest/admin/*`
 
-## Production via Docker Compose
+## Docker Compose
 
 ```bash
-docker compose up --build      # api + worker + postgres + redis + minio + frontend
-# → frontend on http://localhost:5173
+docker compose up --build frontend-admin
+# → http://localhost:5174
 ```

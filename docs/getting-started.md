@@ -55,7 +55,7 @@ Choose the run mode that fits your goal. All three paths support the full reconc
 
 ## Option 1 — Full stack with Docker (recommended)
 
-Runs PostgreSQL, Redis, MinIO, FastAPI, Celery pipeline worker, Celery Beat scheduler (auto-batching), and the React frontend. Uses **mock LLM** by default — no API keys required.
+Runs PostgreSQL, Redis, MinIO, FastAPI, Celery pipeline worker, Celery Beat scheduler (auto-batching), and three React frontend apps. Uses **mock LLM** by default — no Anthropic API keys required.
 
 ### Step 1: Clone the repository
 
@@ -72,16 +72,22 @@ Copy the example file and edit as needed:
 cp .env.example .env
 ```
 
-At minimum, set the following to enable live AI (otherwise mock mode runs end-to-end):
+At minimum, configure admin bootstrap credentials so you can sign in to the UI:
+
+```bash
+DEFAULT_ADMIN_PASSWORD=choose-a-strong-password
+```
+
+Optionally enable live AI:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
 LLM_MODE=live
 ```
 
-The admin key (`ADMIN_API_KEY`, default `aria-dev-admin`) lets you create tenants and API keys via the Settings → API Keys screen. Change it in any non-local environment.
+The legacy `ADMIN_API_KEY` (default `aria-dev-admin`) still works for programmatic admin endpoints (`/api/v1/tenants`) via the `X-API-Key` header. Change it in any non-local environment.
 
-Skip this step entirely to stay in mock mode — the full pipeline runs with deterministic fixture responses.
+Skip Anthropic configuration entirely to stay in mock mode — the full pipeline runs with deterministic fixture responses. **UI and API access always require JWT or a tenant API key.**
 
 ### Step 3: Start all services
 
@@ -95,16 +101,26 @@ Wait until all health checks pass and you see the API listening on port 8000.
 
 | Service | URL | Credentials |
 | --- | --- | --- |
-| **Web UI (ops)** | [http://localhost:5173](http://localhost:5173) | Reconciliation |
-| **Admin UI** | [http://localhost:5174](http://localhost:5174) | Platform admin |
-| **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant config |
+| **Web UI (ops)** | [http://localhost:5173](http://localhost:5173) | Tenant user JWT (see Step 5) |
+| **Admin UI** | [http://localhost:5174](http://localhost:5174) | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` |
+| **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant user JWT |
 | **API Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | — |
 | **Health check** | [http://localhost:8000/health](http://localhost:8000/health) | — |
 | **MinIO console** | [http://localhost:9001](http://localhost:9001) | ariaadmin / ariaadmin |
 
-### Step 5: Run a reconciliation in the UI
+### Step 5: First login and tenant setup
 
-1. Navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
+1. Open the **Admin UI** at [http://localhost:5174/login](http://localhost:5174/login)
+2. Sign in with `DEFAULT_ADMIN_EMAIL` (default `admin@aria.local`) and your `DEFAULT_ADMIN_PASSWORD`
+3. Create a **tenant** (Tenants → New tenant)
+4. Create a **tenant user** assigned to that tenant (Users → New user, role `tenant_user`)
+5. Sign in to **Ops** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials
+
+Optional: create a programmatic **API key** in Tenant mgmt → Keys for curl/SDK integrations (`X-API-Key` header).
+
+### Step 6: Run a reconciliation in the UI
+
+1. In the **Ops UI**, navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
 2. Upload one or more payment proof files (JPEG, PNG, PDF, XLSX, or CSV)
 3. Upload a bank statement (XLSX, CSV, or PDF)
 4. Confirm base currency is **MYR**
@@ -113,12 +129,18 @@ Wait until all health checks pass and you see the API listening on port 8000.
 7. Open **Results** for the dashboard; open **Review** if uncertain items exist
 8. Click **Export** to download the Excel report
 
-### Step 6: Smoke test via curl (optional)
+### Step 7: Smoke test via curl (optional)
 
-From the repository root, with the stack running:
+From the repository root, with the stack running. Replace `YOUR_JWT` with a token from login, or use `X-API-Key: aria_live_...` from Tenant mgmt → Keys.
 
 ```bash
-curl -F "payment_proofs=@backend/tests/fixtures/payment_proofs/usd_invoice.txt" \
+# Obtain JWT (tenant user or admin)
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}' | jq -r .access_token)
+
+curl -H "Authorization: Bearer $TOKEN" \
+     -F "payment_proofs=@backend/tests/fixtures/payment_proofs/usd_invoice.txt" \
      -F "bank_statement=@backend/tests/fixtures/bank_statements/may_2026.csv" \
      -F "base_currency=MYR" \
      http://localhost:8000/api/v1/jobs
@@ -127,16 +149,18 @@ curl -F "payment_proofs=@backend/tests/fixtures/payment_proofs/usd_invoice.txt" 
 Copy the `job_id` from the response, then poll:
 
 ```bash
-curl http://localhost:8000/api/v1/jobs/YOUR_JOB_ID
+curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/v1/jobs/YOUR_JOB_ID
 ```
 
 When `status` is terminal (`COMPLETED`, `AWAITING_REVIEW`, or `FAILED`), fetch results:
 
 ```bash
-curl http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/results
+curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/results
 ```
 
-### Step 7: Stop the stack
+### Step 8: Stop the stack
 
 Press `Ctrl+C` in the terminal, then:
 
@@ -230,7 +254,7 @@ Open http://localhost:5173 (ops), http://localhost:5175 (mgmt), http://localhost
 | --- | --- |
 | [http://localhost:8000/health](http://localhost:8000/health) | `{"status":"ok",...}` |
 | [http://localhost:8000/docs](http://localhost:8000/docs) | Swagger UI loads |
-| [http://localhost:5173/upload](http://localhost:5173/upload) | Upload page renders |
+| [http://localhost:5173/upload](http://localhost:5173/upload) | Upload page renders (after tenant user login) |
 | Celery worker logs | `celery@... ready` |
 
 ---
@@ -261,6 +285,8 @@ uvicorn app.main:app --reload
 ```
 
 Jobs run **inline** (no Redis/Celery required). Open [http://localhost:8000/docs](http://localhost:8000/docs) to interact with the API directly.
+
+Set `DEFAULT_ADMIN_PASSWORD` in `backend/.env`, restart the API, then call `POST /api/v1/auth/login` before other endpoints. Alternatively use a tenant API key via `X-API-Key`.
 
 ---
 

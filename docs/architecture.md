@@ -22,16 +22,19 @@ ARIA is an **AI-first reconciliation platform**. The LangGraph pipeline is the a
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    UI[ARIA Reference UI]
+    OPS[Ops UI :5173]
+    ADMIN[Admin UI :5174]
+    MGMT[Tenant mgmt UI :5175]
     SME[External SME Systems]
   end
   subgraph platform [Platform API — FastAPI]
-    AUTH[APIKeyMiddleware]
+    AUTH[AuthMiddleware]
     JOBS[Jobs API]
     INGEST[Ingest API]
     SSE[SSE Stream]
     WH[Webhooks]
     AN[Analytics]
+    BA[Bank accounts]
   end
   subgraph workers [Worker Layer — Celery]
     WORKER[Pipeline Worker]
@@ -48,8 +51,9 @@ flowchart TB
     RD[(Redis)]
     S3[(MinIO S3)]
   end
-  UI & SME -->|X-API-Key| AUTH
-  AUTH --> JOBS & INGEST & SSE & WH & AN
+  OPS & ADMIN & MGMT -->|JWT Bearer| AUTH
+  SME -->|X-API-Key| AUTH
+  AUTH --> JOBS & INGEST & SSE & WH & AN & BA
   INGEST -->|buffer| PG
   BEAT -->|auto-batch| WORKER
   JOBS -->|enqueue| WORKER
@@ -166,12 +170,15 @@ MatchResult          # Match status, confidence, variance, LLM explanation
 ReconciliationReport # Summary stats + all match results + audit log
 BankEntry            # Parsed row from bank statement
 
-# Platform (multi-tenancy)
+# Platform (multi-tenancy & auth)
 TenantORM            # Tenant: name, created_at
+UserORM              # Email/password user: role (admin | tenant_user), tenant_id
 ApiKeyORM            # API key: tenant_id, key_hash (SHA-256), label, last_used_at, enabled
 TransactionBufferORM # Inbound transactions staged before batching
 WebhookORM           # Registered endpoint: url, events, secret_hash, enabled
 WebhookDeliveryORM   # Delivery log: status, attempt_count, response_code
+BankAccountORM       # Named bank account per tenant (currency, bank name)
+BankStatementORM     # Uploaded statement linked to account; entries with cleared flag
 ```
 
 Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/app/models/database.py`.
@@ -195,18 +202,25 @@ Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/a
 
 ### Frontend
 
+Three role-scoped React apps share UI primitives but deploy independently:
+
+| App | Port | Role | Primary screens |
+| --- | --- | --- | --- |
+| `frontend-tenant-ops` | 5173 | Tenant user | Upload, jobs, results, review |
+| `frontend-admin` | 5174 | Platform admin | Tenants, users, cross-tenant analytics/queue |
+| `frontend-tenant-mgmt` | 5175 | Tenant admin | API keys, webhooks, bank accounts, tenant analytics |
+
 | Component | Technology |
 | --- | --- |
 | Framework | React 18 + TypeScript (strict) |
 | Build | Vite |
 | Styling | Tailwind CSS |
-| Server state | TanStack Query + SSE (`useJobStream` hook; polling as fallback) |
-| UI state | Zustand (`upload-store`, `tenant-store` for API key session) |
+| Auth | JWT via `auth-store`; `LoginPage` + `AuthRoute`; role guards |
+| Server state | TanStack Query + SSE (`useJobStream` in ops app) |
+| UI state | Zustand (`auth-store`, `upload-store` in ops only) |
 | Tables | AG Grid Community |
 | Routing | React Router v6 |
 | Production serve | nginx (Docker) with `/api` reverse proxy |
-
-**Enterprise screens:** Pipeline Dashboard, Job Monitor, Transaction Queue, Analytics, API Keys, Webhooks settings — all reachable from the collapsible sidebar nav.
 
 ### Infrastructure (Docker Compose)
 
@@ -218,11 +232,14 @@ Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/a
 | `api` | `./backend` | 8000 | FastAPI REST |
 | `worker` | `./backend` | — | Celery pipeline worker |
 | `beat` | `./backend` | — | Celery Beat scheduler (auto-batching) |
-| `frontend` | `./frontend` | 5173 → nginx:80 | React SPA |
+| `frontend-ops` | `./frontend-tenant-ops` | 5173 → nginx:80 | Reconciliation ops SPA |
+| `frontend-admin` | `./frontend-admin` | 5174 → nginx:80 | Platform admin SPA |
+| `frontend-tenant-mgmt` | `./frontend-tenant-mgmt` | 5175 → nginx:80 | Tenant configuration SPA |
 
 ## Security considerations
 
-- **Authentication** — API keys validated via SHA-256 hash comparison; raw keys never stored
+- **Authentication** — `AuthMiddleware` accepts JWT Bearer tokens (browser apps) or `X-API-Key` (programmatic). API keys validated via SHA-256 hash; raw keys never stored. SSE streams accept `?access_token=` because `EventSource` cannot send headers.
+- **Roles** — `admin` (platform), `tenant_user` (scoped to one tenant). Admin may impersonate a tenant via `X-Tenant-ID` header.
 - **Multi-tenancy** — row-level isolation: all queries filter by `tenant_id`; MinIO object paths prefixed with `{tenant_id}/`
 - **Webhook signing** — HMAC-SHA256 (Stripe model); 5-minute timestamp tolerance prevents replay
 - **SSRF guard** — webhook URLs validated against a blocklist before registration (no private/loopback addresses)
@@ -238,35 +255,33 @@ Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/a
 ```text
 backend/
 ├── app/
-│   ├── main.py              FastAPI entry + middleware wiring
+│   ├── main.py              FastAPI entry + middleware + admin seed
 │   ├── api/v1/              REST routes
+│   │   ├── auth.py          Login, /me
+│   │   ├── users.py         Platform user CRUD (admin)
+│   │   ├── tenant_settings.py  Tenant-scoped keys + users
 │   │   ├── jobs.py          Job CRUD + list
 │   │   ├── stream.py        SSE endpoint
 │   │   ├── tenants.py       Tenant + API key management (admin)
 │   │   ├── ingest.py        Transaction ingestion + queue
 │   │   ├── webhooks.py      Webhook CRUD + test + deliveries
-│   │   └── analytics.py     Summary analytics
+│   │   ├── analytics.py     Tenant + admin analytics
+│   │   ├── bank_accounts.py Bank accounts, statements, ledger
+│   │   └── bank_statements.py Standalone statement upload/list
 │   ├── agents/              LangGraph node implementations
 │   ├── graph/               StateGraph, routing, state model
 │   ├── models/              Pydantic + SQLAlchemy models
-│   ├── repositories/        DB access: job, tenant, ingest, webhook
+│   ├── repositories/        DB access layers
 │   ├── services/            FX, storage, LLM client, Excel export
 │   ├── tools/               File parsers, FX/SWIFT tools
 │   ├── workers/             Celery app, pipeline task, Beat, webhook delivery
 │   └── core/                Config, security, middleware, logging, database
-├── alembic/                 DB migrations (0001–0005)
+├── alembic/                 DB migrations (0001–0008)
 └── tests/                   Unit, integration, agent tests
 
-frontend/
-├── src/
-│   ├── pages/               Dashboard, Jobs, Queue, Analytics, ApiKeys, Webhooks,
-│   │                        Upload, Progress, Results, Review
-│   ├── components/          UI components + AppShell (sidebar nav)
-│   ├── api/                 Typed fetch client (X-API-Key header injection)
-│   ├── hooks/               useJobStatus, useJobStream, useReviewActions
-│   ├── stores/              upload-store, tenant-store (API key session)
-│   └── types/               Mirrors backend schemas
-└── tests/                   Vitest + Playwright e2e
+frontend-tenant-ops/         Ops: upload, jobs, review, SSE hooks
+frontend-admin/              Admin: tenants, users, platform analytics
+frontend-tenant-mgmt/        Mgmt: keys, webhooks, bank accounts, queue
 ```
 
 See [API Reference]({{ '/api-reference' | relative_url }}) for endpoints and [Getting Started]({{ '/getting-started' | relative_url }}) to run the stack.

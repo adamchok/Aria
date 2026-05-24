@@ -17,7 +17,7 @@ description: "ARIA's value proposition and key differentiators"
 
 ## ARIA in one sentence
 
-**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the LangGraph pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. The reference UI doubles as an enterprise operations dashboard for finance teams who prefer a browser interface.
+**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the LangGraph pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Three role-scoped web apps provide ops, platform admin, and tenant configuration UIs.
 
 ## Core value proposition
 
@@ -46,20 +46,50 @@ flowchart LR
   <span class="aria-pipeline__step aria-pipeline__step--active">Review</span>
 </div>
 
-### Enterprise UI screens
+### Three web applications
+
+| App | Port | Audience | Login |
+| --- | --- | --- | --- |
+| **Ops** (`frontend-tenant-ops`) | 5173 | Finance officers — reconciliation | Tenant user JWT |
+| **Admin** (`frontend-admin`) | 5174 | Platform operators | Admin JWT (seeded via `DEFAULT_ADMIN_PASSWORD`) |
+| **Tenant mgmt** (`frontend-tenant-mgmt`) | 5175 | Tenant administrators | Tenant user JWT |
+
+#### Ops app — reconciliation (`:5173`)
 
 | Route | Screen | Purpose |
 | --- | --- | --- |
-| `/dashboard` | **Pipeline Dashboard** | Job throughput, match-rate summary, recent jobs at a glance |
-| `/jobs` | **Job Monitor** | Paginated, filterable job list with match counts per job |
-| `/jobs/{id}` | **Job Progress** | Four-agent stepper driven by SSE (no polling) |
-| `/jobs/{id}/results` | **Results** | Summary cards, filterable reconciliation grid, variance explanations |
-| `/jobs/{id}/review` | **Review Queue** | Confirm / reject uncertain items side-by-side |
-| `/queue` | **Transaction Queue** | Buffer status by corridor, oldest-transaction age, manual flush |
-| `/analytics` | **Analytics** | Match rate, escalation rate, processing time, corridor breakdown |
-| `/settings/keys` | **API Keys** | Generate and revoke tenant API keys; set session key |
-| `/settings/webhooks` | **Webhooks** | Register endpoints, test delivery, inspect delivery history |
-| `/upload` | **Upload** | Manual file submission (remains fully supported) |
+| `/login` | Sign in | Email + password |
+| `/dashboard` | Pipeline dashboard | Job throughput, match-rate summary, recent jobs |
+| `/jobs` | Job monitor | Paginated, filterable job list |
+| `/jobs/{id}` | Job progress | Four-agent stepper driven by SSE (polling fallback) |
+| `/jobs/{id}/results` | Results | Summary cards, reconciliation grid, export |
+| `/jobs/{id}/review` | Review queue | Confirm / reject uncertain items |
+| `/upload` | Upload | Manual file submission |
+
+#### Admin app — platform (`:5174`)
+
+| Route | Screen | Purpose |
+| --- | --- | --- |
+| `/login` | Sign in | Platform admin credentials |
+| `/tenants` | Tenants | Create and list tenants |
+| `/tenants/{id}` | Tenant detail | Tenant overview, API keys (admin path) |
+| `/users` | Users | Create platform and tenant users |
+| `/analytics` | Analytics | Cross-tenant reconciliation statistics |
+| `/queue` | Ingest queue | All tenants' buffer status, flush per tenant |
+
+#### Tenant mgmt app — configuration (`:5175`)
+
+| Route | Screen | Purpose |
+| --- | --- | --- |
+| `/login` | Sign in | Tenant user credentials |
+| `/dashboard` | Overview | Tenant summary and quick links |
+| `/keys` | API keys | Generate and revoke tenant API keys |
+| `/webhooks` | Webhooks | Register endpoints, test delivery, delivery history |
+| `/bank-accounts` | Bank accounts | Register accounts, upload statements, ledger view |
+| `/bank-accounts/{id}` | Account detail | Statements and uncleared entries for one account |
+| `/analytics` | Analytics | Tenant-scoped match rate and corridor breakdown |
+| `/queue` | Transaction queue | Buffer status by corridor, manual flush |
+| `/users` | Users | Invite tenant users (tenant-scoped) |
 
 ### What the finance officer does (manual upload flow)
 
@@ -73,7 +103,7 @@ flowchart LR
 
 ### What an external SME system does (API integration flow)
 
-1. **Authenticate** — obtain an API key from `/settings/keys` or via the admin key endpoint
+1. **Authenticate** — obtain a tenant API key from Tenant mgmt → Keys (`/keys`), or use JWT from `POST /api/v1/auth/login`
 2. **Ingest** — `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata
 3. **Receive** — register a webhook (`POST /api/v1/webhooks`); receive `job.completed` event with HMAC-signed payload when reconciliation finishes
 4. **Retrieve** — call `GET /api/v1/jobs/{id}/results` for the full report, or follow the SSE stream

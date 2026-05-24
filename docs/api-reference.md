@@ -92,6 +92,7 @@ Returns service status and version.
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/jobs \
+  -H "Authorization: Bearer YOUR_JWT" \
   -F "payment_proofs=@invoice.pdf" \
   -F "payment_proofs=@receipt.png" \
   -F "bank_statement=@statement.csv" \
@@ -329,7 +330,15 @@ curl -H "Authorization: Bearer YOUR_JWT" http://localhost:8000/api/v1/jobs
 | `GET` | `/api/v1/ingest/admin/queue` | All tenant queue status |
 | `POST` | `/api/v1/ingest/admin/queue/flush/{tenant_id}` | Flush tenant buffer |
 
-Legacy **admin API key** (`ADMIN_API_KEY`) still works for programmatic tenant management.
+Legacy **admin API key** (`ADMIN_API_KEY`) still works for programmatic tenant management via `X-API-Key`.
+
+### User management (admin app, JWT admin)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/users` | Create user (`admin` or `tenant_user`; `tenant_id` required for tenant users) |
+| `GET` | `/api/v1/users` | List users (optional `tenant_id` filter) |
+| `DELETE` | `/api/v1/users/{user_id}` | Deactivate user |
 
 ---
 
@@ -416,6 +425,23 @@ data: {"status": "COMPLETED", "summary": {"matched": 10, "uncertain": 1, "unmatc
 ```
 
 The frontend `useJobStream` hook wraps `EventSource`, reconnects on transient errors, and hydrates the TanStack Query cache on each event. Polling via `GET /jobs/{id}` is retained as a fallback.
+
+**Authentication:** Browsers cannot send `Authorization` headers on `EventSource`. Pass the JWT as a query parameter: `GET /api/v1/jobs/{job_id}/stream?access_token=YOUR_JWT`. Restrict this to the stream path only.
+</div>
+
+---
+
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/tenants</span>
+  </div>
+
+### List tenants (admin only)
+
+Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
+
+**Response `200`** — `TenantResponse[]`
 </div>
 
 ---
@@ -427,6 +453,8 @@ The frontend `useJobStream` hook wraps `EventSource`, reconnects on transient er
   </div>
 
 ### Create tenant (admin only)
+
+Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
 
 **Request body**
 
@@ -622,6 +650,68 @@ Aggregated reconciliation statistics for the authenticated tenant.
 
 ---
 
+## Bank accounts and ledger
+
+Tenants register named bank accounts, upload monthly statements, and browse a persistent ledger. Entries are marked **cleared** when matched by a reconciliation job.
+
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--post">POST</span>
+    <span class="aria-endpoint__path">/api/v1/bank-accounts</span>
+  </div>
+
+### Create bank account
+
+**Request body** (`application/json`)
+
+```json
+{
+  "name": "Main Operating",
+  "bank_name": "Maybank",
+  "currency": "MYR",
+  "account_number_last4": "1234"
+}
+```
+
+**Response `201`** — `BankAccountResponse`
+</div>
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/bank-accounts` | List accounts for authenticated tenant |
+| `GET` | `/api/v1/bank-accounts/{id}` | Account detail |
+| `DELETE` | `/api/v1/bank-accounts/{id}` | Delete account |
+| `POST` | `/api/v1/bank-accounts/{id}/statements` | Upload statement (multipart) to account |
+| `GET` | `/api/v1/bank-accounts/{id}/statements` | List statements for account |
+| `GET` | `/api/v1/bank-accounts/{id}/ledger` | Paginated ledger entries (`cleared` filter optional) |
+
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--post">POST</span>
+    <span class="aria-endpoint__path">/api/v1/bank-statements</span>
+  </div>
+
+### Upload bank statement (standalone)
+
+**Content-Type:** `multipart/form-data`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `bank_statement` | file | Yes | XLSX, CSV, or PDF |
+| `base_currency` | string | No | Default `MYR` |
+| `account_id` | UUID | No | Link statement to a bank account |
+
+**Response `201`** — `BankStatementUploadResponse` with `entry_count` and statement period dates.
+</div>
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/bank-statements` | List statements (paginated) |
+| `GET` | `/api/v1/bank-statements/{id}` | Statement detail with all entries |
+| `GET` | `/api/v1/bank-statements/{id}/entries` | Entries only (`cleared` filter optional) |
+
+---
+
 ## Job lifecycle
 
 ```mermaid
@@ -672,4 +762,4 @@ The live OpenAPI 3 schema is served at:
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - JSON schema: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
-Frontend TypeScript types in `frontend/src/types/api.ts` mirror these schemas. Monetary values are serialised as **strings** to preserve decimal precision across the JSON boundary.
+Frontend TypeScript types in each app's `src/types/api.ts` (`frontend-tenant-ops`, `frontend-admin`, `frontend-tenant-mgmt`) mirror these schemas. Monetary values are serialised as **strings** to preserve decimal precision across the JSON boundary.

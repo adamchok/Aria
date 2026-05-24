@@ -179,30 +179,22 @@ Aria/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
-│   │   ├── api/v1/          jobs.py, review.py, export.py
+│   │   ├── api/v1/          auth, users, jobs, tenants, tenant_settings,
+│   │   │                    ingest, webhooks, analytics, bank_accounts, …
 │   │   ├── agents/          ingestion, normalisation, matching, report
 │   │   ├── graph/           builder.py, routing.py, state.py
 │   │   ├── models/          Pydantic schemas + SQLAlchemy ORM
-│   │   ├── services/        fx_service, llm_client, storage, excel_export, report_hydration
+│   │   ├── services/        fx_service, llm_client, storage, excel_export
 │   │   ├── tools/           file_parsers, fx_tools, swift_tools
 │   │   ├── workers/         celery_app.py, tasks.py
-│   │   └── core/            config, database, logging, exceptions
+│   │   └── core/            config, security, middleware, logging
 │   ├── alembic/
 │   ├── tests/
 │   ├── pyproject.toml
 │   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── pages/           Upload, JobProgress, Results, Review
-│   │   ├── components/
-│   │   ├── api/             client.ts
-│   │   ├── hooks/
-│   │   └── types/           api.ts
-│   ├── tests/
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── nginx.conf
-│   └── Dockerfile
+├── frontend-tenant-ops/     Ops app — upload, jobs, review (port 5173)
+├── frontend-admin/          Platform admin — tenants, users (port 5174)
+├── frontend-tenant-mgmt/    Tenant config — keys, webhooks, bank accounts (5175)
 ├── docs/                    GitHub Pages site (this documentation)
 ├── docker-compose.yml
 ├── CLAUDE.md
@@ -218,11 +210,12 @@ A feature is complete when:
 
 1. Implementation matches `ARIA_Technical_Specification.md`
 2. Unit and integration tests pass
-3. Backend and frontend types stay in sync
-4. Agent decisions are audit-logged
-5. UI meets accessibility guidelines in `CLAUDE.md` §4
-6. No secrets committed; `.env.example` updated if new vars added
-7. LangSmith trace visible for agent pipeline steps (when tracing enabled)
+3. Backend and frontend types stay in sync (per-app `src/types/api.ts`)
+4. **`docs/` updated** when behaviour, API, setup, or architecture changed
+5. Agent decisions are audit-logged
+6. UI meets accessibility guidelines in `CLAUDE.md` §4
+7. No secrets committed; `.env.example` updated if new vars added
+8. LangSmith trace visible for agent pipeline steps (when tracing enabled)
 
 ---
 
@@ -247,7 +240,9 @@ Before opening a PR touching data or AI:
 | Project overview | `PROJECT_OVERVIEW.md` | Competition context, impact, innovation |
 | Contributor guide | `CLAUDE.md` | AI assistant and developer conventions |
 | Backend README | `backend/README.md` | Backend quick reference |
-| Frontend README | `frontend/README.md` | Frontend routes and scripts |
+| Ops app README | `frontend-tenant-ops/README.md` | Reconciliation routes and scripts |
+| Admin app README | `frontend-admin/README.md` | Platform admin routes |
+| Mgmt app README | `frontend-tenant-mgmt/README.md` | Tenant configuration routes |
 
 ---
 
