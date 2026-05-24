@@ -17,10 +17,15 @@ os.environ["APP_ENV"] = "test"
 os.environ["LLM_MODE"] = "mock"
 os.environ["EXCHANGERATE_API_KEY"] = ""
 os.environ["OPENEXCHANGERATES_APP_ID"] = ""
+os.environ["ADMIN_API_KEY"] = "test-admin-key"
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./_test_aria.db")
 os.environ.setdefault("S3_ENDPOINT", f"local://{tempfile.mkdtemp(prefix='aria_test_')}")
 os.environ.setdefault("CELERY_TASK_ALWAYS_EAGER", "1")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+
+# Fixed test credentials — seeded into the in-memory DB by api_client fixture.
+TEST_TENANT_ID = "00000000-0000-0000-0001-000000000001"
+TEST_RAW_API_KEY = "aria_testkey_integration"
 
 import pytest
 import pytest_asyncio
@@ -30,6 +35,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
 from app.core.database import Base
+from app.models import database as _orm_models  # registers all ORM classes with Base.metadata
 from app.models.enums import SourceFormat
 from app.models.schemas import (
     BankEntry,
@@ -71,19 +77,32 @@ async def db_session(db_engine) -> AsyncIterator[AsyncSession]:
 
 @pytest_asyncio.fixture
 async def api_client(db_engine):
-    """ASGI client for the FastAPI app, sharing the in-memory test engine."""
+    """ASGI client wired to the in-memory test DB with a pre-seeded tenant + API key."""
     from app.core import database as db_module
     from app.core.dependencies import get_db_session
+    from app.core.security import hash_key
     from app.main import app
+    from app.models.database import ApiKeyORM, TenantORM
 
     test_factory = async_sessionmaker(
         db_engine, expire_on_commit=False, class_=AsyncSession
     )
 
-    # Rebind the module-level factory so the inline pipeline (asyncio.run inside
-    # the request handler) sees the same DB.
+    # Rebind the module-level factory so the auth middleware and pipeline_runner
+    # (which use session_scope()) both see the same in-memory test DB.
     original_factory = db_module._session_factory
     db_module._session_factory = test_factory
+
+    # Seed a tenant + API key so the auth middleware can validate the test key.
+    async with test_factory() as s:
+        s.add(TenantORM(id=TEST_TENANT_ID, name="Test Tenant"))
+        s.add(ApiKeyORM(
+            tenant_id=TEST_TENANT_ID,
+            key_hash=hash_key(TEST_RAW_API_KEY),
+            label="test",
+            enabled=True,
+        ))
+        await s.commit()
 
     async def _override_session():
         async with test_factory() as s:
@@ -92,7 +111,11 @@ async def api_client(db_engine):
     app.dependency_overrides[get_db_session] = _override_session
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": TEST_RAW_API_KEY},
+    ) as client:
         yield client
 
     app.dependency_overrides.clear()

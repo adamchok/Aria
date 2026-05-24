@@ -9,7 +9,8 @@ from app.core.database import session_scope
 from app.core.logging import bind_job_id, get_logger
 from app.graph.builder import arun_pipeline
 from app.graph.state import DocumentInput, ReconciliationState
-from app.models.enums import JobStatus
+from app.models.enums import JobStatus, MatchStatus
+from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
 from app.services.storage import StorageService
 
@@ -43,30 +44,43 @@ async def execute_job(job_id: UUID | str) -> None:
     storage = StorageService()
     job_id_str = str(job_id)
 
+    # Capture ALL scalar fields inside session scope — ORM objects detach on exit
+    # and attribute access raises DetachedInstanceError on lazy-loaded columns.
+    tenant_id: str | None = None
+    bank_statement_id_str: str | None = None
+    base_currency: str = "MYR"
+    payment_proof_keys: list[str] = []
+    bank_statement_key: str | None = None
+
     async with session_scope() as session:
         repo = JobRepository(session)
         job = await repo.get(job_id)
         tenant_id = job.tenant_id
+        bank_statement_id_str = job.bank_statement_id
+        base_currency = job.base_currency
+        payment_proof_keys = list(job.payment_proof_keys or [])
+        bank_statement_key = job.bank_statement_key
         await repo.update_status(job_id, status=JobStatus.INGESTING, progress_pct=5.0)
 
     await _emit(job_id_str, tenant_id, "status_change", {"status": "INGESTING", "progress_pct": 5.0})
 
     # Build initial state.
     state = ReconciliationState(
-        job_id=UUID(str(job.id)),
-        base_currency=job.base_currency,
+        job_id=UUID(job_id_str),
+        base_currency=base_currency,
         payment_documents=[
             DocumentInput(storage_key=key, filename=key.split("/", 1)[-1])
-            for key in job.payment_proof_keys
+            for key in payment_proof_keys
         ],
         bank_statement_input=(
             DocumentInput(
-                storage_key=job.bank_statement_key,
-                filename=job.bank_statement_key.split("/", 1)[-1],
+                storage_key=bank_statement_key,
+                filename=bank_statement_key.split("/", 1)[-1],
             )
-            if job.bank_statement_key
+            if bank_statement_key
             else None
         ),
+        bank_statement_id=UUID(bank_statement_id_str) if bank_statement_id_str else None,
         started_at=datetime.utcnow(),
     )
 
@@ -78,6 +92,28 @@ async def execute_job(job_id: UUID | str) -> None:
         state.bank_statement_input.bytes_data = storage.get_object(
             state.bank_statement_input.storage_key
         )
+
+    # If a ledger statement is referenced, load its uncleared entries into state
+    # so the matching agent works with persistent bank data instead of a one-off file.
+    if bank_statement_id_str:
+        async with session_scope() as session:
+            # tenant_id scopes the repo so cross-tenant reads are impossible.
+            ledger = BankLedgerRepository(session, tenant_id=tenant_id)
+            state.bank_statement = await ledger.get_uncleared_as_bank_statement(
+                bank_statement_id_str, base_currency
+            )
+        entry_count = len(state.bank_statement.entries) if state.bank_statement else 0
+        logger.info(
+            "pipeline.ledger_loaded",
+            statement_id=bank_statement_id_str,
+            entries=entry_count,
+        )
+        if entry_count == 0:
+            logger.warning(
+                "pipeline.ledger_empty",
+                statement_id=bank_statement_id_str,
+                detail="All entries already cleared — all payment records will be UNMATCHED.",
+            )
 
     try:
         state = await arun_pipeline(state)
@@ -107,6 +143,20 @@ async def execute_job(job_id: UUID | str) -> None:
             progress_pct=100.0,
             agents_completed=state.agents_completed,
         )
+
+    # Mark ledger entries as cleared for all auto-confirmed matches.
+    # tenant_id scopes the repo — only entries belonging to this tenant are touched.
+    if bank_statement_id_str and state.match_results:
+        matched_entry_ids = [
+            m.bank_entry.id
+            for m in state.match_results
+            if m.status == MatchStatus.MATCHED and m.bank_entry is not None
+        ]
+        if matched_entry_ids:
+            async with session_scope() as session:
+                ledger = BankLedgerRepository(session, tenant_id=tenant_id)
+                cleared = await ledger.clear_entries(matched_entry_ids, job_id)
+            logger.info("pipeline.ledger_cleared", count=cleared, job_id=job_id_str)
 
     # Terminal SSE event
     terminal_event = "review_required" if state.status == JobStatus.AWAITING_REVIEW else "completed"

@@ -54,6 +54,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(APIKeyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -61,7 +62,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(APIKeyMiddleware)
 
 app.include_router(api_router)
 

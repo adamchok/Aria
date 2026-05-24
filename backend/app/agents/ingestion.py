@@ -171,10 +171,12 @@ class IngestionAgent:
             stmt = parse_bank_statement_pdf(data, base_currency=base_currency)
             if not stmt.entries:
                 text = extract_pdf_text(data)
+                # Sonnet with native document block parses tables pdfplumber misses.
                 payload = self._llm.extract_bank_statement(
                     text_hint=text,
                     filename=doc.filename,
                     base_currency=base_currency,
+                    pdf_bytes=data,
                 )
                 stmt = bank_statement_from_llm_payload(payload, base_currency)
             if not stmt.entries:

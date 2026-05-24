@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -41,6 +41,7 @@ class TenantORM(Base):
     api_keys: Mapped[list[ApiKeyORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     transaction_buffer: Mapped[list[TransactionBufferORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     webhooks: Mapped[list[WebhookORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
+    bank_statements: Mapped[list[BankStatementORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
 
 
 class ApiKeyORM(Base):
@@ -80,7 +81,14 @@ class JobORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
+    bank_statement_id: Mapped[str | None] = mapped_column(
+        ForeignKey("bank_statements.id", ondelete="SET NULL"), nullable=True
+    )
+
     tenant: Mapped[TenantORM | None] = relationship(back_populates="jobs")
+    bank_statement: Mapped[BankStatementORM | None] = relationship(
+        "BankStatementORM", foreign_keys="JobORM.bank_statement_id", lazy="noload"
+    )
     matches: Mapped[list[MatchORM]] = relationship(
         back_populates="job", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -193,3 +201,50 @@ class WebhookDeliveryORM(Base):
 
     webhook: Mapped[WebhookORM] = relationship(back_populates="deliveries")
     job: Mapped[JobORM] = relationship(back_populates="webhook_deliveries")
+
+
+# ─── Bank statement ledger ────────────────────────────────────────────────────
+
+
+class BankStatementORM(Base):
+    __tablename__ = "bank_statements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    tenant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    base_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="MYR")
+    statement_period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    statement_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    entry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    tenant: Mapped[TenantORM | None] = relationship(back_populates="bank_statements")
+    entries: Mapped[list[BankEntryORM]] = relationship(
+        back_populates="statement", cascade="all, delete-orphan", lazy="noload"
+    )
+
+
+class BankEntryORM(Base):
+    __tablename__ = "bank_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    statement_id: Mapped[str] = mapped_column(
+        ForeignKey("bank_statements.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    tenant_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    value_date: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="MYR")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    counterparty: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_row: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    cleared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    cleared_by_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+
+    statement: Mapped[BankStatementORM] = relationship(back_populates="entries")

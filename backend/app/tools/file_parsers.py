@@ -37,13 +37,21 @@ def detect_source_format(filename: str, content_type: str | None = None) -> Sour
 
 
 def extract_pdf_text(data: bytes) -> str:
-    """Return concatenated text from all pages of a PDF."""
+    """Return concatenated text from all pages of a PDF.
+
+    Falls back to raw UTF-8 decode if pdfplumber cannot open the file, so
+    callers can still pass text-like bytes (test fixtures, embedded-text PDFs)
+    to the LLM path.
+    """
     chunks: list[str] = []
-    with pdfplumber.open(io.BytesIO(data)) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if text:
-                chunks.append(text)
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if text:
+                    chunks.append(text)
+    except Exception:
+        return data.decode("utf-8-sig", errors="replace").strip()
     return "\n\n".join(chunks)
 
 
@@ -188,9 +196,8 @@ def parse_bank_statement_pdf(data: bytes, base_currency: str = "MYR") -> BankSta
                         padded = list(row) + [None] * max(0, len(headers) - len(row))
                         table_rows.append(dict(zip(headers, padded[: len(headers)])))
     except Exception:
-        embedded = data.decode("utf-8-sig", errors="replace").strip()
-        if embedded:
-            return parse_bank_statement_text(embedded, base_currency=base_currency)
+        # pdfplumber couldn't open the file — not a valid PDF.
+        # Return empty so the caller can escalate to the LLM document-block path.
         return BankStatement(base_currency=base_currency)
 
     stmt = _build_statement(table_rows, base_currency)

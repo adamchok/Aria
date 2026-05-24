@@ -100,8 +100,8 @@ class LLMClient:
         client = self._get_anthropic()
         content: list[dict[str, Any]] = []
 
+        import base64
         if source_format == SourceFormat.IMAGE:
-            import base64
             content.append(
                 {
                     "type": "image",
@@ -112,7 +112,23 @@ class LLMClient:
                     },
                 }
             )
+        elif source_format == SourceFormat.PDF:
+            # Send raw PDF bytes as a native document block — Claude renders each page
+            # internally, preserving layout and table structure that pdfplumber misses.
+            content.append(
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": base64.b64encode(document_bytes).decode(),
+                    },
+                }
+            )
+            if text_hint:
+                content.append({"type": "text", "text": f"Extracted text hint:\n{text_hint[:5_000]}"})
         else:
+            # EXCEL / CSV: structured text only
             content.append(
                 {
                     "type": "text",
@@ -206,28 +222,64 @@ class LLMClient:
         text_hint: str,
         filename: str,
         base_currency: str,
+        pdf_bytes: bytes | None = None,
     ) -> dict[str, Any]:
-        """Return ``{entries: [{value_date, amount, currency, ...}]}``."""
+        """Return ``{entries: [{value_date, amount, currency, ...}]}``.
+
+        When ``pdf_bytes`` is provided the raw PDF is sent as a native document
+        block to Sonnet 4.6 which renders pages internally — this recovers tables
+        that pdfplumber mis-parses or misses entirely.  Falls back to Haiku 4.5
+        with text only when no PDF bytes are available.
+        """
         if self._settings.llm_mode == "mock":
             return _mock_bank_statement(
                 text_hint=text_hint, filename=filename, base_currency=base_currency
             )
 
-        # Haiku 4.5: structured text extraction — no vision, no deep reasoning needed.
         client = self._get_anthropic()
-        prompt = _BANK_STATEMENT_PROMPT.format(
-            base_currency=base_currency,
-            filename=filename,
-            text=text_hint[:40_000],
-        )
-        try:
-            resp = client.messages.create(
-                model=self._settings.haiku_model,
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}],
+
+        if pdf_bytes is not None:
+            import base64
+            content: list[dict[str, Any]] = [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": base64.b64encode(pdf_bytes).decode(),
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": _BANK_STATEMENT_PROMPT_PDF.format(
+                        base_currency=base_currency, filename=filename
+                    ),
+                },
+            ]
+            try:
+                resp = client.messages.create(
+                    model=self._settings.sonnet_model,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": content}],
+                )
+            except Exception as exc:
+                raise LLMError(f"Anthropic bank-statement PDF call failed: {exc}") from exc
+        else:
+            # Haiku 4.5: structured text extraction — fast and cheap.
+            prompt = _BANK_STATEMENT_PROMPT.format(
+                base_currency=base_currency,
+                filename=filename,
+                text=text_hint[:40_000],
             )
-        except Exception as exc:
-            raise LLMError(f"Anthropic bank-statement call failed: {exc}") from exc
+            try:
+                resp = client.messages.create(
+                    model=self._settings.haiku_model,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except Exception as exc:
+                raise LLMError(f"Anthropic bank-statement call failed: {exc}") from exc
+
         text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
         return _parse_json_block(text)
 
@@ -538,6 +590,31 @@ Write a 4-6 sentence executive narrative for a finance officer. State counts,
 total variance, and the likely cause categories (FX timing, SWIFT charges,
 duplicate, partial payment). Plain language, no jargon, no apologies.
 Plain text only — no markdown, no headers, no bullet lists, no **bold** markers.
+"""
+
+_BANK_STATEMENT_PROMPT_PDF = """You are ARIA Agent 1 (Document Ingestion) extracting a bank statement from the attached PDF.
+
+Filename: {filename}
+Base currency: {base_currency}
+
+Examine every page and extract all credit/deposit transaction rows you can identify.
+Respond with a single JSON object only — no prose, no markdown fences:
+
+{{
+  "entries": [
+    {{
+      "value_date": "YYYY-MM-DD",
+      "amount": "1234.56",
+      "currency": "{base_currency}",
+      "description": str,
+      "reference": str | null,
+      "counterparty": str | null
+    }}
+  ]
+}}
+
+Use positive decimal strings for credit amounts. Skip header/footer/balance/debit rows.
+If no rows can be identified, return {{"entries": []}}.
 """
 
 _BANK_STATEMENT_PROMPT = """You are ARIA Agent 1 (Document Ingestion) extracting a bank statement.

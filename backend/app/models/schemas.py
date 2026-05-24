@@ -291,6 +291,52 @@ class WebhookDeliveryResponse(_Base):
     created_at: datetime
 
 
+# ─── Bank statement ledger ───────────────────────────────────────────────────
+
+class BankStatementUploadResponse(_Base):
+    id: UUID
+    filename: str
+    entry_count: int
+    statement_period_start: date | None = None
+    statement_period_end: date | None = None
+
+
+class BankEntryItem(_Base):
+    id: UUID
+    value_date: date
+    amount: Decimal
+    currency: str
+    description: str = ""
+    reference: str | None = None
+    counterparty: str | None = None
+    cleared: bool = False
+
+
+class BankStatementSummary(_Base):
+    id: UUID
+    tenant_id: UUID | None = None
+    filename: str
+    base_currency: str
+    statement_period_start: date | None = None
+    statement_period_end: date | None = None
+    entry_count: int
+    uncleared_count: int
+    created_at: datetime
+
+
+class BankStatementDetail(_Base):
+    id: UUID
+    tenant_id: UUID | None = None
+    filename: str
+    base_currency: str
+    statement_period_start: date | None = None
+    statement_period_end: date | None = None
+    entry_count: int
+    uncleared_count: int
+    created_at: datetime
+    entries: list[BankEntryItem] = Field(default_factory=list)
+
+
 # ─── SSE event ───────────────────────────────────────────────────────────────
 
 class SSEEvent(_Base):

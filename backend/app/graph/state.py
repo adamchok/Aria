@@ -43,6 +43,8 @@ class ReconciliationState(BaseModel):
     # Inputs
     payment_documents: list[DocumentInput] = Field(default_factory=list)
     bank_statement_input: DocumentInput | None = None
+    # Set when using a pre-uploaded ledger statement instead of a file.
+    bank_statement_id: UUID | None = None
 
     # Per-agent outputs
     payment_records: list[PaymentRecord] = Field(default_factory=list)

@@ -11,6 +11,7 @@ import pytest
 from app.models.enums import MatchStatus
 from app.models.schemas import MatchResult, ReconciliationReport, ReconciliationSummary
 from app.repositories.job_repository import JobRepository
+from tests.conftest import TEST_TENANT_ID
 
 
 async def _seed_uncertain(repo, normalised, bank_entry):
@@ -45,7 +46,9 @@ async def _seed_uncertain(repo, normalised, bank_entry):
 
 @pytest.mark.asyncio
 async def test_confirm_marks_matched(api_client, db_session, normalised_record_usd, bank_entry_myr):
-    job_id, match_id = await _seed_uncertain(JobRepository(db_session), normalised_record_usd, bank_entry_myr)
+    job_id, match_id = await _seed_uncertain(
+        JobRepository(db_session, tenant_id=TEST_TENANT_ID), normalised_record_usd, bank_entry_myr
+    )
     resp = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}",
         json={"action": "confirm", "note": "looks good"},
@@ -58,7 +61,9 @@ async def test_confirm_marks_matched(api_client, db_session, normalised_record_u
 
 @pytest.mark.asyncio
 async def test_reject_marks_unmatched(api_client, db_session, normalised_record_usd, bank_entry_myr):
-    job_id, match_id = await _seed_uncertain(JobRepository(db_session), normalised_record_usd, bank_entry_myr)
+    job_id, match_id = await _seed_uncertain(
+        JobRepository(db_session, tenant_id=TEST_TENANT_ID), normalised_record_usd, bank_entry_myr
+    )
     resp = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "reject"}
     )
@@ -68,7 +73,9 @@ async def test_reject_marks_unmatched(api_client, db_session, normalised_record_
 
 @pytest.mark.asyncio
 async def test_manual_match_requires_bank_entry_id(api_client, db_session, normalised_record_usd, bank_entry_myr):
-    job_id, match_id = await _seed_uncertain(JobRepository(db_session), normalised_record_usd, bank_entry_myr)
+    job_id, match_id = await _seed_uncertain(
+        JobRepository(db_session, tenant_id=TEST_TENANT_ID), normalised_record_usd, bank_entry_myr
+    )
     bad = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "manual_match"}
     )
@@ -84,7 +91,9 @@ async def test_manual_match_requires_bank_entry_id(api_client, db_session, norma
 
 @pytest.mark.asyncio
 async def test_confirm_updates_results_report(api_client, db_session, normalised_record_usd, bank_entry_myr):
-    job_id, match_id = await _seed_uncertain(JobRepository(db_session), normalised_record_usd, bank_entry_myr)
+    job_id, match_id = await _seed_uncertain(
+        JobRepository(db_session, tenant_id=TEST_TENANT_ID), normalised_record_usd, bank_entry_myr
+    )
     confirm = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
     )
@@ -100,7 +109,9 @@ async def test_confirm_updates_results_report(api_client, db_session, normalised
 
 @pytest.mark.asyncio
 async def test_review_action_is_idempotent(api_client, db_session, normalised_record_usd, bank_entry_myr):
-    job_id, match_id = await _seed_uncertain(JobRepository(db_session), normalised_record_usd, bank_entry_myr)
+    job_id, match_id = await _seed_uncertain(
+        JobRepository(db_session, tenant_id=TEST_TENANT_ID), normalised_record_usd, bank_entry_myr
+    )
     first = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
     )
