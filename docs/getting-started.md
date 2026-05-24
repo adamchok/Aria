@@ -55,7 +55,7 @@ Choose the run mode that fits your goal. All three paths support the full reconc
 
 ## Option 1 — Full stack with Docker (recommended)
 
-Runs PostgreSQL, Redis, MinIO, FastAPI, Celery worker, and the React frontend. Uses **mock LLM** by default — no API keys required.
+Runs PostgreSQL, Redis, MinIO, FastAPI, Celery pipeline worker, Celery Beat scheduler (auto-batching), and the React frontend. Uses **mock LLM** by default — no API keys required.
 
 ### Step 1: Clone the repository
 
@@ -64,19 +64,24 @@ git clone https://github.com/adamchok/Aria.git
 cd Aria
 ```
 
-### Step 2: (Optional) Configure live LLM
+### Step 2: Configure environment
 
-Create a `.env` file at the **repository root** (same directory as `docker-compose.yml`):
+Copy the example file and edit as needed:
 
 ```bash
-# c:\Projects\Aria\.env  (Windows)
-# ./.env                 (macOS / Linux)
+cp .env.example .env
+```
 
+At minimum, set the following to enable live AI (otherwise mock mode runs end-to-end):
+
+```bash
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
 LLM_MODE=live
 ```
 
-Skip this step to stay in mock mode — the pipeline still runs end-to-end with deterministic responses.
+The admin key (`ADMIN_API_KEY`, default `aria-dev-admin`) lets you create tenants and API keys via the Settings → API Keys screen. Change it in any non-local environment.
+
+Skip this step entirely to stay in mock mode — the full pipeline runs with deterministic fixture responses.
 
 ### Step 3: Start all services
 

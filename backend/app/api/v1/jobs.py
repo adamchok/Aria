@@ -5,15 +5,18 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
 from app.core.exceptions import JobNotFoundError
 from app.core.logging import bind_job_id, get_logger
+from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, SourceFormat
 from app.models.schemas import (
     JobCreateResponse,
+    JobListItem,
+    JobListResponse,
     JobStatusResponse,
     MatchResult,
     ReconciliationReport,
@@ -38,12 +41,47 @@ _ACCEPTED_PROOF_TYPES = {
 }
 
 
+@router.get("", response_model=JobListResponse)
+async def list_jobs(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status_filter: JobStatus | None = Query(default=None, alias="status"),
+) -> JobListResponse:
+    repo = JobRepository(session, tenant_id=tenant_id)
+    jobs, total = await repo.list_jobs(status=status_filter, page=page, page_size=page_size)
+
+    items = []
+    for job in jobs:
+        matches = job.matches or []
+        matched = sum(1 for m in matches if m.status == MatchStatus.MATCHED)
+        uncertain = sum(1 for m in matches if m.status == MatchStatus.UNCERTAIN)
+        unmatched = sum(1 for m in matches if m.status == MatchStatus.UNMATCHED)
+        items.append(JobListItem(
+            job_id=UUID(job.id),
+            status=JobStatus(job.status),
+            progress_pct=job.progress_pct,
+            base_currency=job.base_currency,
+            record_count=len(matches),
+            matched_count=matched,
+            uncertain_count=uncertain,
+            unmatched_count=unmatched,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+        ))
+    return JobListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
 @router.post("", response_model=JobCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_job(
+    request: Request,
     payment_proofs: Annotated[list[UploadFile], File(description="Payment proofs (multi-file)")],
     bank_statement: Annotated[UploadFile, File(description="Bank statement (XLSX, CSV, or PDF)")],
     base_currency: Annotated[str, Form()] = "MYR",
     session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
 ) -> JobCreateResponse:
     if not payment_proofs:
         raise HTTPException(status_code=400, detail="At least one payment proof is required")
@@ -74,11 +112,12 @@ async def create_job(
         stmt_body, bank_statement.filename or "statement", content_type=bank_statement.content_type
     )
 
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     job = await repo.create_job(
         base_currency=base_currency.upper(),
         payment_proof_keys=proof_keys,
         bank_statement_key=stmt_key,
+        tenant_id=tenant_id,
     )
 
     bind_job_id(job.id)
@@ -92,9 +131,12 @@ async def create_job(
 
 @router.get("/{job_id}", response_model=JobStatusResponse)
 async def get_job(
-    job_id: UUID, session: AsyncSession = Depends(get_db_session)
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
 ) -> JobStatusResponse:
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     try:
         job = await repo.get(job_id)
     except JobNotFoundError as exc:
@@ -113,9 +155,12 @@ async def get_job(
 
 @router.get("/{job_id}/results", response_model=ReconciliationReport)
 async def get_results(
-    job_id: UUID, session: AsyncSession = Depends(get_db_session)
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
 ) -> ReconciliationReport:
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     try:
         job = await repo.get(job_id)
     except JobNotFoundError as exc:
@@ -129,9 +174,12 @@ async def get_results(
 
 @router.get("/{job_id}/review", response_model=list[MatchResult])
 async def get_review_queue(
-    job_id: UUID, session: AsyncSession = Depends(get_db_session)
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
 ) -> list[MatchResult]:
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     try:
         job = await repo.get(job_id)
     except JobNotFoundError as exc:

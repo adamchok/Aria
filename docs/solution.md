@@ -17,7 +17,7 @@ description: "ARIA's value proposition and key differentiators"
 
 ## ARIA in one sentence
 
-**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-native, multi-agent system that ingests payment proofs in any format, normalises amounts across currencies, and matches them against bank statements — producing auditable, explainable reconciliation reports with human escalation for edge cases.
+**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the LangGraph pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. The reference UI doubles as an enterprise operations dashboard for finance teams who prefer a browser interface.
 
 ## Core value proposition
 
@@ -46,15 +46,37 @@ flowchart LR
   <span class="aria-pipeline__step aria-pipeline__step--active">Review</span>
 </div>
 
-### What the finance officer does
+### Enterprise UI screens
+
+| Route | Screen | Purpose |
+| --- | --- | --- |
+| `/dashboard` | **Pipeline Dashboard** | Job throughput, match-rate summary, recent jobs at a glance |
+| `/jobs` | **Job Monitor** | Paginated, filterable job list with match counts per job |
+| `/jobs/{id}` | **Job Progress** | Four-agent stepper driven by SSE (no polling) |
+| `/jobs/{id}/results` | **Results** | Summary cards, filterable reconciliation grid, variance explanations |
+| `/jobs/{id}/review` | **Review Queue** | Confirm / reject uncertain items side-by-side |
+| `/queue` | **Transaction Queue** | Buffer status by corridor, oldest-transaction age, manual flush |
+| `/analytics` | **Analytics** | Match rate, escalation rate, processing time, corridor breakdown |
+| `/settings/keys` | **API Keys** | Generate and revoke tenant API keys; set session key |
+| `/settings/webhooks` | **Webhooks** | Register endpoints, test delivery, inspect delivery history |
+| `/upload` | **Upload** | Manual file submission (remains fully supported) |
+
+### What the finance officer does (manual upload flow)
 
 | Step | Screen | Action |
 | --- | --- | --- |
 | 1 | `/upload` | Drag payment proofs + bank statement; select base currency (MYR) |
-| 2 | `/jobs/{id}` | Watch four-agent stepper; progress persists if you navigate away |
+| 2 | `/jobs/{id}` | Watch four-agent stepper; SSE delivers live progress |
 | 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
 | 4 | `/jobs/{id}/review` | Confirm or reject uncertain items (side-by-side proof vs bank line) |
 | 5 | Export | Download Excel — Summary, Matched, Exceptions, Audit Log |
+
+### What an external SME system does (API integration flow)
+
+1. **Authenticate** — obtain an API key from `/settings/keys` or via the admin key endpoint
+2. **Ingest** — `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata
+3. **Receive** — register a webhook (`POST /api/v1/webhooks`); receive `job.completed` event with HMAC-signed payload when reconciliation finishes
+4. **Retrieve** — call `GET /api/v1/jobs/{id}/results` for the full report, or follow the SSE stream
 
 ## Key differentiators
 
@@ -62,6 +84,10 @@ flowchart LR
   <div class="aria-card" style="pointer-events: none;">
     <p class="aria-card__title">AI-first engine</p>
     <p class="aria-card__desc">The LLM reasoning chain is the reconciliation engine — rules are safety nets only.</p>
+  </div>
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">Platform, not a tool</p>
+    <p class="aria-card__desc">Multi-tenant API with key auth, continuous ingestion, webhooks, and SSE. Any SME system can integrate without the reference UI.</p>
   </div>
   <div class="aria-card" style="pointer-events: none;">
     <p class="aria-card__title">Vision-first ingestion</p>
@@ -74,6 +100,10 @@ flowchart LR
   <div class="aria-card" style="pointer-events: none;">
     <p class="aria-card__title">Audit-ready output</p>
     <p class="aria-card__desc">Every decision includes variance explanation and full reasoning chain in the audit log.</p>
+  </div>
+  <div class="aria-card" style="pointer-events: none;">
+    <p class="aria-card__title">Real-time visibility</p>
+    <p class="aria-card__desc">SSE stream delivers pipeline progress per agent boundary. Webhooks push terminal events to external systems with HMAC-signed payloads.</p>
   </div>
 </div>
 

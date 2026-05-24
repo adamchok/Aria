@@ -135,6 +135,27 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 | `EXTRACTION_ESCALATION_THRESHOLD` | `0.5` | Route to review if avg extraction confidence below this |
 | `DATE_WINDOW_DAYS` | `5` | ± days for date filter in matching |
 
+### Auth & multi-tenancy
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ADMIN_API_KEY` | `aria-dev-admin` | Bootstrap key for admin-only endpoints (tenant/key management). **Rotate in production.** |
+
+### Ingestion pipeline (Celery Beat)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `BATCH_SIZE_THRESHOLD` | `50` | Auto-create a job when buffer hits this many transactions |
+| `BATCH_TIME_WINDOW_MINUTES` | `15` | Auto-create a job when oldest buffered transaction is ≥ N minutes old |
+| `CELERY_BEAT_INTERVAL_MINUTES` | `2` | How often the Beat scheduler checks the buffer |
+
+### Webhooks
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WEBHOOK_MAX_RETRIES` | `3` | Maximum delivery attempts per webhook event |
+| `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS` | `5` | Base delay for exponential backoff; attempt N waits `base × 2^(N-1)` seconds |
+
 ### Application
 
 | Variable | Default | Description |
@@ -223,14 +244,20 @@ APP_ENV=production
 
 ## Docker Compose passthrough
 
-The root `.env` file is read by Docker Compose for variable substitution. Currently wired:
+The root `.env` file is read by Docker Compose for variable substitution. The following variables are wired into the `api`, `worker`, and `beat` services:
 
 ```yaml
 ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 LLM_MODE: ${LLM_MODE:-mock}
+ADMIN_API_KEY: ${ADMIN_API_KEY:-aria-dev-admin}
+BATCH_SIZE_THRESHOLD: ${BATCH_SIZE_THRESHOLD:-50}
+BATCH_TIME_WINDOW_MINUTES: ${BATCH_TIME_WINDOW_MINUTES:-15}
+CELERY_BEAT_INTERVAL_MINUTES: ${CELERY_BEAT_INTERVAL_MINUTES:-2}
+WEBHOOK_MAX_RETRIES: ${WEBHOOK_MAX_RETRIES:-3}
+WEBHOOK_RETRY_BACKOFF_BASE_SECONDS: ${WEBHOOK_RETRY_BACKOFF_BASE_SECONDS:-5}
 ```
 
-For hybrid development, put the full configuration in `backend/.env` and run the API/worker locally. To pass additional variables through Docker, add them under `environment:` for both `api` and `worker` services in `docker-compose.yml`.
+Copy `.env.example` → `.env` at the repo root to get started. For hybrid development, put the full configuration in `backend/.env` and run the API/worker locally.
 
 ---
 

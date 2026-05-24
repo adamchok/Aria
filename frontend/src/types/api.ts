@@ -152,3 +152,140 @@ export interface ReviewActionResponse {
   human_reviewed: boolean;
   note: string | null;
 }
+
+// ─── Job list ────────────────────────────────────────────────────────────────
+
+export interface JobListItem {
+  job_id: UUID;
+  status: JobStatus;
+  progress_pct: number;
+  base_currency: string;
+  record_count: number;
+  matched_count: number;
+  uncertain_count: number;
+  unmatched_count: number;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+export interface JobListResponse {
+  items: JobListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// ─── Tenant / API key ────────────────────────────────────────────────────────
+
+export interface TenantResponse {
+  id: UUID;
+  name: string;
+  created_at: ISODateTime;
+}
+
+export interface ApiKeyResponse {
+  id: UUID;
+  tenant_id: UUID;
+  label: string;
+  last_used_at: ISODateTime | null;
+  expires_at: ISODateTime | null;
+  enabled: boolean;
+  created_at: ISODateTime;
+  key?: string; // only returned on creation
+}
+
+// ─── Transaction ingestion ────────────────────────────────────────────────────
+
+export interface TransactionIngestResponse {
+  buffered: number;
+  tenant_id: UUID;
+}
+
+export interface QueueCorridorStatus {
+  corridor: string;
+  buffered_count: number;
+  oldest_received_at: ISODateTime | null;
+}
+
+export interface QueueStatusResponse {
+  tenant_id: UUID;
+  total_buffered: number;
+  by_corridor: QueueCorridorStatus[];
+  next_batch_trigger: 'count' | 'time' | 'both' | 'none';
+}
+
+// ─── Webhooks ────────────────────────────────────────────────────────────────
+
+export const WebhookEvent = {
+  JOB_COMPLETED: 'job.completed',
+  JOB_FAILED: 'job.failed',
+  JOB_REVIEW_REQUIRED: 'job.review_required',
+} as const;
+export type WebhookEvent = (typeof WebhookEvent)[keyof typeof WebhookEvent];
+
+export interface WebhookResponse {
+  id: UUID;
+  tenant_id: UUID;
+  url: string;
+  events: string[];
+  label: string;
+  enabled: boolean;
+  created_at: ISODateTime;
+  secret?: string; // only on creation
+}
+
+export interface WebhookDeliveryResponse {
+  id: UUID;
+  webhook_id: UUID;
+  job_id: UUID;
+  event: string;
+  status: string;
+  attempt_count: number;
+  last_attempt_at: ISODateTime | null;
+  response_code: number | null;
+  created_at: ISODateTime;
+}
+
+// ─── SSE events ──────────────────────────────────────────────────────────────
+
+export interface SSEEventData {
+  status?: string;
+  progress_pct?: number;
+  agents_completed?: string[];
+  error?: string;
+  summary?: {
+    matched: number;
+    uncertain: number;
+    unmatched: number;
+    total: number;
+  };
+}
+
+export interface StreamEvent {
+  event: string;
+  data: SSEEventData;
+}
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
+
+export interface AnalyticsCorridorBreakdown {
+  corridor: string;
+  job_count: number;
+  record_count: number;
+  avg_match_rate: number;
+}
+
+export interface AnalyticsSummary {
+  tenant_id: UUID;
+  period_start: ISODate;
+  period_end: ISODate;
+  total_jobs: number;
+  total_records: number;
+  matched_records: number;
+  uncertain_records: number;
+  unmatched_records: number;
+  avg_match_rate: number;
+  avg_processing_seconds: number;
+  escalation_rate: number;
+  by_corridor: AnalyticsCorridorBreakdown[];
+}

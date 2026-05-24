@@ -16,8 +16,9 @@ from app.models.schemas import AuditLogEntry, MatchResult
 
 
 class JobRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, tenant_id: str | None = None) -> None:
         self._s = session
+        self._tenant_id = tenant_id
 
     async def create_job(
         self,
@@ -25,12 +26,14 @@ class JobRepository:
         base_currency: str,
         payment_proof_keys: list[str],
         bank_statement_key: str | None,
+        tenant_id: str | None = None,
     ) -> JobORM:
         job = JobORM(
             status=JobStatus.PENDING,
             base_currency=base_currency,
             payment_proof_keys=payment_proof_keys,
             bank_statement_key=bank_statement_key,
+            tenant_id=tenant_id or self._tenant_id,
         )
         self._s.add(job)
         await self._s.commit()
@@ -38,11 +41,35 @@ class JobRepository:
         return job
 
     async def get(self, job_id: UUID | str) -> JobORM:
-        result = await self._s.execute(select(JobORM).where(JobORM.id == str(job_id)))
+        stmt = select(JobORM).where(JobORM.id == str(job_id))
+        if self._tenant_id is not None:
+            stmt = stmt.where(JobORM.tenant_id == self._tenant_id)
+        result = await self._s.execute(stmt)
         job = result.scalar_one_or_none()
         if job is None:
             raise JobNotFoundError(f"Job {job_id} not found")
         return job
+
+    async def list_jobs(
+        self,
+        *,
+        status: JobStatus | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[JobORM], int]:
+        stmt = select(JobORM)
+        if self._tenant_id is not None:
+            stmt = stmt.where(JobORM.tenant_id == self._tenant_id)
+        if status is not None:
+            stmt = stmt.where(JobORM.status == status)
+
+        from sqlalchemy import func
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._s.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.order_by(JobORM.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        result = await self._s.execute(stmt)
+        return list(result.scalars().all()), total
 
     async def update_status(
         self,

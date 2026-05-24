@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
-from app.models.enums import JobStatus, MatchStatus, ReviewAction, SourceFormat
+from app.models.enums import BufferStatus, JobStatus, MatchStatus, ReviewAction, SourceFormat, WebhookEvent
 
 MoneyStr = Annotated[Decimal, Field(..., description="Decimal amount; JSON-encoded as string")]
 
@@ -171,3 +171,152 @@ class ReviewActionResponse(_Base):
     status: MatchStatus
     human_reviewed: bool = True
     note: str | None = None
+
+
+# ─── Job list ────────────────────────────────────────────────────────────────
+
+class JobListItem(_Base):
+    job_id: UUID
+    status: JobStatus
+    progress_pct: float
+    base_currency: str
+    record_count: int = 0
+    matched_count: int = 0
+    uncertain_count: int = 0
+    unmatched_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobListResponse(_Base):
+    items: list[JobListItem]
+    total: int
+    page: int
+    page_size: int
+
+
+# ─── Tenant / API key ────────────────────────────────────────────────────────
+
+class TenantCreate(_Base):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class TenantResponse(_Base):
+    id: UUID
+    name: str
+    created_at: datetime
+
+
+class ApiKeyCreate(_Base):
+    label: str = Field(default="", max_length=255)
+    expires_at: datetime | None = None
+
+
+class ApiKeyResponse(_Base):
+    id: UUID
+    tenant_id: UUID
+    label: str
+    last_used_at: datetime | None = None
+    expires_at: datetime | None = None
+    enabled: bool
+    created_at: datetime
+    key: str | None = None  # only populated on creation, never returned again
+
+
+# ─── Transaction ingestion ────────────────────────────────────────────────────
+
+class TransactionIngestItem(_Base):
+    payment_proof_b64: str | None = None
+    storage_key: str | None = None
+    bank_entry: "BankEntry | None" = None
+    corridor: str = Field(description="e.g. 'USD/MYR'")
+    value_date: date
+
+    @field_validator("corridor")
+    @classmethod
+    def _upper_corridor(cls, v: str) -> str:
+        return v.upper()
+
+
+class TransactionIngestRequest(_Base):
+    transactions: list[TransactionIngestItem] = Field(min_length=1, max_length=200)
+
+
+class TransactionIngestResponse(_Base):
+    buffered: int
+    tenant_id: UUID
+
+
+class QueueCorridorStatus(_Base):
+    corridor: str
+    buffered_count: int
+    oldest_received_at: datetime | None = None
+
+
+class QueueStatusResponse(_Base):
+    tenant_id: UUID
+    total_buffered: int
+    by_corridor: list[QueueCorridorStatus]
+    next_batch_trigger: str  # "count" | "time" | "both" | "none"
+
+
+# ─── Webhooks ────────────────────────────────────────────────────────────────
+
+class WebhookCreate(_Base):
+    url: str = Field(min_length=8, max_length=2048)
+    events: list[str] = Field(min_length=1)
+    label: str = Field(default="", max_length=255)
+
+
+class WebhookResponse(_Base):
+    id: UUID
+    tenant_id: UUID
+    url: str
+    events: list[str]
+    label: str
+    enabled: bool
+    created_at: datetime
+    secret: str | None = None  # only on creation
+
+
+class WebhookDeliveryResponse(_Base):
+    id: UUID
+    webhook_id: UUID
+    job_id: UUID
+    event: str
+    status: str
+    attempt_count: int
+    last_attempt_at: datetime | None = None
+    response_code: int | None = None
+    created_at: datetime
+
+
+# ─── SSE event ───────────────────────────────────────────────────────────────
+
+class SSEEvent(_Base):
+    event: str
+    data: dict[str, Any]
+
+
+# ─── Analytics ───────────────────────────────────────────────────────────────
+
+class AnalyticsCorridorBreakdown(_Base):
+    corridor: str
+    job_count: int
+    record_count: int
+    avg_match_rate: float
+
+
+class AnalyticsSummary(_Base):
+    tenant_id: UUID
+    period_start: date
+    period_end: date
+    total_jobs: int
+    total_records: int
+    matched_records: int
+    uncertain_records: int
+    unmatched_records: int
+    avg_match_rate: float
+    avg_processing_seconds: float
+    escalation_rate: float
+    by_corridor: list[AnalyticsCorridorBreakdown]

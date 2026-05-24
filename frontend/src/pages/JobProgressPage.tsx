@@ -3,19 +3,28 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { JobStepper } from '@/components/JobStepper';
+import { useJobStream } from '@/hooks/useJobStream';
 import { isTerminalStatus, useJobStatus } from '@/hooks/useJobStatus';
 import { formatPercent } from '@/lib/format';
 
 export function JobProgressPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+
+  // SSE stream — hydrates the cache; polling is the fallback
+  useJobStream(jobId ?? null, {
+    onComplete: () => navigate(`/jobs/${jobId}/results`, { replace: true }),
+    onReviewRequired: () => navigate(`/jobs/${jobId}/review`, { replace: true }),
+  });
+
+  // Polling: stops automatically once the cache reaches a terminal status
   const status = useJobStatus(jobId ?? null);
 
   useEffect(() => {
-    if (status.data && status.data.status === 'COMPLETED') {
+    if (status.data?.status === 'COMPLETED') {
       navigate(`/jobs/${jobId}/results`, { replace: true });
     }
-    if (status.data && status.data.status === 'AWAITING_REVIEW') {
+    if (status.data?.status === 'AWAITING_REVIEW') {
       navigate(`/jobs/${jobId}/review`, { replace: true });
     }
   }, [status.data, jobId, navigate]);
@@ -87,7 +96,9 @@ export function JobProgressPage() {
               </Link>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">You can leave this page — the job continues in the background.</p>
+            <p className="text-sm text-slate-500">
+              ARIA is reconciling your documents. You can leave this page — the job continues in the background.
+            </p>
           )}
         </CardContent>
       </Card>

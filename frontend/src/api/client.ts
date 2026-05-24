@@ -1,12 +1,21 @@
 import type {
+  AnalyticsSummary,
+  ApiKeyResponse,
   JobCreateResponse,
+  JobListResponse,
   JobStatusResponse,
   MatchResult,
+  QueueStatusResponse,
   ReconciliationReport,
   ReviewActionRequest,
   ReviewActionResponse,
+  TenantResponse,
+  TransactionIngestResponse,
   UUID,
+  WebhookDeliveryResponse,
+  WebhookResponse,
 } from '@/types/api';
+import { getApiKey } from '@/stores/tenant-store';
 
 const API_BASE = (import.meta.env?.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
@@ -24,11 +33,13 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const apiKey = getApiKey();
   const response = await fetch(url, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+      ...(apiKey ? { 'X-API-Key': apiKey } : {}),
       ...init?.headers,
     },
   });
@@ -56,12 +67,23 @@ export interface CreateJobInput {
 }
 
 export const api = {
+  // ─── Jobs ──────────────────────────────────────────────────────────────────
+
   createJob: async (input: CreateJobInput): Promise<JobCreateResponse> => {
     const form = new FormData();
     for (const file of input.paymentProofs) form.append('payment_proofs', file, file.name);
     form.append('bank_statement', input.bankStatement, input.bankStatement.name);
     form.append('base_currency', input.baseCurrency);
     return request<JobCreateResponse>('/api/v1/jobs', { method: 'POST', body: form });
+  },
+
+  listJobs: (params?: { status?: string; page?: number; page_size?: number }): Promise<JobListResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.page !== undefined) qs.set('page', String(params.page));
+    if (params?.page_size !== undefined) qs.set('page_size', String(params.page_size));
+    const query = qs.toString();
+    return request<JobListResponse>(`/api/v1/jobs${query ? `?${query}` : ''}`);
   },
 
   getJobStatus: (jobId: UUID): Promise<JobStatusResponse> =>
@@ -83,7 +105,72 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  exportUrl: (jobId: UUID): string => `${API_BASE}/api/v1/jobs/${jobId}/export`,
+  exportUrl: (jobId: UUID): string => {
+    const apiKey = getApiKey();
+    const qs = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
+    return `${API_BASE}/api/v1/jobs/${jobId}/export${qs}`;
+  },
+
+  // ─── Tenants / API keys ────────────────────────────────────────────────────
+
+  listTenants: (): Promise<TenantResponse[]> =>
+    request<TenantResponse[]>('/api/v1/tenants'),
+
+  createTenant: (name: string): Promise<TenantResponse> =>
+    request<TenantResponse>('/api/v1/tenants', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  listApiKeys: (tenantId: UUID): Promise<ApiKeyResponse[]> =>
+    request<ApiKeyResponse[]>(`/api/v1/tenants/${tenantId}/keys`),
+
+  createApiKey: (tenantId: UUID, label?: string): Promise<ApiKeyResponse> =>
+    request<ApiKeyResponse>(`/api/v1/tenants/${tenantId}/keys`, {
+      method: 'POST',
+      body: JSON.stringify({ label: label ?? '' }),
+    }),
+
+  revokeApiKey: (tenantId: UUID, keyId: UUID): Promise<void> =>
+    request<void>(`/api/v1/tenants/${tenantId}/keys/${keyId}`, { method: 'DELETE' }),
+
+  // ─── Transaction ingestion ─────────────────────────────────────────────────
+
+  getQueueStatus: (): Promise<QueueStatusResponse> =>
+    request<QueueStatusResponse>('/api/v1/ingest/queue'),
+
+  flushQueue: (): Promise<TransactionIngestResponse> =>
+    request<TransactionIngestResponse>('/api/v1/ingest/queue/flush', { method: 'POST' }),
+
+  // ─── Webhooks ──────────────────────────────────────────────────────────────
+
+  listWebhooks: (): Promise<WebhookResponse[]> =>
+    request<WebhookResponse[]>('/api/v1/webhooks'),
+
+  createWebhook: (payload: { url: string; events: string[]; label?: string }): Promise<WebhookResponse> =>
+    request<WebhookResponse>('/api/v1/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteWebhook: (webhookId: UUID): Promise<void> =>
+    request<void>(`/api/v1/webhooks/${webhookId}`, { method: 'DELETE' }),
+
+  testWebhook: (webhookId: UUID): Promise<{ queued: boolean }> =>
+    request<{ queued: boolean }>(`/api/v1/webhooks/${webhookId}/test`, { method: 'POST' }),
+
+  listWebhookDeliveries: (webhookId: UUID): Promise<WebhookDeliveryResponse[]> =>
+    request<WebhookDeliveryResponse[]>(`/api/v1/webhooks/${webhookId}/deliveries`),
+
+  // ─── Analytics ─────────────────────────────────────────────────────────────
+
+  getAnalytics: (params?: { period_start?: string; period_end?: string }): Promise<AnalyticsSummary> => {
+    const qs = new URLSearchParams();
+    if (params?.period_start) qs.set('period_start', params.period_start);
+    if (params?.period_end) qs.set('period_end', params.period_end);
+    const query = qs.toString();
+    return request<AnalyticsSummary>(`/api/v1/analytics/summary${query ? `?${query}` : ''}`);
+  },
 };
 
 export type Api = typeof api;

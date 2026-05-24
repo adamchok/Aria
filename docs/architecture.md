@@ -17,20 +17,29 @@ description: "System design, agent pipeline, and technology stack"
 
 ## System overview
 
-ARIA is a stateful multi-agent system orchestrated by LangGraph, exposed through a FastAPI REST API and a React web application.
+ARIA is an **AI-first reconciliation platform**. The LangGraph pipeline is the authoritative reconciliation engine; multiple SME frontends — custom-built or the reference UI — connect to it through an authenticated, multi-tenant API. Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
 
 ```mermaid
 flowchart TB
-  subgraph presentation [Presentation]
-    UI[React 18 SPA]
+  subgraph clients [Clients]
+    UI[ARIA Reference UI]
+    SME[External SME Systems]
   end
-  subgraph api [API Layer]
-    FAST[FastAPI REST]
+  subgraph platform [Platform API — FastAPI]
+    AUTH[APIKeyMiddleware]
+    JOBS[Jobs API]
+    INGEST[Ingest API]
+    SSE[SSE Stream]
+    WH[Webhooks]
+    AN[Analytics]
   end
-  subgraph orchestration [Agent Orchestration]
-    LG[LangGraph StateGraph]
+  subgraph workers [Worker Layer — Celery]
+    WORKER[Pipeline Worker]
+    BEAT[Beat Scheduler]
+    WH_TASK[Webhook Delivery]
   end
-  subgraph intelligence [Intelligence]
+  subgraph intelligence [Intelligence — LangGraph]
+    LG[4-Agent Pipeline]
     LLM[Claude Sonnet / Haiku]
     FX[FX + SWIFT tools]
   end
@@ -39,13 +48,17 @@ flowchart TB
     RD[(Redis)]
     S3[(MinIO S3)]
   end
-  UI -->|/api/v1| FAST
-  FAST -->|Celery| LG
-  LG --> LLM
-  LG --> FX
-  LG --> PG
-  FAST --> S3
-  LG --> RD
+  UI & SME -->|X-API-Key| AUTH
+  AUTH --> JOBS & INGEST & SSE & WH & AN
+  INGEST -->|buffer| PG
+  BEAT -->|auto-batch| WORKER
+  JOBS -->|enqueue| WORKER
+  WORKER --> LG
+  LG --> LLM & FX & PG & S3
+  LG -->|SSE events| SSE
+  LG -->|terminal events| WH_TASK
+  WH_TASK -->|HMAC POST| SME
+  WORKER --> RD
 ```
 
 ## Agent pipeline
@@ -146,14 +159,22 @@ Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If
 ## Core data models
 
 ```python
-PaymentRecord       # Extracted payment: payer, amount, currency, date, confidence
-NormalisedRecord    # MYR amounts at invoice/settlement rates + tolerance bounds
-MatchResult         # Match status, confidence, variance, LLM explanation
+# Reconciliation
+PaymentRecord        # Extracted payment: payer, amount, currency, date, confidence
+NormalisedRecord     # MYR amounts at invoice/settlement rates + tolerance bounds
+MatchResult          # Match status, confidence, variance, LLM explanation
 ReconciliationReport # Summary stats + all match results + audit log
-BankEntry           # Parsed row from bank statement
+BankEntry            # Parsed row from bank statement
+
+# Platform (multi-tenancy)
+TenantORM            # Tenant: name, created_at
+ApiKeyORM            # API key: tenant_id, key_hash (SHA-256), label, last_used_at, enabled
+TransactionBufferORM # Inbound transactions staged before batching
+WebhookORM           # Registered endpoint: url, events, secret_hash, enabled
+WebhookDeliveryORM   # Delivery log: status, attempt_count, response_code
 ```
 
-Schemas: `backend/app/models/schemas.py`.
+Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/app/models/database.py`.
 
 ## Technology stack
 
@@ -179,55 +200,71 @@ Schemas: `backend/app/models/schemas.py`.
 | Framework | React 18 + TypeScript (strict) |
 | Build | Vite |
 | Styling | Tailwind CSS |
-| Server state | TanStack Query (2 s polling on job status) |
-| UI state | Zustand |
+| Server state | TanStack Query + SSE (`useJobStream` hook; polling as fallback) |
+| UI state | Zustand (`upload-store`, `tenant-store` for API key session) |
 | Tables | AG Grid Community |
 | Routing | React Router v6 |
 | Production serve | nginx (Docker) with `/api` reverse proxy |
 
+**Enterprise screens:** Pipeline Dashboard, Job Monitor, Transaction Queue, Analytics, API Keys, Webhooks settings — all reachable from the collapsible sidebar nav.
+
 ### Infrastructure (Docker Compose)
 
-| Service | Image / build | Port |
-| --- | --- | --- |
-| `postgres` | postgres:16-alpine | 5432 |
-| `redis` | redis:7-alpine | 6379 |
-| `minio` | minio/minio | 9000, 9001 |
-| `api` | `./backend` | 8000 |
-| `worker` | `./backend` | — |
-| `frontend` | `./frontend` | 5173 → nginx:80 |
+| Service | Image / build | Port | Role |
+| --- | --- | --- | --- |
+| `postgres` | postgres:16-alpine | 5432 | Primary database |
+| `redis` | redis:7-alpine | 6379 | Celery broker + result backend |
+| `minio` | minio/minio | 9000, 9001 | Object storage |
+| `api` | `./backend` | 8000 | FastAPI REST |
+| `worker` | `./backend` | — | Celery pipeline worker |
+| `beat` | `./backend` | — | Celery Beat scheduler (auto-batching) |
+| `frontend` | `./frontend` | 5173 → nginx:80 | React SPA |
 
 ## Security considerations
 
+- **Authentication** — API keys validated via SHA-256 hash comparison; raw keys never stored
+- **Multi-tenancy** — row-level isolation: all queries filter by `tenant_id`; MinIO object paths prefixed with `{tenant_id}/`
+- **Webhook signing** — HMAC-SHA256 (Stripe model); 5-minute timestamp tolerance prevents replay
+- **SSRF guard** — webhook URLs validated against a blocklist before registration (no private/loopback addresses)
 - Documents stored encrypted at rest (AES-256 via S3/MinIO)
 - Presigned URLs expire in 15 minutes (`S3_PRESIGN_TTL_SECONDS=900`)
 - No payment PII in debug logs (payer names masked where applicable)
 - Every LLM reasoning chain persisted in audit log
 - Items below confidence 0.75 never auto-confirmed
-- API keys via environment variables only — never committed
+- Secrets via environment variables only — never committed
 
 ## Repository map
 
 ```text
 backend/
 ├── app/
-│   ├── main.py              FastAPI entry
+│   ├── main.py              FastAPI entry + middleware wiring
 │   ├── api/v1/              REST routes
+│   │   ├── jobs.py          Job CRUD + list
+│   │   ├── stream.py        SSE endpoint
+│   │   ├── tenants.py       Tenant + API key management (admin)
+│   │   ├── ingest.py        Transaction ingestion + queue
+│   │   ├── webhooks.py      Webhook CRUD + test + deliveries
+│   │   └── analytics.py     Summary analytics
 │   ├── agents/              LangGraph node implementations
 │   ├── graph/               StateGraph, routing, state model
 │   ├── models/              Pydantic + SQLAlchemy models
+│   ├── repositories/        DB access: job, tenant, ingest, webhook
 │   ├── services/            FX, storage, LLM client, Excel export
 │   ├── tools/               File parsers, FX/SWIFT tools
-│   ├── workers/             Celery app + tasks
-│   └── core/                Config, logging, database
-├── alembic/                 DB migrations
+│   ├── workers/             Celery app, pipeline task, Beat, webhook delivery
+│   └── core/                Config, security, middleware, logging, database
+├── alembic/                 DB migrations (0001–0005)
 └── tests/                   Unit, integration, agent tests
 
 frontend/
 ├── src/
-│   ├── pages/               Upload, Progress, Results, Review
-│   ├── components/          UI components
-│   ├── api/                 Typed fetch client
-│   ├── hooks/               useJobStatus, useReviewActions
+│   ├── pages/               Dashboard, Jobs, Queue, Analytics, ApiKeys, Webhooks,
+│   │                        Upload, Progress, Results, Review
+│   ├── components/          UI components + AppShell (sidebar nav)
+│   ├── api/                 Typed fetch client (X-API-Key header injection)
+│   ├── hooks/               useJobStatus, useJobStream, useReviewActions
+│   ├── stores/              upload-store, tenant-store (API key session)
 │   └── types/               Mirrors backend schemas
 └── tests/                   Vitest + Playwright e2e
 ```

@@ -33,3 +33,22 @@ class ReviewAction(StrEnum):
     CONFIRM = "confirm"
     REJECT = "reject"
     MANUAL_MATCH = "manual_match"
+
+
+class BufferStatus(StrEnum):
+    BUFFERED = "BUFFERED"
+    BATCHED = "BATCHED"
+
+
+class WebhookEvent(StrEnum):
+    JOB_COMPLETED = "job.completed"
+    JOB_FAILED = "job.failed"
+    JOB_REVIEW_REQUIRED = "job.review_required"
+    JOB_CREATED = "job.created"
+
+
+class WebhookDeliveryStatus(StrEnum):
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    DISABLED = "DISABLED"

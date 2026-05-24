@@ -16,15 +16,40 @@ from app.services.storage import StorageService
 logger = get_logger(__name__)
 
 
+async def _emit(job_id: str, tenant_id: str | None, event: str, data: dict) -> None:
+    """Publish SSE event and (for terminal events) trigger webhooks."""
+    try:
+        from app.api.v1.stream import publish_event
+        await publish_event(job_id, event, data)
+    except Exception:  # noqa: BLE001 — never block pipeline on SSE failure
+        pass
+
+    if event in {"completed", "error", "review_required"} and tenant_id:
+        try:
+            from app.workers.tasks import trigger_webhooks
+            webhook_event_map = {
+                "completed": "job.completed",
+                "error": "job.failed",
+                "review_required": "job.review_required",
+            }
+            await trigger_webhooks(tenant_id, job_id, webhook_event_map[event])
+        except Exception:  # noqa: BLE001
+            pass
+
+
 async def execute_job(job_id: UUID | str) -> None:
     """Load the job from the database, run the pipeline, persist results."""
     bind_job_id(job_id)
     storage = StorageService()
+    job_id_str = str(job_id)
 
     async with session_scope() as session:
         repo = JobRepository(session)
         job = await repo.get(job_id)
+        tenant_id = job.tenant_id
         await repo.update_status(job_id, status=JobStatus.INGESTING, progress_pct=5.0)
+
+    await _emit(job_id_str, tenant_id, "status_change", {"status": "INGESTING", "progress_pct": 5.0})
 
     # Build initial state.
     state = ReconciliationState(
@@ -67,6 +92,7 @@ async def execute_job(job_id: UUID | str) -> None:
                 progress_pct=100.0,
                 agents_completed=state.agents_completed,
             )
+        await _emit(job_id_str, tenant_id, "error", {"status": "FAILED", "error": str(exc)})
         return
 
     async with session_scope() as session:
@@ -81,3 +107,16 @@ async def execute_job(job_id: UUID | str) -> None:
             progress_pct=100.0,
             agents_completed=state.agents_completed,
         )
+
+    # Terminal SSE event
+    terminal_event = "review_required" if state.status == JobStatus.AWAITING_REVIEW else "completed"
+    summary_data: dict = {"status": state.status}
+    if state.report:
+        s = state.report.summary
+        summary_data["summary"] = {
+            "matched": s.matched_count,
+            "uncertain": s.uncertain_count,
+            "unmatched": s.unmatched_count,
+            "total": s.total_records,
+        }
+    await _emit(job_id_str, tenant_id, terminal_event, summary_data)

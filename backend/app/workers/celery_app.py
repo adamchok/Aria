@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import get_settings
 
@@ -23,4 +24,10 @@ celery_app.conf.update(
     task_track_started=True,
     worker_send_task_events=True,
     broker_connection_retry_on_startup=True,
+    beat_schedule={
+        "auto-batch-transactions": {
+            "task": "aria.auto_batch_transactions",
+            "schedule": _settings.celery_beat_interval_minutes * 60,  # seconds
+        },
+    },
 )

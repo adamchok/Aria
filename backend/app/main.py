@@ -15,6 +15,8 @@ from app.core.config import get_settings
 from app.core.database import Base, get_engine
 from app.core.exceptions import (
     AriaError,
+    AuthenticationError,
+    AuthorizationError,
     ExtractionError,
     FXRateUnavailableError,
     InvalidJobStateError,
@@ -22,8 +24,11 @@ from app.core.exceptions import (
     LLMError,
     MatchNotFoundError,
     StorageError,
+    TenantNotFoundError,
+    WebhookNotFoundError,
 )
 from app.core.logging import configure_logging, get_logger
+from app.core.middleware import APIKeyMiddleware
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -56,6 +61,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(APIKeyMiddleware)
 
 app.include_router(api_router)
 
@@ -106,3 +112,23 @@ async def _llm(_request: Request, exc: LLMError) -> JSONResponse:
 @app.exception_handler(AriaError)
 async def _aria(_request: Request, exc: AriaError) -> JSONResponse:
     return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuthenticationError)
+async def _auth(_request: Request, exc: AuthenticationError) -> JSONResponse:
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuthorizationError)
+async def _authz(_request: Request, exc: AuthorizationError) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+@app.exception_handler(TenantNotFoundError)
+async def _tenant_not_found(_request: Request, exc: TenantNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(WebhookNotFoundError)
+async def _webhook_not_found(_request: Request, exc: WebhookNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})

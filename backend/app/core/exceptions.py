@@ -33,3 +33,19 @@ class StorageError(AriaError):
 
 class LLMError(AriaError):
     """LLM call failed (transport, parsing, or schema validation)."""
+
+
+class AuthenticationError(AriaError):
+    """Invalid or missing API key."""
+
+
+class AuthorizationError(AriaError):
+    """Caller lacks permission for this operation."""
+
+
+class TenantNotFoundError(AriaError):
+    """Requested tenant does not exist."""
+
+
+class WebhookNotFoundError(AriaError):
+    """Requested webhook does not exist."""

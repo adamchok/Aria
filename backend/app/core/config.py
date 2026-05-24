@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     match_review_floor: float = 0.5
     date_window_days: int = 5
 
+    # Auth / multi-tenancy
+    admin_api_key: str = ""  # Bootstrap key; required in production
+
+    # Ingestion pipeline (Celery Beat auto-batching)
+    batch_size_threshold: int = 50
+    batch_time_window_minutes: int = 15
+    celery_beat_interval_minutes: int = 2
+
+    # Webhooks
+    webhook_max_retries: int = 3
+    webhook_retry_backoff_base_seconds: int = 5
+
     # App
     app_env: Literal["development", "test", "staging", "production"] = "development"
     log_level: str = "INFO"
