@@ -65,6 +65,7 @@ export function ApiKeysPage() {
           <div className="flex gap-2">
             <input
               type="text"
+              aria-label="Key label"
               placeholder="Label"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
@@ -77,8 +78,16 @@ export function ApiKeysPage() {
         </CardHeader>
         <CardContent className="p-0">
           {keysQuery.isLoading && <p className="p-4 text-sm text-slate-500">Loading…</p>}
-          {keysQuery.data && keysQuery.data.length === 0 && (
-            <p className="p-4 text-sm text-slate-500">No API keys yet.</p>
+          {keysQuery.isError && (
+            <div className="p-4">
+              <p className="text-sm text-rose-600" role="alert">Failed to load API keys.</p>
+              <Button variant="secondary" className="mt-2" onClick={() => void keysQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {keysQuery.data && keysQuery.data.length === 0 && !keysQuery.isLoading && (
+            <p className="p-4 text-sm text-slate-500">No API keys yet. Generate one to integrate programmatically.</p>
           )}
           {keysQuery.data && keysQuery.data.length > 0 && (
             <table className="w-full text-left text-sm">

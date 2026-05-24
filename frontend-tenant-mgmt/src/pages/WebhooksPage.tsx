@@ -273,7 +273,12 @@ export function WebhooksPage() {
         </div>
       )}
       {isError && (
-        <p className="text-sm text-rose-600">Failed to load webhooks.</p>
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+          <p className="text-sm text-rose-600" role="alert">Failed to load webhooks.</p>
+          <Button variant="secondary" className="mt-2" onClick={() => void qc.invalidateQueries({ queryKey: ['webhooks'] })}>
+            Retry
+          </Button>
+        </div>
       )}
       {webhooks?.length === 0 && !isLoading && (
         <p className="text-sm text-slate-500">No webhooks registered yet.</p>

@@ -132,14 +132,8 @@ function LedgerRow({ entry }: { entry: LedgerEntryItem }) {
               {entry.cleared_by_job_id && (
                 <div>
                   <dt className="text-slate-500">Cleared by job</dt>
-                  <dd className="font-mono text-slate-700">
-                    <Link
-                      to={`/jobs/${entry.cleared_by_job_id}`}
-                      className="text-blue-600 hover:text-blue-800"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {entry.cleared_by_job_id.slice(0, 8)}…
-                    </Link>
+                  <dd className="font-mono text-slate-700" title="View job in Ops app">
+                    {entry.cleared_by_job_id.slice(0, 8)}…
                   </dd>
                 </div>
               )}

@@ -1,21 +1,112 @@
 import type {
+  AnalyticsSummary,
+  ApiKeyResponse,
   BankAccountResponse,
   BankStatementSummary,
-  JobCreateResponse,
-  JobStatusResponse,
   LedgerEntryItem,
   LedgerPageResponse,
-  MatchResult,
-  ReconciliationReport,
+  LoginResponse,
+  QueueStatusResponse,
+  UserResponse,
+  WebhookDeliveryResponse,
+  WebhookResponse,
 } from '@/types/api';
+import { WebhookEvent } from '@/types/api';
 
-export const JOB_ID = '11111111-1111-1111-1111-111111111111';
+export const TENANT_ID = '00000000-0000-0000-0001-000000000001';
 export const ACCOUNT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 export const STMT_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+export const KEY_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+export const WEBHOOK_ID = 'wwwwwwww-wwww-wwww-wwww-wwwwwwwwwwww';
+export const USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+export const tenantUserFixture: UserResponse = {
+  id: USER_ID,
+  email: 'finance@acme.test',
+  role: 'tenant_user',
+  tenant_id: TENANT_ID,
+  is_active: true,
+  created_at: '2026-05-01T08:00:00Z',
+};
+
+export const adminUserFixture: UserResponse = {
+  id: 'admin-admin-admin-admin-adminadmin',
+  email: 'admin@aria.local',
+  role: 'admin',
+  tenant_id: null,
+  is_active: true,
+  created_at: '2026-05-01T08:00:00Z',
+};
+
+export const loginResponseFixture: LoginResponse = {
+  access_token: 'test-jwt-token',
+  token_type: 'bearer',
+  user: tenantUserFixture,
+};
+
+export const apiKeyFixture: ApiKeyResponse = {
+  id: KEY_ID,
+  tenant_id: TENANT_ID,
+  label: 'Production',
+  last_used_at: null,
+  expires_at: null,
+  enabled: true,
+  created_at: '2026-05-03T08:00:00Z',
+};
+
+export const analyticsFixture: AnalyticsSummary = {
+  tenant_id: TENANT_ID,
+  period_start: '2026-04-01',
+  period_end: '2026-05-01',
+  total_jobs: 12,
+  total_records: 240,
+  matched_records: 220,
+  uncertain_records: 15,
+  unmatched_records: 5,
+  avg_match_rate: 0.917,
+  avg_processing_seconds: 38.5,
+  escalation_rate: 0.062,
+  by_corridor: [
+    { corridor: 'USD/MYR', job_count: 8, record_count: 160, avg_match_rate: 0.925 },
+    { corridor: 'EUR/MYR', job_count: 4, record_count: 80, avg_match_rate: 0.9 },
+  ],
+};
+
+export const queueFixture: QueueStatusResponse = {
+  tenant_id: TENANT_ID,
+  total_buffered: 6,
+  next_batch_trigger: 'count',
+  by_corridor: [
+    { corridor: 'USD/MYR', buffered_count: 4, oldest_received_at: '2026-05-23T08:00:00Z' },
+    { corridor: 'EUR/MYR', buffered_count: 2, oldest_received_at: '2026-05-23T09:00:00Z' },
+  ],
+};
+
+export const webhookFixture: WebhookResponse = {
+  id: WEBHOOK_ID,
+  tenant_id: TENANT_ID,
+  url: 'https://erp.example.com/webhooks/aria',
+  events: [WebhookEvent.JOB_COMPLETED],
+  label: 'ERP',
+  enabled: true,
+  created_at: '2026-05-04T08:00:00Z',
+};
+
+export const webhookDeliveryFixture: WebhookDeliveryResponse = {
+  id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+  webhook_id: WEBHOOK_ID,
+  job_id: '11111111-1111-1111-1111-111111111111',
+  event: WebhookEvent.JOB_COMPLETED,
+  status: 'SUCCESS',
+  attempt_count: 1,
+  last_attempt_at: '2026-05-23T10:00:00Z',
+  response_code: 200,
+  created_at: '2026-05-23T10:00:00Z',
+};
 
 export const bankAccountFixture: BankAccountResponse = {
   id: ACCOUNT_ID,
-  tenant_id: '00000000-0000-0000-0001-000000000001',
+  tenant_id: TENANT_ID,
   name: 'Main Operating Account',
   bank_name: 'Maybank',
   account_number_masked: '****1234',
@@ -28,7 +119,7 @@ export const bankAccountFixture: BankAccountResponse = {
 
 export const statementFixture: BankStatementSummary = {
   id: STMT_ID,
-  tenant_id: '00000000-0000-0000-0001-000000000001',
+  tenant_id: TENANT_ID,
   filename: 'may_2026.csv',
   base_currency: 'MYR',
   statement_period_start: '2026-05-01',
@@ -57,98 +148,4 @@ export const ledgerPageFixture: LedgerPageResponse = {
   total: 1,
   page: 1,
   page_size: 50,
-};
-
-export const jobCreateResponse: JobCreateResponse = {
-  job_id: JOB_ID,
-  status: 'PENDING',
-  created_at: '2026-05-23T08:00:00Z',
-};
-
-export const jobStatusCompleted: JobStatusResponse = {
-  job_id: JOB_ID,
-  status: 'COMPLETED',
-  progress_pct: 100,
-  agents_completed: ['ingestion', 'normalisation', 'matching', 'report'],
-  error: null,
-  created_at: '2026-05-23T08:00:00Z',
-  updated_at: '2026-05-23T08:00:30Z',
-};
-
-export const jobStatusAwaitingReview: JobStatusResponse = {
-  ...jobStatusCompleted,
-  status: 'AWAITING_REVIEW',
-};
-
-export const matchedItem: MatchResult = {
-  id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-  normalised_record: {
-    payment: {
-      id: 'pay-1',
-      payer: 'Acme US Inc',
-      payee: 'ARIA Demo SDN BHD',
-      amount_original: '1000.00',
-      currency: 'USD',
-      value_date: '2026-05-18',
-      reference: 'INV-001',
-      bank_charges: null,
-      source_format: 'IMAGE',
-      extraction_confidence: 0.95,
-      raw_extracted_text: '',
-      field_confidences: {},
-      source_document: null,
-    },
-    amount_myr_at_invoice_rate: '4230.00',
-    amount_myr_at_settlement_rate: '4230.00',
-    fx_rate_invoice: '4.230',
-    fx_rate_settlement: '4.230',
-    tolerance_low: '4115.79',
-    tolerance_high: '4293.45',
-    estimated_charges_myr: '50.76',
-    base_currency: 'MYR',
-  },
-  bank_entry: {
-    id: 'bank-1',
-    value_date: '2026-05-20',
-    amount: '4179.24',
-    currency: 'MYR',
-    description: 'Inward TT Acme US Inc',
-    reference: 'INV-001',
-    counterparty: 'ACME US INC',
-  },
-  candidate_scores: [],
-  confidence: 0.88,
-  status: 'MATCHED',
-  amount_variance_myr: '-50.76',
-  variance_explanation: 'Bank entry within tolerance after SWIFT charge of MYR 50.76.',
-  reasoning_chain: '...',
-  human_reviewed: false,
-  review_notes: null,
-};
-
-export const uncertainItem: MatchResult = {
-  ...matchedItem,
-  id: 'bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-  confidence: 0.62,
-  status: 'UNCERTAIN',
-  variance_explanation: 'Amount inside tolerance but payer name match is weak.',
-};
-
-export const reportFixture: ReconciliationReport = {
-  job_id: JOB_ID,
-  base_currency: 'MYR',
-  generated_at: '2026-05-23T08:00:30Z',
-  narrative:
-    'ARIA reconciled 1 of 2 records with high confidence. 1 item routed to human review.',
-  summary: {
-    total_records: 2,
-    matched_count: 1,
-    uncertain_count: 1,
-    unmatched_count: 0,
-    total_value_myr: '8460.00',
-    matched_value_myr: '4230.00',
-    total_variance_myr: '-50.76',
-    processing_seconds: 28.4,
-  },
-  matches: [matchedItem, uncertainItem],
 };

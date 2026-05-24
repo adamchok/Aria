@@ -1,0 +1,35 @@
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router-dom';
+import { BankAccountDetailPage } from '@/pages/BankAccountDetailPage';
+import { renderWithProviders } from '@/test/render';
+import { useAuthStore } from '@/stores/auth-store';
+import { ACCOUNT_ID, tenantUserFixture } from '@/test/fixtures';
+
+function Harness() {
+  return (
+    <Routes>
+      <Route path="/bank-accounts/:accountId" element={<BankAccountDetailPage />} />
+    </Routes>
+  );
+}
+
+beforeEach(() => {
+  useAuthStore.getState().setAuth('test-token', tenantUserFixture);
+});
+
+afterEach(() => {
+  useAuthStore.getState().clear();
+});
+
+describe('BankAccountDetailPage', () => {
+  it('shows account details and ledger entries', async () => {
+    renderWithProviders(<Harness />, { initialEntries: [`/bank-accounts/${ACCOUNT_ID}`] });
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: /main operating account/i })).toBeInTheDocument());
+    expect(screen.getByText(/Payment from Acme/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /statements/i }));
+    await waitFor(() => expect(screen.getByText('may_2026.csv')).toBeInTheDocument());
+  });
+});

@@ -24,7 +24,8 @@ Sign in with a **tenant user** account (created in Admin UI or invited here by a
 | `npm run dev` | Vite dev server with `/api` proxy |
 | `npm run build` | Type-check + production bundle |
 | `npm run typecheck` | Strict TypeScript |
-| `npm test` | Vitest unit tests |
+| `npm test` | Vitest — auth, API client, route guard, and mgmt page integration tests |
+| `npm run test:e2e` | Playwright — login → dashboard → API key flow |
 
 ## Routes
 

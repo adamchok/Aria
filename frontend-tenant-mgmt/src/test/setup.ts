@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { server } from './msw-server';
+import { resetHandlerState } from './handlers';
 
 // jsdom doesn't ship matchMedia; AG Grid / Tailwind utilities query it.
 if (!window.matchMedia) {
@@ -46,5 +47,8 @@ if (!(globalThis as { EventSource?: unknown }).EventSource) {
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  resetHandlerState();
+});
 afterAll(() => server.close());

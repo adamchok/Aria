@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export function UsersPage() {
   const qc = useQueryClient();
@@ -15,13 +16,15 @@ export function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => api.createTenantUser(email, password),
+    mutationFn: () => api.createTenantUser(email.trim(), password),
     onSuccess: () => {
       setEmail('');
       setPassword('');
       void qc.invalidateQueries({ queryKey: ['tenant', 'users'] });
     },
   });
+
+  const canSubmit = email.trim().length >= 3 && password.length >= 8;
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,27 +37,50 @@ export function UsersPage() {
         <CardHeader>
           <CardTitle>Invite user</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm"
-          />
-          <input
-            type="password"
-            placeholder="Password (min 8 chars)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm"
-          />
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || email.length < 3 || password.length < 8}
+        <CardContent>
+          <form
+            className="flex flex-col gap-4 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canSubmit) createMutation.mutate();
+            }}
           >
-            Create user
-          </Button>
+            <label className="flex flex-1 flex-col gap-1 text-sm">
+              <span className="font-medium text-slate-700">Email</span>
+              <input
+                type="email"
+                required
+                autoComplete="off"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+            <div className="flex flex-1 flex-col gap-1 text-sm">
+              <label htmlFor="invite-password" className="font-medium text-slate-700">
+                Password
+              </label>
+              <input
+                id="invite-password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-500">Minimum 8 characters</span>
+            </div>
+            <Button type="submit" disabled={!canSubmit || createMutation.isPending}>
+              {createMutation.isPending ? 'Creating…' : 'Create user'}
+            </Button>
+          </form>
+          {createMutation.isError && (
+            <p className="mt-3 text-sm text-rose-600" role="alert">
+              Could not create user. The email may already be registered.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -63,14 +89,29 @@ export function UsersPage() {
           <CardTitle>Tenant users</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {usersQuery.isLoading && <p className="p-4 text-sm text-slate-500">Loading…</p>}
-          {usersQuery.isError && <p className="p-4 text-sm text-rose-600">Failed to load users.</p>}
-          {usersQuery.data && (
+          {usersQuery.isLoading && (
+            <p className="p-4 text-sm text-slate-500" aria-live="polite">Loading users…</p>
+          )}
+          {usersQuery.isError && (
+            <div className="p-4">
+              <p className="text-sm text-rose-600" role="alert">Failed to load users.</p>
+              <Button variant="secondary" className="mt-2" onClick={() => void usersQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {usersQuery.data?.length === 0 && (
+            <EmptyState
+              title="No users yet"
+              description="Invite a user so they can sign in to Ops or this management app."
+              className="m-4 border-0"
+            />
+          )}
+          {usersQuery.data && usersQuery.data.length > 0 && (
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="px-4 py-2 font-medium text-slate-500">Email</th>
-                  <th className="px-4 py-2 font-medium text-slate-500">Role</th>
                   <th className="px-4 py-2 font-medium text-slate-500">Status</th>
                 </tr>
               </thead>
@@ -78,7 +119,6 @@ export function UsersPage() {
                 {usersQuery.data.map((u) => (
                   <tr key={u.id} className="border-t border-slate-100">
                     <td className="px-4 py-3">{u.email}</td>
-                    <td className="px-4 py-3">{u.role}</td>
                     <td className="px-4 py-3">{u.is_active ? 'Active' : 'Inactive'}</td>
                   </tr>
                 ))}
