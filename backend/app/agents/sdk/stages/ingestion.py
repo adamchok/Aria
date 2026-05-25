@@ -121,6 +121,9 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
         raw_extracted_text=payload.get("raw_extracted_text", ""),
         field_confidences=payload.get("field_confidences", {}),
         source_document=doc.storage_key,
+        amount_charged_local=payload.get("amount_charged_local"),
+        local_currency=payload.get("local_currency"),
+        card_fx_rate=payload.get("card_fx_rate"),
     )
 
 

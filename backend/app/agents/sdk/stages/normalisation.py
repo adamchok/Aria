@@ -85,20 +85,32 @@ async def _normalise(record: PaymentRecord, base_currency: str, fx: FXService, s
     charges_source = estimate_swift_charges(record.amount_original, record.currency)
     charges_myr = (charges_source * fx_settlement).quantize(Decimal("0.01"))
 
-    buffer = settings.fx_variance_buffer_pct
-    charges_for_tolerance = (
-        Decimal("0") if record.amount_original < Decimal("1000") else charges_myr
+    # When the receipt explicitly states the charged local-currency amount (common on card
+    # receipts: "Charged RM786.72 using 1 USD = 4.0975 MYR"), use it as the settlement
+    # amount — more accurate than the interbank rate. Tighten tolerance to ±MYR 0.10.
+    card_stated = (
+        record.amount_charged_local is not None
+        and record.local_currency is not None
+        and record.local_currency.upper() == base_currency
     )
-    card_markup = (amount_settlement * Decimal("0.025")).quantize(Decimal("0.01"))
-
-    tolerance_low = (amount_invoice - charges_for_tolerance - buffer * amount_invoice).quantize(
-        Decimal("0.01")
-    )
-    tolerance_high = (amount_settlement + buffer * amount_settlement + card_markup).quantize(
-        Decimal("0.01")
-    )
-    if tolerance_low > tolerance_high:
-        tolerance_low, tolerance_high = tolerance_high, tolerance_low
+    if card_stated:
+        amount_settlement = record.amount_charged_local.quantize(Decimal("0.01"))  # type: ignore[union-attr]
+        tolerance_low = (amount_settlement - Decimal("0.10")).quantize(Decimal("0.01"))
+        tolerance_high = (amount_settlement + Decimal("0.10")).quantize(Decimal("0.01"))
+    else:
+        buffer = settings.fx_variance_buffer_pct
+        charges_for_tolerance = (
+            Decimal("0") if record.amount_original < Decimal("1000") else charges_myr
+        )
+        card_markup = (amount_settlement * Decimal("0.025")).quantize(Decimal("0.01"))
+        tolerance_low = (amount_invoice - charges_for_tolerance - buffer * amount_invoice).quantize(
+            Decimal("0.01")
+        )
+        tolerance_high = (amount_settlement + buffer * amount_settlement + card_markup).quantize(
+            Decimal("0.01")
+        )
+        if tolerance_low > tolerance_high:
+            tolerance_low, tolerance_high = tolerance_high, tolerance_low
 
     return NormalisedRecord(
         payment=record,

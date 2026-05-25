@@ -28,7 +28,10 @@ INGESTION_INSTRUCTIONS = build_instructions(
   "bank_charges": str | null,
   "extraction_confidence": float (0..1),
   "field_confidences": { "amount_original": float, ... },
-  "raw_extracted_text": str
+  "raw_extracted_text": str,
+  "amount_charged_local": str | null,
+  "local_currency": str | null,
+  "card_fx_rate": str | null
 }""",
     constraints=[
         "Never use float for money — decimal strings only.",
@@ -47,6 +50,13 @@ INGESTION_INSTRUCTIONS = build_instructions(
             "symbols (S$ or SGD → SGD; A$ → AUD; US$ → USD) or vendor address country. "
             "US-incorporated SaaS companies (even Singapore-registered) typically bill in USD. "
             "When uncertain, lower field_confidences['currency'] below 0.7."
+        ),
+        (
+            "Card/POS receipts often state the exact local-currency amount charged and the "
+            "card network FX rate used (e.g. 'Charged RM786.72 using 1 USD = 4.0975 MYR'). "
+            "When present, extract: amount_charged_local='786.72', local_currency='MYR', "
+            "card_fx_rate='4.0975'. These are distinct from amount_original and currency. "
+            "This data is critical for bank-entry matching — do not omit it."
         ),
     ],
 )

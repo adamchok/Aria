@@ -45,6 +45,12 @@ class PaymentRecord(_Base):
     raw_extracted_text: str = ""
     field_confidences: dict[str, float] = Field(default_factory=dict)
     source_document: str | None = Field(default=None, description="Storage key for the source file")
+    # Card receipts sometimes state the exact local-currency charged amount and card FX rate
+    # (e.g. "Charged RM786.72 using 1 USD = 4.0975 MYR"). When present these override
+    # interbank-rate estimates in normalisation and scoring.
+    amount_charged_local: Decimal | None = None
+    local_currency: str | None = Field(default=None, description="Currency of amount_charged_local")
+    card_fx_rate: Decimal | None = None
 
     @field_validator("currency")
     @classmethod
@@ -294,7 +300,7 @@ class WebhookResponse(_Base):
 class WebhookDeliveryResponse(_Base):
     id: UUID
     webhook_id: UUID
-    job_id: UUID
+    job_id: UUID | None = None
     event: str
     status: str
     attempt_count: int

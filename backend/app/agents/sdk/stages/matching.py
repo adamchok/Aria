@@ -19,10 +19,20 @@ logger = get_logger(__name__)
 
 AGENT_NAME = "matching"
 
+# SWIFT / wire transfer weights
 _W_AMOUNT = 0.4
 _W_DATE = 0.2
 _W_REF = 0.3
 _W_PAYER = 0.1
+
+# Card / POS weights — bank assigns internal codes (T61763), never invoice refs;
+# amount precision and merchant name carry almost all evidential weight.
+_W_AMOUNT_CARD = 0.55
+_W_DATE_CARD = 0.25
+_W_REF_CARD = 0.05
+_W_PAYER_CARD = 0.15
+
+_RE_POS = re.compile(r"^POS\s+(DEBIT|CREDIT)\b", re.IGNORECASE)
 
 
 def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None = None) -> None:
@@ -199,16 +209,37 @@ def _description_rescue(
 
 def _score(nr: NormalisedRecord, entry: BankEntry, settings) -> CandidateScore:
     target_amount = nr.amount_myr_at_settlement_rate
-    spread_half = max(
-        (nr.tolerance_high - nr.tolerance_low) / Decimal("2"),
-        nr.amount_myr_at_settlement_rate * Decimal("0.025"),
-    )
     entry_amount_abs = abs(entry.amount)
-    if spread_half == 0:
-        amount_score = 1.0 if entry_amount_abs == target_amount else 0.0
+    within_band = nr.tolerance_low <= entry_amount_abs <= nr.tolerance_high
+
+    if within_band:
+        # The tolerance band is asymmetric (card-network markup pushes tolerance_high
+        # well above settlement rate). Score 1.0 at settlement rate, floor 0.5 at band
+        # edges — guarantees in-band entries never score 0 regardless of which half
+        # of the band they fall in.
+        dist_from_settlement = abs(entry_amount_abs - target_amount)
+        max_dist_in_band = max(
+            nr.tolerance_high - target_amount,
+            target_amount - nr.tolerance_low,
+        )
+        if max_dist_in_band == 0:
+            amount_score = 1.0
+        else:
+            amount_score = max(0.5, 1.0 - 0.5 * float(dist_from_settlement / max_dist_in_band))
     else:
-        dist = abs(entry_amount_abs - target_amount)
-        amount_score = max(0.0, 1.0 - float(dist / spread_half))
+        # Outside band: decay from the nearest band edge (not from settlement rate).
+        spread_half = max(
+            (nr.tolerance_high - nr.tolerance_low) / Decimal("2"),
+            target_amount * Decimal("0.025"),
+        )
+        if spread_half == 0:
+            amount_score = 1.0 if entry_amount_abs == target_amount else 0.0
+        else:
+            dist = min(
+                abs(entry_amount_abs - nr.tolerance_low),
+                abs(entry_amount_abs - nr.tolerance_high),
+            )
+            amount_score = max(0.0, 1.0 - float(dist / spread_half))
 
     delta = abs((entry.value_date - nr.payment.value_date).days)
     date_score = max(0.0, 1.0 - delta / max(settings.date_window_days, 1))
@@ -230,11 +261,22 @@ def _score(nr: NormalisedRecord, entry: BankEntry, settings) -> CandidateScore:
     )
 
     party_score = _party_match_score(nr, entry)
+
+    # Card/POS transactions use internal bank references (T61763), never invoice numbers.
+    # Detect from either side: receipt has card-stated amount, or bank description is POS.
+    is_card = nr.payment.amount_charged_local is not None or bool(
+        entry.description and _RE_POS.match(entry.description)
+    )
+    if is_card:
+        w_amount, w_date, w_ref, w_payer = _W_AMOUNT_CARD, _W_DATE_CARD, _W_REF_CARD, _W_PAYER_CARD
+    else:
+        w_amount, w_date, w_ref, w_payer = _W_AMOUNT, _W_DATE, _W_REF, _W_PAYER
+
     composite = (
-        _W_AMOUNT * amount_score
-        + _W_DATE * date_score
-        + _W_REF * ref_score
-        + _W_PAYER * party_score
+        w_amount * amount_score
+        + w_date * date_score
+        + w_ref * ref_score
+        + w_payer * party_score
     )
     composite = max(0.0, min(1.0, composite))
     return CandidateScore(
