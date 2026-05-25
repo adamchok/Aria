@@ -19,6 +19,13 @@ const BANK_STATEMENT_MIME = new Set([
   'application/pdf',
 ]);
 
+type BankStatementSource = 'upload' | 'ledger';
+
+const SOURCE_OPTIONS: { value: BankStatementSource; label: string }[] = [
+  { value: 'upload', label: 'Upload file' },
+  { value: 'ledger', label: 'From bank account' },
+];
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -36,6 +43,7 @@ export function IngestPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [corridor, setCorridor] = useState<Corridor>('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [bankStatementSource, setBankStatementSource] = useState<BankStatementSource>('upload');
   const [selectedAccountId, setSelectedAccountId] = useState<UUID | null>(null);
   const [bankStatement, setBankStatement] = useState<File | null>(null);
   const [statementMessage, setStatementMessage] = useState<string | null>(null);
@@ -101,23 +109,123 @@ export function IngestPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm text-slate-600">
-              Batch jobs match proofs against uncleared ledger entries. Upload a statement to the
-              account that will receive inbound payments.
+              Batch jobs match proofs against uncleared ledger entries. Upload a new statement or
+              use pending entries already on a registered account.
             </p>
 
-            {accountsLoading ? (
+            <div
+              className="flex gap-1 rounded-lg bg-slate-100 p-1"
+              role="radiogroup"
+              aria-label="Bank statement source"
+            >
+              {SOURCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={bankStatementSource === opt.value}
+                  onClick={() => {
+                    setBankStatementSource(opt.value);
+                    setStatementMessage(null);
+                  }}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    bankStatementSource === opt.value
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {bankStatementSource === 'upload' ? (
+              accountsLoading ? (
+                <p className="text-sm text-slate-500">Loading bank accounts…</p>
+              ) : accounts?.length === 0 ? (
+                <p className="text-sm text-slate-600">
+                  No bank accounts yet.{' '}
+                  <Link to="/bank-accounts" className="text-teal-600 underline hover:text-teal-800">
+                    Add a bank account
+                  </Link>{' '}
+                  first.
+                </p>
+              ) : (
+                <>
+                  <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
+                    Bank account
+                    <select
+                      value={selectedAccountId ?? ''}
+                      onChange={(e) => {
+                        setSelectedAccountId(e.target.value || null);
+                        setStatementMessage(null);
+                      }}
+                      aria-label="Bank account"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    >
+                      <option value="">Select an account…</option>
+                      {accounts?.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} · {acc.bank_name} ({acc.currency})
+                          {acc.uncleared_count > 0
+                            ? ` — ${acc.uncleared_count} pending`
+                            : ' — no pending entries'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <UploadDropzone
+                    testId="ingest-bank-statement-dropzone"
+                    label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
+                    onFiles={(uploaded) => setBankStatement(uploaded[0] ?? null)}
+                    helperText="One XLSX, CSV, or PDF with date, amount, reference, and counterparty columns."
+                    acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
+                    acceptedMimeTypes={BANK_STATEMENT_MIME}
+                  />
+                  <FileList
+                    files={bankStatement ? [bankStatement] : []}
+                    onRemove={() => setBankStatement(null)}
+                    emptyLabel="No bank statement uploaded."
+                  />
+
+                  {uploadStatementMutation.isError && (
+                    <p className="text-sm text-rose-600" role="alert">
+                      Upload failed.{' '}
+                      {uploadStatementMutation.error instanceof Error
+                        ? uploadStatementMutation.error.message
+                        : 'Unknown error.'}
+                    </p>
+                  )}
+
+                  {statementMessage && (
+                    <p className="text-sm font-medium text-emerald-700" role="status">
+                      {statementMessage}
+                    </p>
+                  )}
+
+                  <div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => uploadStatementMutation.mutate()}
+                      disabled={!canUploadStatement}
+                      loading={uploadStatementMutation.isPending}
+                    >
+                      Upload statement
+                    </Button>
+                  </div>
+                </>
+              )
+            ) : accountsLoading ? (
               <p className="text-sm text-slate-500">Loading bank accounts…</p>
             ) : accounts?.length === 0 ? (
               <p className="text-sm text-slate-600">
-                No bank accounts yet.{' '}
-                <Link to="/bank-accounts" className="text-teal-600 underline hover:text-teal-800">
-                  Add a bank account
-                </Link>{' '}
-                first.
+                No bank accounts registered yet. Add an account and upload statements in{' '}
+                <span className="font-medium">Tenant mgmt</span> (port 5175), then return here.
               </p>
             ) : (
               <>
-                <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
+                <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                   Bank account
                   <select
                     value={selectedAccountId ?? ''}
@@ -126,7 +234,7 @@ export function IngestPage() {
                       setStatementMessage(null);
                     }}
                     aria-label="Bank account"
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    className="rounded border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                   >
                     <option value="">Select an account…</option>
                     {accounts?.map((acc) => (
@@ -141,52 +249,53 @@ export function IngestPage() {
                 </label>
 
                 {selectedAccount && (
-                  <p className="text-sm text-slate-600">
-                    <span className="font-medium tabular-nums">{selectedAccount.uncleared_count}</span>{' '}
-                    pending ledger {selectedAccount.uncleared_count === 1 ? 'entry' : 'entries'} on this
-                    account.
-                  </p>
+                  <>
+                    <p className="text-sm text-slate-600">
+                      Buffered proofs will match against{' '}
+                      <span className="font-medium tabular-nums">
+                        {selectedAccount.uncleared_count}
+                      </span>{' '}
+                      pending ledger{' '}
+                      {selectedAccount.uncleared_count === 1 ? 'entry' : 'entries'} across{' '}
+                      <span className="font-medium tabular-nums">
+                        {selectedAccount.statement_count}
+                      </span>{' '}
+                      {selectedAccount.statement_count === 1 ? 'statement' : 'statements'}.
+                    </p>
+
+                    {selectedAccount.uncleared_count === 0 && (
+                      <p className="text-sm text-amber-700" role="status">
+                        All ledger entries for this account are already cleared. Upload a new
+                        statement or choose another account.
+                      </p>
+                    )}
+
+                    <dl className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                      <div>
+                        <span className="tabular-nums font-medium text-slate-900">
+                          {selectedAccount.statement_count}
+                        </span>{' '}
+                        <span className="text-slate-600">
+                          {selectedAccount.statement_count === 1 ? 'statement' : 'statements'}
+                        </span>
+                      </div>
+                      <div>
+                        <span
+                          className={`tabular-nums font-medium ${
+                            selectedAccount.uncleared_count > 0
+                              ? 'text-amber-700'
+                              : 'text-emerald-700'
+                          }`}
+                        >
+                          {selectedAccount.uncleared_count}
+                        </span>{' '}
+                        <span className="text-slate-600">
+                          pending {selectedAccount.uncleared_count === 1 ? 'entry' : 'entries'}
+                        </span>
+                      </div>
+                    </dl>
+                  </>
                 )}
-
-                <UploadDropzone
-                  testId="ingest-bank-statement-dropzone"
-                  label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
-                  onFiles={(uploaded) => setBankStatement(uploaded[0] ?? null)}
-                  helperText="One XLSX, CSV, or PDF with date, amount, reference, and counterparty columns."
-                  acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
-                  acceptedMimeTypes={BANK_STATEMENT_MIME}
-                />
-                <FileList
-                  files={bankStatement ? [bankStatement] : []}
-                  onRemove={() => setBankStatement(null)}
-                  emptyLabel="No bank statement selected."
-                />
-
-                {uploadStatementMutation.isError && (
-                  <p className="text-sm text-rose-600" role="alert">
-                    Upload failed.{' '}
-                    {uploadStatementMutation.error instanceof Error
-                      ? uploadStatementMutation.error.message
-                      : 'Unknown error.'}
-                  </p>
-                )}
-
-                {statementMessage && (
-                  <p className="text-sm font-medium text-emerald-700" role="status">
-                    {statementMessage}
-                  </p>
-                )}
-
-                <div>
-                  <Button
-                    variant="secondary"
-                    onClick={() => uploadStatementMutation.mutate()}
-                    disabled={!canUploadStatement}
-                    loading={uploadStatementMutation.isPending}
-                  >
-                    Upload statement
-                  </Button>
-                </div>
               </>
             )}
           </CardContent>

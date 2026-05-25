@@ -70,7 +70,7 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 | `/jobs/{id}/results` | Results | Summary cards, reconciliation grid, export |
 | `/jobs/{id}/review` | Review queue | Confirm / reject uncertain items |
 | `/upload` | Upload | Manual file submission (same as `POST /api/v1/jobs`) |
-| `/ingest` | Simulate ingest | Upload bank statement + push proofs via ingest API |
+| `/ingest` | Simulate ingest | Bank statement (upload file or select account ledger) + push proofs via ingest API |
 | `/queue` | Transaction queue | Buffer status by corridor, manual flush → jobs |
 | `/bank-accounts` | Bank accounts | Register accounts, upload statements, ledger view |
 | `/bank-accounts/{id}` | Account detail | Statements and uncleared entries for one account |

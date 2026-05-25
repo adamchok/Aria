@@ -210,16 +210,17 @@ export function UploadPage() {
                           </p>
                         )}
 
-                        <dl className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-slate-500">Statements</dt>
-                            <dd className="tabular-nums font-medium text-slate-900">
+                        <dl className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                          <div>
+                            <span className="tabular-nums font-medium text-slate-900">
                               {selectedAccount.statement_count}
-                            </dd>
+                            </span>{' '}
+                            <span className="text-slate-600">
+                              {selectedAccount.statement_count === 1 ? 'statement' : 'statements'}
+                            </span>
                           </div>
-                          <div className="mt-1 flex justify-between gap-4">
-                            <dt className="text-slate-500">Pending entries</dt>
-                            <dd
+                          <div>
+                            <span
                               className={`tabular-nums font-medium ${
                                 selectedAccount.uncleared_count > 0
                                   ? 'text-amber-700'
@@ -227,7 +228,11 @@ export function UploadPage() {
                               }`}
                             >
                               {selectedAccount.uncleared_count}
-                            </dd>
+                            </span>{' '}
+                            <span className="text-slate-600">
+                              pending{' '}
+                              {selectedAccount.uncleared_count === 1 ? 'entry' : 'entries'}
+                            </span>
                           </div>
                         </dl>
                       </>

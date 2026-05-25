@@ -57,4 +57,21 @@ describe('IngestPage', () => {
       expect(screen.getByRole('status')).toHaveTextContent(/uploaded 2 ledger entries/i),
     );
   });
+
+  it('shows pending ledger summary when using from bank account tab', async () => {
+    renderWithProviders(<IngestPage />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /From bank account/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: /Main Operating Account/i })).toBeInTheDocument(),
+    );
+    await userEvent.selectOptions(screen.getByLabelText('Bank account'), [
+      screen.getByRole('option', { name: /Main Operating Account/i }),
+    ]);
+
+    expect(screen.getByText(/pending ledger entries across/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Drop bank statement file input/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /upload statement/i })).not.toBeInTheDocument();
+  });
 });
