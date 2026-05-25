@@ -57,15 +57,15 @@ export function LoginPage() {
             A
           </span>
           <span className="flex flex-col leading-none">
-            <span className="text-base font-semibold text-white">ARIA Mgmt</span>
-            <span className="text-[10px] font-medium uppercase tracking-widest text-violet-200">Tenant Console</span>
+            <span className="text-base font-semibold text-white">My Account</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-violet-200">Account Portal</span>
           </span>
         </div>
 
         {/* Center content */}
         <div className="flex flex-col gap-6">
           <h1 className="text-3xl font-bold leading-snug text-white">
-            Configure your tenant's reconciliation settings.
+            Manage your reconciliation account settings.
           </h1>
           <p className="text-sm text-violet-200 leading-relaxed">
             Manage API credentials, webhooks, bank account integrations, and monitor AI reconciliation performance — all from one place.
@@ -94,12 +94,12 @@ export function LoginPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-600 text-xs font-bold text-white">
               A
             </span>
-            <span className="text-sm font-semibold text-slate-900">ARIA Mgmt</span>
+            <span className="text-sm font-semibold text-slate-900">My Account</span>
           </div>
 
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-900">Sign in</h2>
-            <p className="mt-1 text-sm text-slate-500">Tenant configuration workspace</p>
+            <p className="mt-1 text-sm text-slate-500">Account management</p>
           </div>
 
           <form
@@ -144,7 +144,7 @@ export function LoginPage() {
           </form>
 
           <p className="mt-8 text-xs text-slate-400">
-            Access is restricted to authorised tenant administrators. Contact your platform admin if you need an account.
+            Access is managed by your organisation. Contact support if you need help signing in.
           </p>
         </div>
       </div>

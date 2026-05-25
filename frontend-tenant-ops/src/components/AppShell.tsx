@@ -102,13 +102,13 @@ const navSections: NavSection[] = [
       { to: '/dashboard', label: 'Dashboard', icon: <LayoutIcon /> },
       { to: '/jobs', label: 'Jobs', icon: <BriefcaseIcon /> },
       { to: '/bank-accounts', label: 'Bank Accounts', icon: <BankIcon /> },
+      { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
     ],
   },
   {
     label: 'Integration',
     items: [
       { to: '/ingest', label: 'Simulate ingest', icon: <ApiIcon /> },
-      { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
     ],
   },
 ];
@@ -141,12 +141,12 @@ export function AppShell({ children }: AppShellProps) {
               className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">
-                A
+                N
               </span>
               <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-white">ARIA Portal</span>
+                <span className="text-sm font-semibold text-white">NovaPay</span>
                 <span className="text-[9px] font-medium uppercase tracking-widest text-teal-400">
-                  Client
+                  Finance Ops
                 </span>
               </div>
             </Link>
@@ -238,9 +238,9 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
         <footer className="border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-400">
-          <span className="font-medium text-slate-600">ARIA Reconciliation</span>
+          <span className="font-medium text-slate-600">NovaPay Finance</span>
           {' · '}
-          <span>Client Portal</span>
+          <span>Reconciliation</span>
           {' · '}
           <span>AI Marathon 2026 — Track 3</span>
         </footer>

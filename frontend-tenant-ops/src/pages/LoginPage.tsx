@@ -53,12 +53,12 @@ export function LoginPage() {
         {/* Logo */}
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500 text-sm font-bold text-white">
-            A
+            N
           </span>
           <div className="flex flex-col leading-tight">
-            <span className="text-base font-semibold text-white">ARIA Portal</span>
+            <span className="text-base font-semibold text-white">NovaPay</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-teal-400">
-              Client Workspace
+              Finance Workspace
             </span>
           </div>
         </div>
@@ -70,7 +70,7 @@ export function LoginPage() {
               Reconcile cross-border payments with AI confidence.
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-slate-400">
-              Upload payment proofs and bank statements. ARIA extracts, normalises, and matches
+              Upload payment proofs and bank statements. Our AI engine extracts, normalises, and matches
               transactions across corridors — flagging only what needs your attention.
             </p>
           </div>
@@ -87,7 +87,7 @@ export function LoginPage() {
 
         {/* Footer */}
         <p className="text-xs text-slate-700">
-          ARIA · AI Marathon 2026 — Track 3: Global Treasury Agent
+          NovaPay Finance · AI Marathon 2026 — Track 3: Global Treasury Agent
         </p>
       </div>
 
@@ -97,14 +97,14 @@ export function LoginPage() {
           {/* Mobile logo */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500 text-sm font-bold text-white">
-              A
+              N
             </span>
-            <span className="text-base font-semibold text-slate-900">ARIA Portal</span>
+            <span className="text-base font-semibold text-slate-900">NovaPay</span>
           </div>
 
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900">Sign in</h2>
-            <p className="mt-1 text-sm text-slate-500">Finance officer reconciliation workspace</p>
+            <p className="mt-1 text-sm text-slate-500">Your reconciliation workspace</p>
           </div>
 
           <form

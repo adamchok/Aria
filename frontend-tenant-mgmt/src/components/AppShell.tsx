@@ -150,8 +150,8 @@ export function AppShell({ children }: AppShellProps) {
                 A
               </span>
               <span className="flex flex-col leading-none">
-                <span className="text-sm font-semibold text-slate-900">ARIA Mgmt</span>
-                <span className="text-[9px] font-medium uppercase tracking-widest text-violet-500">Tenant</span>
+                <span className="text-sm font-semibold text-slate-900">My Account</span>
+                <span className="text-[9px] font-medium uppercase tracking-widest text-violet-500">Settings</span>
               </span>
             </Link>
           )}
@@ -217,7 +217,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
         <footer className="border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-500">
-          ARIA Reconciliation · Tenant Config · AI Marathon 2026 — Track 3
+          ARIA Reconciliation · My Account · AI Marathon 2026 — Track 3
         </footer>
       </div>
     </div>

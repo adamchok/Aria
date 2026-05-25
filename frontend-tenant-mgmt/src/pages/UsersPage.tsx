@@ -30,7 +30,7 @@ export function UsersPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Users</h1>
-        <p className="mt-1 text-sm text-slate-500">Invite tenant users for ops and mgmt apps</p>
+        <p className="mt-1 text-sm text-slate-500">Invite team members to access your account</p>
       </div>
 
       <Card>
@@ -86,7 +86,7 @@ export function UsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tenant users</CardTitle>
+          <CardTitle>Team members</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {usersQuery.isLoading && (

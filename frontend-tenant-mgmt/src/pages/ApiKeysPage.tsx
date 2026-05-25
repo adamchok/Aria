@@ -42,7 +42,7 @@ export function ApiKeysPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">API Keys</h1>
-        <p className="mt-1 text-sm text-slate-500">Programmatic access keys for your tenant</p>
+        <p className="mt-1 text-sm text-slate-500">Programmatic access keys for your account</p>
       </div>
 
       {newKey && (
