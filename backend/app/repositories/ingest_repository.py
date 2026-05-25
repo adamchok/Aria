@@ -24,7 +24,7 @@ class IngestRepository:
             TransactionBufferORM(
                 tenant_id=str(tenant_id),
                 payload=item,
-                corridor=item.get("corridor", "UNKNOWN").upper(),
+                corridor=(item.get("corridor") or "UNKNOWN").upper(),
             )
             for item in items
         ]

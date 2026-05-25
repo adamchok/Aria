@@ -247,13 +247,21 @@ class TransactionIngestItem(_Base):
     payment_proof_b64: str | None = None
     storage_key: str | None = None
     bank_entry: "BankEntry | None" = None
-    corridor: str = Field(description="e.g. 'USD/MYR'")
-    value_date: date
+    corridor: str | None = Field(
+        default=None,
+        description="Optional hint e.g. 'USD/MYR'. Used only for queue display — "
+                    "the pipeline auto-detects currency from the document.",
+    )
+    value_date: date | None = Field(
+        default=None,
+        description="Optional hint for the value date. Ignored by the pipeline — "
+                    "extracted from the document by the ingestion agent.",
+    )
 
     @field_validator("corridor")
     @classmethod
-    def _upper_corridor(cls, v: str) -> str:
-        return v.upper()
+    def _upper_corridor(cls, v: str | None) -> str | None:
+        return v.upper() if v else None
 
 
 class TransactionIngestRequest(_Base):
