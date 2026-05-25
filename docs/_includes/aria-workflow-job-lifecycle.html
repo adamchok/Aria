@@ -1,0 +1,66 @@
+<div class="aria-pipeline-widget" data-aria-pipeline>
+  <div class="aria-pipeline-widget__panel" aria-live="polite">
+    <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="submit">
+      <h3>Submit</h3>
+      <p>Client uploads payment proofs and bank data; the API persists files and enqueues work.</p>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>POST /api/v1/jobs</code> (multipart) or continuous ingest → auto-batch.</li>
+        <li>Files stored in MinIO; job row created with status <span class="aria-badge aria-badge--neutral">PENDING</span>.</li>
+        <li>Celery task enqueued on Redis (inline fallback when Redis unavailable).</li>
+        <li>Webhook: <code>job.created</code> fires immediately.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="process" hidden>
+      <h3>Process</h3>
+      <p>Worker runs the OpenAI Agents SDK pipeline; status moves to <span class="aria-badge aria-badge--progress">RUNNING</span>.</p>
+      <ul>
+        <li>Progress updated per agent stage (<code>progress_pct</code>, <code>agents_completed</code>).</li>
+        <li>SSE stream: <code>GET /api/v1/jobs/{job_id}/stream</code> — poll fallback via <code>GET /jobs/{id}</code>.</li>
+        <li>Webhooks: <code>job.stage_completed</code> after each stage (ingestion, normalisation, matching, report).</li>
+        <li>Typical latency: &lt; 60 s for a 50-transaction batch in mock or live mode.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="complete" hidden>
+      <h3>Complete</h3>
+      <p>Pipeline finishes; report stored and terminal status set.</p>
+      <ul>
+        <li><span class="aria-badge aria-badge--matched">COMPLETED</span> — all matches resolved above threshold.</li>
+        <li><span class="aria-badge aria-badge--uncertain">AWAITING_REVIEW</span> — uncertain items (0.50–0.74) need human decision.</li>
+        <li><span class="aria-badge aria-badge--unmatched">FAILED</span> — unrecoverable extraction, storage, or pipeline error.</li>
+        <li>Results: <code>GET /api/v1/jobs/{job_id}/results</code>; webhooks <code>job.completed</code> or <code>job.review_required</code>.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
+      <h3>Review</h3>
+      <p>Optional human step when status is <span class="aria-badge aria-badge--uncertain">AWAITING_REVIEW</span>.</p>
+      <ul>
+        <li><code>GET /api/v1/jobs/{job_id}/review</code> — returns only <code>UNCERTAIN</code> items.</li>
+        <li><code>POST /api/v1/jobs/{job_id}/review/{match_id}</code> — confirm, reject, or manual_match (idempotent).</li>
+        <li><code>GET /api/v1/jobs/{job_id}/bank-entries</code> — picker for manual match.</li>
+        <li>Results and export update immediately after each decision; job moves to <span class="aria-badge aria-badge--matched">COMPLETED</span>.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="export" hidden>
+      <h3>Export</h3>
+      <p>Download audit-ready Excel once results are available.</p>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>GET /api/v1/jobs/{job_id}/export</code></li>
+        <li>Sheets: Summary, Matched, Exceptions, Audit Log.</li>
+        <li>Includes human review outcomes when applicable.</li>
+        <li><strong>Content-Disposition:</strong> <code>attachment; filename="aria-reconciliation-{job_id}.xlsx"</code></li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="aria-pipeline" role="tablist" aria-label="Job lifecycle stages">
+    <button type="button" class="aria-pipeline__step aria-pipeline__step--active" role="tab" data-step-target="submit" aria-selected="true">Submit</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="process" aria-selected="false" tabindex="-1">Process</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="complete" aria-selected="false" tabindex="-1">Complete</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="review" aria-selected="false" tabindex="-1">Review</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="export" aria-selected="false" tabindex="-1">Export</button>
+  </div>
+</div>

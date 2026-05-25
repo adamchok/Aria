@@ -1,0 +1,42 @@
+<div class="aria-pipeline-widget" data-aria-pipeline>
+  <div class="aria-pipeline-widget__panel" aria-live="polite">
+    <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="upload">
+      <h3>Upload</h3>
+      <p>Payment proofs and bank data enter ARIA via multipart job submission or continuous ingest API.</p>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="extract" hidden>
+      <h3>Extract</h3>
+      <p>Multimodal agents extract structured payer, amount, date, and reference fields from any proof format.</p>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="normalise" hidden>
+      <h3>Normalise</h3>
+      <p>FX conversion to base currency with corridor-specific tolerance windows for settlement variance.</p>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="match" hidden>
+      <h3>Match</h3>
+      <p>Fuzzy matching with explainable confidence scoring — auto-match at ≥ 75%, review queue at 50–74%.</p>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="report" hidden>
+      <h3>Report</h3>
+      <p>Audit-ready Excel export with summary stats, exceptions, and full reasoning chains.</p>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
+      <h3>Human review</h3>
+      <p>Finance officers confirm or override uncertain matches with side-by-side proof and bank line context.</p>
+    </article>
+  </div>
+
+  <div class="aria-pipeline" role="tablist" aria-label="Pipeline stages">
+    <button type="button" class="aria-pipeline__step aria-pipeline__step--active" role="tab" data-step-target="upload" aria-selected="true">Upload</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="extract" aria-selected="false" tabindex="-1">Extract</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="normalise" aria-selected="false" tabindex="-1">Normalise</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="match" aria-selected="false" tabindex="-1">Match</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="report" aria-selected="false" tabindex="-1">Report</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="review" aria-selected="false" tabindex="-1">Human review</button>
+  </div>
+</div>

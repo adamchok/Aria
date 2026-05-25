@@ -750,11 +750,7 @@ stateDiagram-v2
   FAILED --> [*]
 ```
 
-1. **Submit** — files uploaded to MinIO; job row created; Celery task enqueued
-2. **Process** — worker runs OpenAI Agents SDK pipeline; progress updated per stage
-3. **Complete** — report stored; status set to `COMPLETED` or `AWAITING_REVIEW`
-4. **Review** (optional) — human confirms or rejects uncertain matches; results and export update immediately
-5. **Export** — Excel generated from the hydrated report (includes review outcomes)
+{% include aria-workflow-job-lifecycle.html %}
 
 ---
 

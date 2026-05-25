@@ -225,11 +225,57 @@ $aria-font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monos
 
 // ─── Pipeline stepper (mirrors app JobStepper) ──────────────────────────────
 
+.aria-pipeline-widget {
+  margin: 1.25rem 0 1.75rem;
+
+  &__panel {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    min-height: 8rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  &__pane {
+    display: none;
+
+    &--active {
+      display: block;
+    }
+
+    h3 {
+      color: #0f172a;
+      font-size: 1.0625rem;
+      margin: 0 0 0.5rem;
+    }
+
+    p {
+      color: #475569;
+      font-size: 0.9375rem;
+      line-height: 1.55;
+      margin: 0 0 0.75rem;
+    }
+
+    ul {
+      color: #475569;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      margin: 0;
+      padding-left: 1.25rem;
+
+      li + li {
+        margin-top: 0.35rem;
+      }
+    }
+  }
+}
+
 .aria-pipeline {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 1.25rem 0 1.75rem;
+  margin: 0;
 }
 
 .aria-pipeline__step {
@@ -238,7 +284,9 @@ $aria-font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monos
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   color: #334155;
+  cursor: pointer;
   display: inline-flex;
+  font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
   gap: 0.4rem;
@@ -252,6 +300,16 @@ $aria-font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monos
 
   &:last-child::after {
     content: none;
+  }
+
+  &:hover {
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
   }
 
   &--active {

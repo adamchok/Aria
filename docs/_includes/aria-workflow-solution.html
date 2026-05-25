@@ -1,0 +1,72 @@
+<div class="aria-pipeline-widget" data-aria-pipeline>
+  <div class="aria-pipeline-widget__panel" aria-live="polite">
+    <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="upload">
+      <h3>Upload</h3>
+      <p>Finance teams submit payment proofs (images, PDFs, Excel) plus bank data in one job.</p>
+      <ul>
+        <li><strong>NovaPay:</strong> <code>/upload</code> — drag proofs; attach a statement file <em>or</em> select a registered bank account (all pending ledger entries included).</li>
+        <li><strong>API:</strong> <code>POST /api/v1/jobs</code> — multipart upload with <code>payment_proofs[]</code>, optional <code>bank_statement</code> or <code>bank_account_id</code>.</li>
+        <li><strong>Continuous ingest:</strong> external systems push proofs via <code>POST /api/v1/ingest/transactions</code>; statements land on bank accounts separately.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="extract" hidden>
+      <h3>Extract</h3>
+      <p>Specialist agents turn unstructured documents into typed <code>PaymentRecord</code> and <code>BankEntry</code> rows.</p>
+      <ul>
+        <li><strong>Payment proofs:</strong> vision-first for images; structured parsers for PDF/Excel/CSV with LLM fallback.</li>
+        <li><strong>Bank statements:</strong> LLM-first PDF extraction; pdfplumber fallback; XLSX/CSV via column-aware parsers.</li>
+        <li>Records with extraction confidence &lt; 0.5 route to human review; field-level flags below 0.7 surface in the UI.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="normalise" hidden>
+      <h3>Normalise</h3>
+      <p>Every payment proof is converted to the job base currency (default MYR) with an FX-aware tolerance window.</p>
+      <ul>
+        <li>Live and historical FX rates at invoice date and settlement date.</li>
+        <li>Estimated SWIFT charges deducted per corridor.</li>
+        <li>1.5% variance buffer (<code>FX_VARIANCE_BUFFER_PCT</code>) defines <code>tolerance_low</code> / <code>tolerance_high</code> for matching.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="match" hidden>
+      <h3>Match</h3>
+      <p>Three-stage matching combines deterministic filters with LLM reasoning and a composite confidence score.</p>
+      <ul>
+        <li><strong>Filter:</strong> date window ±5 days, amount within tolerance band.</li>
+        <li><strong>Score:</strong> amount 40%, date 20%, reference 30%, payer name 10%.</li>
+        <li>≥ 0.75 → auto-match; 0.50–0.74 → review queue; &lt; 0.50 → exception / unmatched.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="report" hidden>
+      <h3>Report</h3>
+      <p>ARIA synthesises a reconciliation narrative and exports an audit-ready Excel workbook.</p>
+      <ul>
+        <li>Summary cards: matched, uncertain, unmatched counts and total value in base currency.</li>
+        <li>Variance explanations in plain language for every line item.</li>
+        <li>Excel export: Summary, Matched, Exceptions, and Audit Log sheets.</li>
+      </ul>
+    </article>
+
+    <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
+      <h3>Review</h3>
+      <p>Uncertain matches (confidence 0.50–0.74) never auto-confirm — finance officers decide with full context.</p>
+      <ul>
+        <li><strong>NovaPay:</strong> <code>/jobs/{id}/review</code> — side-by-side proof vs candidate bank lines.</li>
+        <li>Actions: confirm, reject, or manual match with bank entry picker.</li>
+        <li>Every decision is logged with reasoning chain, confidence, and optional reviewer note.</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="aria-pipeline" role="tablist" aria-label="Pipeline stages">
+    <button type="button" class="aria-pipeline__step aria-pipeline__step--active" role="tab" data-step-target="upload" aria-selected="true">Upload</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="extract" aria-selected="false" tabindex="-1">Extract</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="normalise" aria-selected="false" tabindex="-1">Normalise</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="match" aria-selected="false" tabindex="-1">Match</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="report" aria-selected="false" tabindex="-1">Report</button>
+    <button type="button" class="aria-pipeline__step" role="tab" data-step-target="review" aria-selected="false" tabindex="-1">Review</button>
+  </div>
+</div>

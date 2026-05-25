@@ -82,12 +82,7 @@ flowchart TD
   HR --> RE
 ```
 
-<div class="aria-pipeline">
-  <span class="aria-pipeline__step aria-pipeline__step--active">Ingestion</span>
-  <span class="aria-pipeline__step">Normalisation</span>
-  <span class="aria-pipeline__step">Matching</span>
-  <span class="aria-pipeline__step">Report</span>
-</div>
+{% include aria-workflow-architecture.html %}
 
 ### Agent responsibilities
 

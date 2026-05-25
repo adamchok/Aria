@@ -28,14 +28,7 @@ permalink: /
 
 ## Pipeline at a glance
 
-<div class="aria-pipeline">
-  <span class="aria-pipeline__step">Upload</span>
-  <span class="aria-pipeline__step aria-pipeline__step--active">Extract</span>
-  <span class="aria-pipeline__step">Normalise</span>
-  <span class="aria-pipeline__step">Match</span>
-  <span class="aria-pipeline__step">Report</span>
-  <span class="aria-pipeline__step">Human review</span>
-</div>
+{% include aria-workflow-overview.html %}
 
 ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance teams upload payment proofs (screenshots, PDFs, Excel) and a bank statement. An OpenAI Agents SDK pipeline with Anthropic Claude specialists extracts structured data, converts amounts to a base currency with live FX rates, matches transactions with explainable confidence scoring, and exports an audit-ready Excel report.
 
