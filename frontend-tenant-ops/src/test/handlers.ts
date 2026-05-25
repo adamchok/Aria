@@ -9,6 +9,8 @@ import {
   jobStatusCompleted,
   ledgerPageFixture,
   loginResponseFixture,
+  queueFixture,
+  ingestResponseFixture,
   reportFixture,
   statementFixture,
   uncertainItem,
@@ -98,6 +100,18 @@ export const handlers = [
   ),
   http.get(`http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/ledger`, () =>
     HttpResponse.json(ledgerPageFixture),
+  ),
+
+  http.post('http://localhost/api/v1/ingest/transactions', async ({ request }) => {
+    const body = (await request.json()) as { transactions: unknown[] };
+    return HttpResponse.json(
+      { ...ingestResponseFixture, buffered: body.transactions.length },
+      { status: 202 },
+    );
+  }),
+  http.get('http://localhost/api/v1/ingest/queue', () => HttpResponse.json(queueFixture)),
+  http.post('http://localhost/api/v1/ingest/queue/flush', () =>
+    HttpResponse.json({ status: 'flush_queued', tenant_id: ACCOUNT_ID.replace(/^c/, '0') }),
   ),
 ];
 

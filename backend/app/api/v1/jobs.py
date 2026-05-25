@@ -13,6 +13,16 @@ from app.core.exceptions import JobNotFoundError
 from app.core.logging import bind_job_id, get_logger
 from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, SourceFormat
+
+_TERMINAL_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+_CANCELLABLE_STATUSES = {
+    JobStatus.PENDING,
+    JobStatus.INGESTING,
+    JobStatus.NORMALISING,
+    JobStatus.MATCHING,
+    JobStatus.REPORTING,
+    JobStatus.AWAITING_REVIEW,
+}
 from app.models.schemas import (
     BankEntry,
     JobCreateResponse,
@@ -312,3 +322,60 @@ async def get_job_bank_entries(
 
     ledger = BankLedgerRepository(session, tenant_id=tenant_id)
     return await list_job_bank_entries(job, repo, ledger)
+
+
+@router.post("/{job_id}/cancel", response_model=JobStatusResponse)
+async def cancel_job(
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
+) -> JobStatusResponse:
+    repo = JobRepository(session, tenant_id=tenant_id)
+    try:
+        job = await repo.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if JobStatus(job.status) not in _CANCELLABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is {job.status} and cannot be cancelled.",
+        )
+
+    job = await repo.update_status(
+        job_id,
+        status=JobStatus.CANCELLED,
+        error="Cancelled by user",
+    )
+    return JobStatusResponse(
+        job_id=UUID(job.id),
+        status=JobStatus(job.status),
+        progress_pct=job.progress_pct,
+        agents_completed=list(job.agents_completed or []),
+        error=job.error,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job(
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
+) -> None:
+    repo = JobRepository(session, tenant_id=tenant_id)
+    try:
+        job = await repo.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if JobStatus(job.status) not in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is {job.status}. Cancel the job before deleting.",
+        )
+
+    await repo.delete_job(job_id)

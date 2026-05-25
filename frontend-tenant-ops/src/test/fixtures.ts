@@ -10,6 +10,7 @@ import type {
   LedgerPageResponse,
   LoginResponse,
   MatchResult,
+  QueueStatusResponse,
   ReconciliationReport,
   UserResponse,
 } from '@/types/api';
@@ -216,4 +217,19 @@ export const reportFixture: ReconciliationReport = {
     processing_seconds: 28.4,
   },
   matches: [matchedItem, uncertainItem],
+};
+
+export const queueFixture: QueueStatusResponse = {
+  tenant_id: TENANT_ID,
+  total_buffered: 6,
+  next_batch_trigger: 'count',
+  by_corridor: [
+    { corridor: 'USD/MYR', buffered_count: 4, oldest_received_at: '2026-05-23T08:00:00Z' },
+    { corridor: 'EUR/MYR', buffered_count: 2, oldest_received_at: '2026-05-23T09:00:00Z' },
+  ],
+};
+
+export const ingestResponseFixture = {
+  buffered: 2,
+  tenant_id: TENANT_ID,
 };

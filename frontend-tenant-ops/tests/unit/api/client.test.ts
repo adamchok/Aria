@@ -81,4 +81,37 @@ describe('api client', () => {
     expect(url).toContain(`/api/v1/jobs/${JOB_ID}/export`);
     expect(url).toContain('access_token=test-token');
   });
+
+  it('getQueueStatus parses ingest queue response', async () => {
+    const { queueFixture } = await import('@/test/fixtures');
+    expect((await api.getQueueStatus()).total_buffered).toBe(queueFixture.total_buffered);
+  });
+
+  it('ingestTransactions POSTs JSON payload', async () => {
+    let path = '';
+    server.use(
+      http.post('http://localhost/api/v1/ingest/transactions', ({ request }) => {
+        path = new URL(request.url).pathname;
+        return HttpResponse.json({ buffered: 1, tenant_id: tenantUserFixture.tenant_id }, { status: 202 });
+      }),
+    );
+
+    const result = await api.ingestTransactions({
+      transactions: [{ payment_proof_b64: 'abc', corridor: 'USD/MYR', value_date: '2026-05-24' }],
+    });
+    expect(path).toContain('/ingest/transactions');
+    expect(result.buffered).toBe(1);
+  });
+
+  it('flushQueue POSTs to ingest flush endpoint', async () => {
+    let path = '';
+    server.use(
+      http.post('http://localhost/api/v1/ingest/queue/flush', ({ request }) => {
+        path = new URL(request.url).pathname;
+        return HttpResponse.json({ status: 'flush_queued' });
+      }),
+    );
+    await api.flushQueue();
+    expect(path).toContain('/ingest/queue/flush');
+  });
 });

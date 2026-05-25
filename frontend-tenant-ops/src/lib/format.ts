@@ -77,6 +77,14 @@ export function formatDate(iso: string): string {
   return iso;
 }
 
+export function formatDateTime(iso: string): string {
+  // Returns "YYYY-MM-DD HH:MM" in local time.
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('sv'); // sv locale gives YYYY-MM-DD
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date} ${time}`;
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;

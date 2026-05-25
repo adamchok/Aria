@@ -65,6 +65,8 @@ flowchart LR
 | `/jobs/{id}/results` | Results | Summary cards, reconciliation grid, export |
 | `/jobs/{id}/review` | Review queue | Confirm / reject uncertain items |
 | `/upload` | Upload | Manual file submission |
+| `/ingest` | Simulate ingest | Upload bank statement + push proofs via ingest API |
+| `/queue` | Transaction queue | Buffer status by corridor, manual flush → jobs |
 
 #### Admin app — platform (`:5174`)
 
@@ -103,10 +105,13 @@ flowchart LR
 
 ### What an external SME system does (API integration flow)
 
-1. **Authenticate** — obtain a tenant API key from Tenant mgmt → Keys (`/keys`), or use JWT from `POST /api/v1/auth/login`
-2. **Ingest** — `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata
-3. **Receive** — register a webhook (`POST /api/v1/webhooks`); receive `job.completed` event with HMAC-signed payload when reconciliation finishes
-4. **Retrieve** — call `GET /api/v1/jobs/{id}/results` for the full report, or follow the SSE stream
+Demo this flow from **Tenant Ops** (`:5173`) — the Ops app simulates the external ERP pushing data into ARIA:
+
+1. **Authenticate** — sign in to Ops, or obtain a tenant API key from Tenant mgmt → Keys (`/keys`)
+2. **Ingest** — Ops → **Simulate ingest** (`/ingest`) calls `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata; or call the API directly with the key
+3. **Batch** — buffered items auto-batch via Celery Beat, or flush manually from Ops → **Queue** (`/queue`)
+4. **Receive** — register a webhook in Tenant mgmt (`POST /api/v1/webhooks`); receive `job.completed` with HMAC-signed payload when reconciliation finishes
+5. **Retrieve** — monitor jobs in Ops (`/jobs`), call `GET /api/v1/jobs/{id}/results`, or follow the SSE stream
 
 ## Key differentiators
 

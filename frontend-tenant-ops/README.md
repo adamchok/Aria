@@ -1,6 +1,6 @@
 # ARIA Tenant Ops
 
-Reconciliation operations app for finance officers — upload, job monitoring, results, and human review.
+Reconciliation operations app for finance officers — upload, job monitoring, results, human review, and **external-system simulation** (ingest API + queue).
 
 React 18 + TypeScript · Vite · Tailwind · TanStack Query · AG Grid · JWT auth.
 
@@ -38,7 +38,11 @@ Sign in with a **tenant user** account created in the Admin UI (`frontend-admin`
 /jobs/:id                   Live progress (SSE + polling fallback)
 /jobs/:id/results           Reconciliation dashboard + Excel export
 /jobs/:id/review            Human review queue (UNCERTAIN items)
-/upload                     New reconciliation job
+/upload                     New reconciliation job (manual UI)
+/ingest                     Bank statement upload + simulate POST /api/v1/ingest/transactions
+/queue                      Ingest buffer status and manual flush
+/bank-accounts              Register accounts and ledger (bank data for jobs)
+/bank-accounts/:id          Account detail, statements, ledger
 ```
 
 ## Architecture notes

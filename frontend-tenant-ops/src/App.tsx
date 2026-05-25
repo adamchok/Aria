@@ -5,9 +5,11 @@ import { TenantRoleRoute } from '@/components/TenantRoleRoute';
 import { BankAccountDetailPage } from '@/pages/BankAccountDetailPage';
 import { BankAccountsPage } from '@/pages/BankAccountsPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { IngestPage } from '@/pages/IngestPage';
 import { JobProgressPage } from '@/pages/JobProgressPage';
 import { JobsPage } from '@/pages/JobsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { QueuePage } from '@/pages/QueuePage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { ReviewPage } from '@/pages/ReviewPage';
 import { UploadPage } from '@/pages/UploadPage';
@@ -30,6 +32,8 @@ export default function App() {
                 <Route path="/jobs/:jobId/results" element={<ResultsPage />} />
                 <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
                 <Route path="/upload" element={<UploadPage />} />
+                <Route path="/ingest" element={<IngestPage />} />
+                <Route path="/queue" element={<QueuePage />} />
                 <Route path="/bank-accounts" element={<BankAccountsPage />} />
                 <Route path="/bank-accounts/:accountId" element={<BankAccountDetailPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />

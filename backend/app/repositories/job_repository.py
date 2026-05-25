@@ -202,3 +202,8 @@ class JobRepository:
             select(AuditLogORM).where(AuditLogORM.job_id == str(job_id)).order_by(AuditLogORM.timestamp)
         )
         return list(result.scalars().all())
+
+    async def delete_job(self, job_id: UUID | str) -> None:
+        job = await self.get(job_id)
+        await self._s.delete(job)
+        await self._s.commit()

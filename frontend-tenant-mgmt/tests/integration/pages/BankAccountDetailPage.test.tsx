@@ -41,4 +41,21 @@ describe('BankAccountDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /edit entry inv-001/i }));
     expect(screen.getByRole('heading', { name: /edit ledger entry/i })).toBeInTheDocument();
   });
+
+  it('uploads a bank statement via the dropzone modal', async () => {
+    renderWithProviders(<Harness />, { initialEntries: [`/bank-accounts/${ACCOUNT_ID}`] });
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /main operating account/i })).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /upload statement/i }));
+
+    const stmtInput = screen.getByLabelText(/Drop bank statement file input/i) as HTMLInputElement;
+    await userEvent.upload(stmtInput, new File(['stmt'], 'june.csv', { type: 'text/csv' }));
+    await userEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /upload bank statement/i })).not.toBeInTheDocument(),
+    );
+  });
 });

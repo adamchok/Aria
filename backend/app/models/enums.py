@@ -21,6 +21,7 @@ class JobStatus(StrEnum):
     AWAITING_REVIEW = "AWAITING_REVIEW"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class MatchStatus(StrEnum):

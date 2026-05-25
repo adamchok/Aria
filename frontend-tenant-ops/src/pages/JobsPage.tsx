@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { JobStatusBadge } from '@/components/JobStatusBadge';
-import { formatDate } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { JobStatus } from '@/types/api';
-import type { JobStatus as JobStatusType } from '@/types/api';
+import type { JobListItem, JobStatus as JobStatusType, UUID } from '@/types/api';
 
 const STATUS_FILTERS: { label: string; value: JobStatusType | '' }[] = [
   { label: 'All', value: '' },
@@ -15,9 +15,114 @@ const STATUS_FILTERS: { label: string; value: JobStatusType | '' }[] = [
   { label: 'Awaiting review', value: JobStatus.AWAITING_REVIEW },
   { label: 'Completed', value: JobStatus.COMPLETED },
   { label: 'Failed', value: JobStatus.FAILED },
+  { label: 'Cancelled', value: JobStatus.CANCELLED },
 ];
 
+const TERMINAL_STATUSES: Set<JobStatusType> = new Set([
+  JobStatus.COMPLETED,
+  JobStatus.FAILED,
+  JobStatus.CANCELLED,
+]);
+
+const CANCELLABLE_STATUSES: Set<JobStatusType> = new Set([
+  JobStatus.PENDING,
+  JobStatus.INGESTING,
+  JobStatus.NORMALISING,
+  JobStatus.MATCHING,
+  JobStatus.REPORTING,
+  JobStatus.AWAITING_REVIEW,
+]);
+
 const PAGE_SIZE = 20;
+
+function ConfirmButton({
+  label,
+  confirmLabel,
+  onClick,
+  className,
+}: {
+  label: string;
+  confirmLabel: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <span className="flex items-center gap-1">
+        <button
+          onClick={() => {
+            setConfirming(false);
+            onClick();
+          }}
+          className={`text-xs font-medium underline ${className ?? ''}`}
+        >
+          {confirmLabel}
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          className="text-xs text-slate-400 underline hover:text-slate-600"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setConfirming(true)}
+      className={`text-xs font-medium underline ${className ?? ''}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function JobActions({ job }: { job: JobListItem }) {
+  const qc = useQueryClient();
+
+  const cancelMutation = useMutation({
+    mutationFn: () => api.cancelJob(job.job_id as UUID),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['jobs', 'list'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteJob(job.job_id as UUID),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['jobs', 'list'] }),
+  });
+
+  const isTerminal = TERMINAL_STATUSES.has(job.status);
+  const isCancellable = CANCELLABLE_STATUSES.has(job.status);
+
+  return (
+    <span className="flex items-center justify-end gap-3">
+      <Link
+        to={`/jobs/${job.job_id}`}
+        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+      >
+        View
+      </Link>
+      {isCancellable && (
+        <ConfirmButton
+          label={cancelMutation.isPending ? 'Cancelling…' : 'Cancel'}
+          confirmLabel="Yes, cancel"
+          onClick={() => cancelMutation.mutate()}
+          className="text-amber-700 hover:text-amber-900"
+        />
+      )}
+      {isTerminal && (
+        <ConfirmButton
+          label={deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+          confirmLabel="Yes, delete"
+          onClick={() => deleteMutation.mutate()}
+          className="text-rose-600 hover:text-rose-800"
+        />
+      )}
+    </span>
+  );
+}
 
 export function JobsPage() {
   const [page, setPage] = useState(1);
@@ -124,14 +229,9 @@ export function JobsPage() {
                         <td className="px-3 py-3 text-sm tabular-nums text-slate-700">{job.record_count}</td>
                         <td className="px-3 py-3 text-sm tabular-nums text-emerald-700">{job.matched_count}</td>
                         <td className="px-3 py-3 text-sm tabular-nums text-amber-700">{job.uncertain_count}</td>
-                        <td className="px-3 py-3 text-xs text-slate-500">{formatDate(job.created_at.slice(0, 10))}</td>
+                        <td className="px-3 py-3 text-xs text-slate-500">{formatDateTime(job.created_at)}</td>
                         <td className="py-3 pl-3 pr-4 text-right">
-                          <Link
-                            to={`/jobs/${job.job_id}`}
-                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                          >
-                            View
-                          </Link>
+                          <JobActions job={job} />
                         </td>
                       </tr>
                     ))}

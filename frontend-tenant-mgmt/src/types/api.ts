@@ -18,6 +18,7 @@ export const JobStatus = {
   AWAITING_REVIEW: 'AWAITING_REVIEW',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
 } as const;
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 

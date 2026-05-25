@@ -4,10 +4,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { UploadDropzone } from '@/components/UploadDropzone';
+import { FileList } from '@/components/FileList';
 import { formatAmount, formatDate } from '@/lib/format';
 import type { BankAccountUpdate, LedgerEntryCreate, LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
 
 const PAGE_SIZE = 50;
+
+const BANK_STATEMENT_EXTENSIONS = ['.xlsx', '.csv', '.pdf'] as const;
+const BANK_STATEMENT_MIME = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
+  'application/pdf',
+]);
 
 function invalidateAccountQueries(qc: ReturnType<typeof useQueryClient>, accountId: string) {
   qc.invalidateQueries({ queryKey: ['bank-account', accountId] });
@@ -84,25 +94,21 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
           Upload bank statement
         </h2>
 
-        <label className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-slate-400">
-          {file ? (
-            <span className="text-sm font-medium text-slate-900">{file.name}</span>
-          ) : (
-            <>
-              <span className="text-sm text-slate-500">Click to select XLSX, CSV, or PDF</span>
-              <span className="text-xs text-slate-400">Bank statement for this account</span>
-            </>
-          )}
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv,.pdf"
-            className="sr-only"
-            onChange={(e) => {
-              setError(null);
-              setFile(e.target.files?.[0] ?? null);
-            }}
-          />
-        </label>
+        <UploadDropzone
+          label={file ? 'Replace bank statement' : 'Drop bank statement'}
+          onFiles={(uploaded) => {
+            setError(null);
+            setFile(uploaded[0] ?? null);
+          }}
+          helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
+          acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
+          acceptedMimeTypes={BANK_STATEMENT_MIME}
+        />
+        <FileList
+          files={file ? [file] : []}
+          onRemove={() => setFile(null)}
+          emptyLabel="No bank statement selected."
+        />
 
         {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 

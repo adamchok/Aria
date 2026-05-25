@@ -18,6 +18,9 @@ import type {
   ReconciliationReport,
   ReviewActionRequest,
   ReviewActionResponse,
+  TransactionIngestRequest,
+  TransactionIngestResponse,
+  QueueStatusResponse,
   UUID,
 } from '@/types/api';
 import { getAccessToken, useAuthStore } from '@/stores/auth-store';
@@ -207,6 +210,12 @@ export const api = {
   getJobBankEntries: (jobId: UUID): Promise<BankEntry[]> =>
     request<BankEntry[]>(`/api/v1/jobs/${jobId}/bank-entries`),
 
+  cancelJob: (jobId: UUID): Promise<JobStatusResponse> =>
+    request<JobStatusResponse>(`/api/v1/jobs/${jobId}/cancel`, { method: 'POST' }),
+
+  deleteJob: (jobId: UUID): Promise<void> =>
+    request<void>(`/api/v1/jobs/${jobId}`, { method: 'DELETE' }),
+
   submitReviewAction: (
     jobId: UUID,
     matchId: UUID,
@@ -222,6 +231,18 @@ export const api = {
     const qs = token ? `?access_token=${encodeURIComponent(token)}` : '';
     return `${API_BASE}/api/v1/jobs/${jobId}/export${qs}`;
   },
+
+  ingestTransactions: (payload: TransactionIngestRequest): Promise<TransactionIngestResponse> =>
+    request<TransactionIngestResponse>('/api/v1/ingest/transactions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getQueueStatus: (): Promise<QueueStatusResponse> =>
+    request<QueueStatusResponse>('/api/v1/ingest/queue'),
+
+  flushQueue: (): Promise<{ status: string }> =>
+    request<{ status: string }>('/api/v1/ingest/queue/flush', { method: 'POST' }),
 };
 
 export type Api = typeof api;

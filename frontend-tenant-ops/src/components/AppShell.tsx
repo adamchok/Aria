@@ -64,6 +64,23 @@ function BankIcon() {
   );
 }
 
+function InboxIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v12H4z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4-4h8l4 4" />
+    </svg>
+  );
+}
+
+function ApiIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3-3 3 3M12 6v12M5 19h14" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -78,6 +95,13 @@ const navSections: NavSection[] = [
       { to: '/dashboard', label: 'Dashboard', icon: <LayoutIcon /> },
       { to: '/jobs', label: 'Jobs', icon: <BriefcaseIcon /> },
       { to: '/bank-accounts', label: 'Bank Accounts', icon: <BankIcon /> },
+    ],
+  },
+  {
+    label: 'Integration',
+    items: [
+      { to: '/ingest', label: 'Simulate ingest', icon: <ApiIcon /> },
+      { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
     ],
   },
 ];
