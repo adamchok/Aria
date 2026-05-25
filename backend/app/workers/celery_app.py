@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+import sys
+
 from celery import Celery
 from celery.schedules import crontab
 
 from app.core.config import get_settings
+
+# asyncpg uses selector-based I/O; ProactorEventLoop (Windows default) corrupts
+# the IOCP port after the first asyncio.run() closes it, causing subsequent
+# asyncio.run() calls in the same worker process to hit
+# AttributeError: 'NoneType' object has no attribute 'send'.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 _settings = get_settings()
 
@@ -31,3 +42,5 @@ celery_app.conf.update(
         },
     },
 )
+if os.getenv("CELERY_TASK_ALWAYS_EAGER") == "1" or _settings.is_test:
+    celery_app.conf.task_always_eager = True

@@ -20,6 +20,19 @@ from app.workers.celery_app import celery_app
 logger = get_logger(__name__)
 
 
+def _dispose_engine() -> None:
+    """Synchronously dispose the async engine's connection pool.
+
+    asyncpg connections are bound to the event loop they were created in.
+    When asyncio.run() closes that loop, pooled connections become stale and
+    cause 'NoneType has no attribute send' / 'Event loop is closed' errors in
+    subsequent asyncio.run() calls within the same worker process.
+    sync_engine.dispose() tears down the pool without requiring a running loop.
+    """
+    from app.core.database import get_engine
+    get_engine().sync_engine.dispose()
+
+
 # ─── Pipeline ────────────────────────────────────────────────────────────────
 
 @celery_app.task(name="aria.run_pipeline", bind=True, max_retries=2, default_retry_delay=10)
@@ -30,6 +43,8 @@ def run_pipeline_task(self, job_id: str) -> None:  # pragma: no cover
     except Exception as exc:
         logger.exception("celery.pipeline.error", error=str(exc))
         raise self.retry(exc=exc)
+    finally:
+        _dispose_engine()
 
 
 async def enqueue_job(job_id: str | UUID) -> None:
@@ -55,7 +70,10 @@ async def enqueue_job(job_id: str | UUID) -> None:
 @celery_app.task(name="aria.auto_batch_transactions")
 def auto_batch_transactions() -> None:
     """Celery Beat: scan buffer, create jobs when thresholds met."""
-    asyncio.run(_auto_batch_async())
+    try:
+        asyncio.run(_auto_batch_async())
+    finally:
+        _dispose_engine()
 
 
 async def _resolve_batch_bank_account_id(session, tenant_id: str) -> str | None:
@@ -156,7 +174,10 @@ async def _auto_batch_async() -> None:
 @celery_app.task(name="aria.batch_tenant_transactions")
 def batch_tenant_transactions(tenant_id: str) -> None:
     """Manual flush: immediately batch a single tenant's buffer."""
-    asyncio.run(_batch_one_tenant(tenant_id))
+    try:
+        asyncio.run(_batch_one_tenant(tenant_id))
+    finally:
+        _dispose_engine()
 
 
 async def _batch_one_tenant(tenant_id: str) -> None:
@@ -205,11 +226,14 @@ async def _batch_one_tenant(tenant_id: str) -> None:
 # ─── Webhook delivery ────────────────────────────────────────────────────────
 
 @celery_app.task(name="aria.deliver_webhook", bind=True, max_retries=3)
-def deliver_webhook_task(self, webhook_id: str, job_id: str, event: str) -> None:
-    asyncio.run(_deliver_webhook(self, webhook_id, job_id, event))
+def deliver_webhook_task(self, webhook_id: str, job_id: str | None, event: str) -> None:
+    try:
+        asyncio.run(_deliver_webhook(self, webhook_id, job_id, event))
+    finally:
+        _dispose_engine()
 
 
-async def _deliver_webhook(task, webhook_id: str, job_id: str, event: str) -> None:
+async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str) -> None:
     from app.core.database import session_scope
     from app.models.enums import WebhookDeliveryStatus
     from app.repositories.webhook_repository import WebhookRepository
@@ -231,13 +255,14 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str, event: str) -> No
         delivery = await repo.create_delivery(webhook_id, job_id, event)
 
     # Build payload
-    payload = {
+    payload: dict[str, str] = {
         "event": event,
         "api_version": "2026-05-24",
         "webhook_id": webhook_id,
-        "job_id": job_id,
         "created_at": datetime.utcnow().isoformat() + "Z",
     }
+    if job_id is not None:
+        payload["job_id"] = job_id
     body = json.dumps(payload).encode()
     timestamp = int(time.time())
     signature = sign_webhook_payload(webhook.secret, timestamp, body)
@@ -275,7 +300,7 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str, event: str) -> No
             backoff = settings.webhook_retry_backoff_base_seconds * (2 ** task.request.retries)
             raise task.retry(exc=Exception(f"HTTP {response_code}"), countdown=backoff)
 
-        logger.info("webhook.delivered", webhook_id=webhook_id, job_id=job_id, event=event)
+        logger.info("webhook.delivered", webhook_id=webhook_id, job_id=job_id, webhook_event=event)
 
     except httpx.RequestError as exc:
         backoff = settings.webhook_retry_backoff_base_seconds * (2 ** task.request.retries)
