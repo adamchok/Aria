@@ -8,6 +8,9 @@ from pathlib import Path
 import openpyxl
 import pytest
 
+from app.models.enums import JobStatus
+from app.repositories.job_repository import JobRepository
+
 
 @pytest.mark.asyncio
 async def test_export_returns_xlsx_stream(api_client, fixtures_dir: Path):
@@ -27,3 +30,20 @@ async def test_export_returns_xlsx_stream(api_client, fixtures_dir: Path):
     assert "spreadsheetml" in resp.headers["content-type"]
     wb = openpyxl.load_workbook(io.BytesIO(resp.content))
     assert {"Summary", "Matched", "Exceptions", "Audit Log"} <= set(wb.sheetnames)
+
+
+@pytest.mark.asyncio
+async def test_export_404_for_other_tenant_job(api_client, db_session):
+    """Jobs belonging to another tenant must not be exportable."""
+    other_repo = JobRepository(db_session, tenant_id="other-tenant")
+    job = await other_repo.create_job(
+        base_currency="MYR",
+        payment_proof_keys=["proofs/other.png"],
+        bank_statement_key="statements/other.csv",
+        tenant_id="other-tenant",
+    )
+    await other_repo.update_status(job.id, status=JobStatus.COMPLETED)
+    await other_repo.save_report(job.id, {"summary": {"total_records": 0}})
+
+    resp = await api_client.get(f"/api/v1/jobs/{job.id}/export")
+    assert resp.status_code == 404

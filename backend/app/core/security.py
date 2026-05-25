@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import secrets
@@ -11,9 +12,11 @@ from typing import Any
 
 import bcrypt
 import jwt
+from cryptography.fernet import Fernet, InvalidToken
 
 _KEY_PREFIX = "aria_"
 _KEY_BYTES = 32  # 256-bit raw key
+_WEBHOOK_SECRET_PREFIX = "whsec_"
 
 
 # ─── Password helpers ────────────────────────────────────────────────────────
@@ -66,8 +69,42 @@ def hash_key(raw_key: str) -> str:
 
 def generate_webhook_secret() -> tuple[str, str]:
     """Return (raw_secret, secret_hash). Store only the hash; show raw once."""
-    raw = "whsec_" + secrets.token_hex(_KEY_BYTES)
+    raw = _WEBHOOK_SECRET_PREFIX + secrets.token_hex(_KEY_BYTES)
     return raw, hash_key(raw)
+
+
+def _webhook_fernet(encryption_key: str, fallback_secret: str) -> Fernet:
+    """Derive a Fernet key from configured encryption material."""
+    material = encryption_key.strip() or fallback_secret
+    digest = hashlib.sha256(material.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def encrypt_webhook_secret(raw_secret: str, *, encryption_key: str, fallback_secret: str) -> str:
+    """Encrypt webhook signing secret for at-rest storage."""
+    return _webhook_fernet(encryption_key, fallback_secret).encrypt(raw_secret.encode()).decode()
+
+
+def decrypt_webhook_secret(stored: str, *, encryption_key: str, fallback_secret: str) -> str:
+    """Decrypt stored webhook secret; supports legacy plaintext whsec_ values."""
+    if stored.startswith(_WEBHOOK_SECRET_PREFIX):
+        return stored
+    try:
+        return _webhook_fernet(encryption_key, fallback_secret).decrypt(stored.encode()).decode()
+    except InvalidToken as exc:
+        raise ValueError("Unable to decrypt webhook secret") from exc
+
+
+def resolve_webhook_signing_secret(
+    stored: str,
+    *,
+    encryption_key: str,
+    fallback_secret: str,
+) -> str:
+    """Return the raw signing secret from DB storage (encrypted or legacy plaintext)."""
+    if stored.startswith(_WEBHOOK_SECRET_PREFIX):
+        return stored
+    return decrypt_webhook_secret(stored, encryption_key=encryption_key, fallback_secret=fallback_secret)
 
 
 def sign_webhook_payload(secret: str, timestamp: int, body: bytes) -> str:

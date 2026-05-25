@@ -52,6 +52,8 @@ export const api = {
   login: (email: string, password: string): Promise<LoginResponse> =>
     request('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
+  me: (): Promise<UserResponse> => request('/api/v1/auth/me'),
+
   listTenants: (): Promise<TenantResponse[]> => request('/api/v1/tenants'),
   createTenant: (name: string): Promise<TenantResponse> =>
     request('/api/v1/tenants', { method: 'POST', body: JSON.stringify({ name }) }),

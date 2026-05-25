@@ -81,3 +81,19 @@ async def test_register_rejects_private_webhook_url(api_client):
         },
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_test_webhook_404_for_other_tenant(api_client, db_session):
+    from app.repositories.webhook_repository import WebhookRepository
+
+    repo = WebhookRepository(db_session)
+    webhook, _ = await repo.create(
+        "other-tenant",
+        url="https://webhook.site/other",
+        events=["job.completed"],
+        label="Other",
+    )
+
+    resp = await api_client.post(f"/api/v1/webhooks/{webhook.id}/test")
+    assert resp.status_code == 404

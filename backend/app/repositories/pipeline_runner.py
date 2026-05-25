@@ -19,6 +19,17 @@ from app.services.storage import StorageService
 logger = get_logger(__name__)
 
 
+class JobCancelledError(Exception):
+    """Raised when the job was cancelled while the pipeline was running."""
+
+
+async def _job_is_cancelled(job_id: UUID | str) -> bool:
+    async with session_scope() as session:
+        repo = JobRepository(session)
+        job = await repo.get(job_id)
+        return JobStatus(job.status) == JobStatus.CANCELLED
+
+
 def _basename(storage_key: str) -> str:
     """Return the filename portion of a storage key.
 
@@ -43,6 +54,9 @@ async def _publish_stage_progress(
     agent: str,
 ) -> None:
     """Persist and broadcast pipeline stage completion for live progress UI."""
+    if await _job_is_cancelled(job_id):
+        raise JobCancelledError()
+
     progress_pct = _STAGE_PROGRESS_PCT.get(agent, 0.0)
     agents = list(state.agents_completed)
     async with session_scope() as session:
@@ -116,6 +130,9 @@ async def execute_job(job_id: UUID | str) -> None:
         base_currency = job.base_currency
         payment_proof_keys = list(job.payment_proof_keys or [])
         bank_statement_key = job.bank_statement_key
+        if JobStatus(job.status) == JobStatus.CANCELLED:
+            logger.info("pipeline.skip_cancelled", job_id=job_id_str)
+            return
         await repo.update_status(job_id, status=JobStatus.INGESTING, progress_pct=5.0)
 
     await _emit(job_id_str, tenant_id, "status_change", {"status": "INGESTING", "progress_pct": 5.0})
@@ -210,6 +227,8 @@ async def execute_job(job_id: UUID | str) -> None:
 
     try:
         async def on_stage_complete(state: ReconciliationState, agent: str) -> None:
+            if await _job_is_cancelled(job_id):
+                raise JobCancelledError()
             await _publish_stage_progress(job_id, tenant_id, state, agent)
 
         state = await run_reconciliation(
@@ -218,6 +237,15 @@ async def execute_job(job_id: UUID | str) -> None:
             tenant_id=tenant_id,
             vendor_rules=vendor_rules,
         )
+    except JobCancelledError:
+        logger.info("pipeline.cancelled", job_id=job_id_str)
+        await _emit(
+            job_id_str,
+            tenant_id,
+            "error",
+            {"status": JobStatus.CANCELLED, "error": "Cancelled by user"},
+        )
+        return
     except Exception as exc:  # noqa: BLE001 — log and persist
         logger.exception("pipeline.failed", error=str(exc))
         async with session_scope() as session:
@@ -230,6 +258,16 @@ async def execute_job(job_id: UUID | str) -> None:
                 agents_completed=state.agents_completed,
             )
         await _emit(job_id_str, tenant_id, "error", {"status": "FAILED", "error": str(exc)})
+        return
+
+    if await _job_is_cancelled(job_id):
+        logger.info("pipeline.cancelled_before_persist", job_id=job_id_str)
+        await _emit(
+            job_id_str,
+            tenant_id,
+            "error",
+            {"status": JobStatus.CANCELLED, "error": "Cancelled by user"},
+        )
         return
 
     async with session_scope() as session:

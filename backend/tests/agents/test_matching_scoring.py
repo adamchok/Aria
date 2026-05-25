@@ -39,7 +39,8 @@ def test_score_amount_at_window_edge_zero(normalised_record_usd):
         amount=edge,
     )
     score = _score(normalised_record_usd, entry, _settings())
-    assert score.amount_match_score < 0.5
+    # In-band edge scores floor at 0.5 (see matching._score docstring).
+    assert score.amount_match_score == 0.5
 
 
 def test_score_prefers_card_debit_with_foreign_amount_and_payee():

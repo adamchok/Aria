@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/Button';
+import { sanitizeRedirectPath } from '@/utils/redirect';
 
 function CheckIcon() {
   return (
@@ -23,7 +24,10 @@ const features = [
 export function LoginPage() {
   const { accessToken, setAuth } = useAuthStore();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+  const from = sanitizeRedirectPath(
+    (location.state as { from?: string } | null)?.from,
+    '/dashboard',
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

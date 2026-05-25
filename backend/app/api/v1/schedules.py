@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from app.core.dependencies import get_db_session
 from app.core.middleware import require_tenant
 from app.models.database import ReconciliationScheduleORM
 from app.models.schemas import ReconciliationScheduleCreate, ReconciliationScheduleResponse
+from app.repositories.bank_account_repository import BankAccountRepository
 
 router = APIRouter()
 
@@ -48,6 +49,13 @@ async def create_schedule(
     tenant_id: str = Depends(require_tenant),
     session: AsyncSession = Depends(get_db_session),
 ) -> ReconciliationScheduleResponse:
+    account_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await account_repo.get(body.bank_account_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail="bank_account_id not found or does not belong to this tenant.",
+        )
+
     schedule = ReconciliationScheduleORM(
         id=str(uuid4()),
         tenant_id=tenant_id,
@@ -80,8 +88,18 @@ async def update_schedule(
     if schedule is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
+    if str(body.bank_account_id) != schedule.bank_account_id:
+        account_repo = BankAccountRepository(session, tenant_id=tenant_id)
+        if await account_repo.get(body.bank_account_id) is None:
+            raise HTTPException(
+                status_code=404,
+                detail="bank_account_id not found or does not belong to this tenant.",
+            )
+
     schedule.run_time_utc = body.run_time_utc
     schedule.days_of_week = body.days_of_week
+    schedule.bank_account_id = str(body.bank_account_id)
+    schedule.base_currency = body.base_currency.upper()
     schedule.enabled = body.enabled
     await session.commit()
     await session.refresh(schedule)

@@ -62,11 +62,14 @@ describe('api client', () => {
   it('exportJobResults fetches blob from export endpoint', async () => {
     server.use(
       http.get(`http://localhost/api/v1/jobs/${JOB_ID}/export`, () =>
-        new HttpResponse(new Blob(['xlsx-content']), { status: 200 }),
+        new HttpResponse(new Blob(['xlsx-content']), {
+          status: 200,
+          headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+        }),
       ),
     );
     const blob = await api.exportJobResults(JOB_ID);
-    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
   });
 
   it('getQueueStatus parses ingest queue response', async () => {

@@ -25,8 +25,12 @@ describe('TenantsPage', () => {
     renderWithProviders(<TenantsPage />);
     await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
 
-    await userEvent.type(screen.getByLabelText(/tenant name/i), 'Gamma Inc');
+    await userEvent.click(screen.getByRole('button', { name: /onboard tenant/i }));
+    await userEvent.type(screen.getByLabelText(/organisation name/i), 'Gamma Inc');
     await userEvent.click(screen.getByRole('button', { name: /create tenant/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^close$/i }));
 
     await waitFor(() => expect(screen.getByText('Gamma Inc')).toBeInTheDocument());
   });

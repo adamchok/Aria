@@ -15,6 +15,7 @@ import type { MatchResult, ReviewAction } from '@/types/api';
 export function ReviewPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [active, setActive] = useState<MatchResult | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const queue = useReviewQueue(jobId ?? null);
   const review = useReviewActions(jobId ?? null);
   const bankEntries = useJobBankEntries(jobId ?? null, Boolean(active));
@@ -37,8 +38,10 @@ export function ReviewPage() {
   }
 
   const items = queue.data;
+
   const handleAction = (action: ReviewAction, payload: { bankEntryId?: string; note?: string }) => {
     if (!jobId || !active) return;
+    setReviewError(null);
     review.mutate(
       {
         jobId,
@@ -57,6 +60,9 @@ export function ReviewPage() {
             return;
           }
           setActive(null);
+        },
+        onError: (err: Error) => {
+          setReviewError(err.message || 'Review action failed');
         },
       },
     );
@@ -79,6 +85,12 @@ export function ReviewPage() {
           ← Back to results
         </Link>
       </header>
+
+      {reviewError && (
+        <p className="text-sm text-rose-600" role="alert">
+          {reviewError}
+        </p>
+      )}
 
       {items.length === 0 ? (
         <EmptyState

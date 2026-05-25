@@ -85,6 +85,8 @@ async def test_webhook(
     session: AsyncSession = Depends(get_db_session),
     tenant_id: str = Depends(require_tenant),
 ) -> dict:
+    repo = WebhookRepository(session)
+    await repo.get(webhook_id, tenant_id)
     from app.workers.tasks import deliver_webhook_task
     deliver_webhook_task.delay(str(webhook_id), None, "job.test")
     return {"status": "test_queued", "webhook_id": str(webhook_id)}

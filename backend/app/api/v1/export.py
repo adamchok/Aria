@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
 from app.core.exceptions import JobNotFoundError
+from app.core.middleware import require_tenant
 from app.models.schemas import AuditLogEntry, ReconciliationReport
 from app.repositories.job_repository import JobRepository
 from app.services.excel_export import render_excel_report
@@ -20,9 +21,11 @@ router = APIRouter()
 
 @router.get("/{job_id}/export")
 async def export_excel(
-    job_id: UUID, session: AsyncSession = Depends(get_db_session)
+    job_id: UUID,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
 ) -> StreamingResponse:
-    repo = JobRepository(session)
+    repo = JobRepository(session, tenant_id=tenant_id)
     try:
         job = await repo.get(job_id)
     except JobNotFoundError as exc:

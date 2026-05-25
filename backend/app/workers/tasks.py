@@ -13,7 +13,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.logging import bind_job_id, get_logger
-from app.core.security import sign_webhook_payload
+from app.core.security import resolve_webhook_signing_secret, sign_webhook_payload
 from app.repositories.pipeline_runner import execute_job
 from app.workers.celery_app import celery_app
 
@@ -98,11 +98,70 @@ async def _resolve_batch_bank_account_id(session, tenant_id: str) -> str | None:
     return candidates[0][0]
 
 
-async def _auto_batch_async() -> None:
-    from app.core.database import session_scope
-    from app.models.enums import JobStatus
+def _corridor_group_key(tx) -> str:
+    """Group buffered ingest rows by corridor label (e.g. USD/MYR)."""
+    corridor = (getattr(tx, "corridor", None) or tx.payload.get("corridor") or "MYR").upper()
+    return corridor
+
+
+def _base_currency_from_corridor(corridor_key: str) -> str:
+    """Derive reconciliation base currency from a corridor label."""
+    if "/" in corridor_key:
+        return corridor_key.split("/")[-1]
+    if corridor_key in {"UNKNOWN", "MYR"}:
+        return "MYR"
+    return corridor_key if len(corridor_key) == 3 else "MYR"
+
+
+async def _create_batch_jobs(
+    session,
+    *,
+    tenant_id: str,
+    buffered: list,
+    bank_account_id: str,
+    batch_size_threshold: int,
+    base_currency_filter: str | None = None,
+) -> list[str]:
+    """Create one job per corridor group; mark only included txs as batched."""
+    from collections import defaultdict
+
     from app.repositories.ingest_repository import IngestRepository
     from app.repositories.job_repository import JobRepository
+
+    corridor_groups: dict[str, list] = defaultdict(list)
+    for tx in buffered:
+        corridor_groups[_corridor_group_key(tx)].append(tx)
+
+    ingest_repo = IngestRepository(session)
+    job_repo = JobRepository(session, tenant_id=tenant_id)
+    created_job_ids: list[str] = []
+
+    for corridor_key, corridor_txs in corridor_groups.items():
+        base_currency = _base_currency_from_corridor(corridor_key)
+        if base_currency_filter and base_currency != base_currency_filter.upper():
+            continue
+        batched_txs = [
+            tx for tx in corridor_txs if tx.payload.get("storage_key")
+        ][:batch_size_threshold]
+        proof_keys = [tx.payload["storage_key"] for tx in batched_txs]
+        if not proof_keys:
+            continue
+        job = await job_repo.create_job(
+            base_currency=base_currency,
+            payment_proof_keys=proof_keys,
+            bank_statement_key=None,
+            bank_account_id=bank_account_id,
+            tenant_id=tenant_id,
+        )
+        await ingest_repo.mark_batched([tx.id for tx in batched_txs], job.id)
+        created_job_ids.append(str(job.id))
+
+    return created_job_ids
+
+
+async def _auto_batch_async() -> None:
+    from app.core.database import session_scope
+    from app.repositories.ingest_repository import IngestRepository
 
     settings = get_settings()
 
@@ -144,32 +203,13 @@ async def _auto_batch_async() -> None:
                 )
                 continue
 
-            # Group by corridor, create one job per corridor
-            from collections import defaultdict
-            corridor_groups: dict[str, list] = defaultdict(list)
-            for tx in buffered:
-                corridor = tx.payload.get("base_currency", "MYR")
-                corridor_groups[corridor].append(tx)
-
-            job_repo = JobRepository(session, tenant_id=tenant_id)
-            created_job_ids = []
-            for base_currency, corridor_txs in corridor_groups.items():
-                proof_keys = [
-                    tx.payload.get("storage_key", "")
-                    for tx in corridor_txs
-                    if tx.payload.get("storage_key")
-                ][:settings.batch_size_threshold]
-                if not proof_keys:
-                    continue
-                job = await job_repo.create_job(
-                    base_currency=base_currency,
-                    payment_proof_keys=proof_keys,
-                    bank_statement_key=None,
-                    bank_account_id=bank_account_id,
-                    tenant_id=tenant_id,
-                )
-                await ingest_repo.mark_batched([tx.id for tx in corridor_txs], job.id)
-                created_job_ids.append(str(job.id))
+            created_job_ids = await _create_batch_jobs(
+                session,
+                tenant_id=tenant_id,
+                buffered=buffered,
+                bank_account_id=bank_account_id,
+                batch_size_threshold=settings.batch_size_threshold,
+            )
 
         # Enqueue outside session scope
         for job_id_str in created_job_ids:
@@ -178,20 +218,25 @@ async def _auto_batch_async() -> None:
 
 
 @celery_app.task(name="aria.batch_tenant_transactions")
-def batch_tenant_transactions(tenant_id: str) -> None:
+def batch_tenant_transactions(
+    tenant_id: str,
+    bank_account_id: str | None = None,
+    base_currency: str | None = None,
+) -> None:
     """Manual flush: immediately batch a single tenant's buffer."""
     try:
-        asyncio.run(_batch_one_tenant(tenant_id))
+        asyncio.run(_batch_one_tenant(tenant_id, bank_account_id, base_currency))
     finally:
         _dispose_engine()
 
 
-async def _batch_one_tenant(tenant_id: str) -> None:
-    from collections import defaultdict
-
+async def _batch_one_tenant(
+    tenant_id: str,
+    bank_account_id: str | None = None,
+    base_currency: str | None = None,
+) -> None:
     from app.core.database import session_scope
     from app.repositories.ingest_repository import IngestRepository
-    from app.repositories.job_repository import JobRepository
 
     settings = get_settings()
 
@@ -203,8 +248,10 @@ async def _batch_one_tenant(tenant_id: str) -> None:
             logger.info("batch.manual_flush.empty", tenant_id=tenant_id)
             return
 
-        bank_account_id = await _resolve_batch_bank_account_id(session, tenant_id)
-        if bank_account_id is None:
+        resolved_account = bank_account_id or await _resolve_batch_bank_account_id(
+            session, tenant_id
+        )
+        if resolved_account is None:
             logger.warning(
                 "batch.manual_flush.skipped_no_ledger",
                 tenant_id=tenant_id,
@@ -212,30 +259,14 @@ async def _batch_one_tenant(tenant_id: str) -> None:
             )
             return
 
-        corridor_groups: dict[str, list] = defaultdict(list)
-        for tx in buffered:
-            corridor = tx.payload.get("base_currency", "MYR")
-            corridor_groups[corridor].append(tx)
-
-        job_repo = JobRepository(session, tenant_id=tenant_id)
-        created_job_ids = []
-        for base_currency, corridor_txs in corridor_groups.items():
-            proof_keys = [
-                tx.payload.get("storage_key", "")
-                for tx in corridor_txs
-                if tx.payload.get("storage_key")
-            ][:settings.batch_size_threshold]
-            if not proof_keys:
-                continue
-            job = await job_repo.create_job(
-                base_currency=base_currency,
-                payment_proof_keys=proof_keys,
-                bank_statement_key=None,
-                bank_account_id=bank_account_id,
-                tenant_id=tenant_id,
-            )
-            await ingest_repo.mark_batched([tx.id for tx in corridor_txs], job.id)
-            created_job_ids.append(str(job.id))
+        created_job_ids = await _create_batch_jobs(
+            session,
+            tenant_id=tenant_id,
+            buffered=buffered,
+            bank_account_id=resolved_account,
+            batch_size_threshold=settings.batch_size_threshold,
+            base_currency_filter=base_currency,
+        )
 
     for job_id_str in created_job_ids:
         run_pipeline_task.delay(job_id_str)
@@ -316,7 +347,13 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
         payload["data"] = {"message": "Test event from ARIA webhook system"}
     body = json.dumps(payload).encode()
     timestamp = int(time.time())
-    signature = sign_webhook_payload(webhook.secret, timestamp, body)
+    settings = get_settings()
+    signing_secret = resolve_webhook_signing_secret(
+        webhook.secret,
+        encryption_key=settings.webhook_secret_encryption_key,
+        fallback_secret=settings.jwt_secret_key,
+    )
+    signature = sign_webhook_payload(signing_secret, timestamp, body)
 
     # Deliver with retries
     attempt = task.request.retries + 1
@@ -397,7 +434,11 @@ async def _run_scheduled_jobs_async() -> None:
         ]
 
     for schedule in matching:
-        batch_tenant_transactions.delay(schedule.tenant_id)
+        batch_tenant_transactions.delay(
+            schedule.tenant_id,
+            schedule.bank_account_id,
+            schedule.base_currency,
+        )
         logger.info(
             "schedule.triggered",
             schedule_id=schedule.id,

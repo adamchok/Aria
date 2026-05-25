@@ -55,6 +55,7 @@ export function useJobStream(jobId: UUID | null, options: UseJobStreamOptions = 
     if (!jobId || options.enabled === false) return;
 
     let es: EventSource | null = null;
+    let terminalReached = false;
 
     function applyPatch(data: SSEEventData) {
       qc.setQueryData<JobStatusResponse>(['job', jobId, 'status'], (old) => {
@@ -95,6 +96,7 @@ export function useJobStream(jobId: UUID | null, options: UseJobStreamOptions = 
             if (event === 'error') cbs.onError?.(data.error ?? 'Pipeline failed');
 
             if (TERMINAL_EVENTS.has(event)) {
+              terminalReached = true;
               es?.close();
             }
           } catch {
@@ -105,7 +107,7 @@ export function useJobStream(jobId: UUID | null, options: UseJobStreamOptions = 
 
       es.onerror = () => {
         es?.close();
-        if (mountedRef.current) {
+        if (mountedRef.current && !terminalReached) {
           reconnectTimerRef.current = setTimeout(open, 3_000);
         }
       };

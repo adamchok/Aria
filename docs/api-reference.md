@@ -294,7 +294,7 @@ Returns uncleared ledger entries (when the job used a bank account or statement)
 
 Uses the same **live hydrated report** as `GET /results` (reflects human review decisions).
 
-**Errors:** `404` job not found · `409` report not yet available
+**Errors:** `404` job not found (includes cross-tenant access) · `409` report not yet available
 
 **Example**
 
@@ -610,7 +610,7 @@ Supported events: `job.completed`, `job.failed`, `job.review_required`
 }
 ```
 
-**The `secret` is returned only on creation.** Use it to verify HMAC-SHA256 signatures on incoming webhook payloads:
+**The `secret` is returned only on creation.** Store it securely — ARIA encrypts the signing secret at rest in the database (see `WEBHOOK_SECRET_ENCRYPTION_KEY` in configuration). Use the raw secret to verify HMAC-SHA256 signatures on incoming webhook payloads:
 
 ```
 X-ARIA-Signature: sha256=<hmac_hex>

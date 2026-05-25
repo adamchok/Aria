@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     # Webhooks
     webhook_max_retries: int = 3
     webhook_retry_backoff_base_seconds: int = 5
+    webhook_secret_encryption_key: str = ""
 
     # Email notifications
     smtp_host: str = ""

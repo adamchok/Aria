@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
+import { sanitizeRedirectPath } from '@/utils/redirect';
 
 const DEMO_EMAIL = 'finance@novapay.demo';
 const DEMO_PASSWORD = 'novapay2026';
@@ -23,7 +24,10 @@ const FEATURES = [
 export function LoginPage() {
   const { isLoggedIn, login } = useAuthStore();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+  const from = sanitizeRedirectPath(
+    (location.state as { from?: string } | null)?.from,
+    '/dashboard',
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

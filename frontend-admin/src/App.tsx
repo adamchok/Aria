@@ -3,6 +3,7 @@ import { AdminRoleRoute } from '@/components/AdminRoleRoute';
 import { AppShell } from '@/components/AppShell';
 import { AuthRoute } from '@/components/AuthRoute';
 import { AdminAnalyticsPage } from '@/pages/AdminAnalyticsPage';
+import { AdminQueuePage } from '@/pages/AdminQueuePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { TenantDetailPage } from '@/pages/TenantDetailPage';
 import { TenantsPage } from '@/pages/TenantsPage';
@@ -24,6 +25,7 @@ export default function App() {
                   <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
                   <Route path="/users" element={<UsersPage />} />
                   <Route path="/analytics" element={<AdminAnalyticsPage />} />
+                  <Route path="/queue" element={<AdminQueuePage />} />
                   <Route path="*" element={<Navigate to="/tenants" replace />} />
                 </Routes>
               </AppShell>

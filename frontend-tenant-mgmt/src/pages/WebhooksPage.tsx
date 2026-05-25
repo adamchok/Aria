@@ -100,7 +100,11 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => deleteMutation.mutate()}
+            onClick={() => {
+              if (window.confirm('Remove this webhook? Deliveries will stop immediately.')) {
+                deleteMutation.mutate();
+              }
+            }}
             disabled={deleteMutation.isPending}
           >
             {deleteMutation.isPending ? 'Removing…' : 'Remove'}

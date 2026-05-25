@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ReconciliationGrid } from '@/components/ReconciliationGrid';
 import { ReviewDrawer } from '@/components/ReviewDrawer';
 import { SummaryCards } from '@/components/SummaryCards';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import { useJobBankEntries } from '@/hooks/useJobBankEntries';
 import { useResults } from '@/hooks/useResults';
 import { useReviewActions } from '@/hooks/useReviewActions';
@@ -18,10 +18,13 @@ export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [active, setActive] = useState<MatchResult | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const handleExport = useCallback(async () => {
     if (!jobId || exporting) return;
     setExporting(true);
+    setExportError(null);
     try {
       const blob = await api.exportJobResults(jobId);
       const url = URL.createObjectURL(blob);
@@ -30,6 +33,16 @@ export function ResultsPage() {
       a.download = `reconciliation-${jobId}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? (typeof err.detail === 'object' && err.detail && 'detail' in err.detail
+              ? String((err.detail as { detail: string }).detail)
+              : err.message)
+          : err instanceof Error
+            ? err.message
+            : 'Export failed';
+      setExportError(message);
     } finally {
       setExporting(false);
     }
@@ -74,6 +87,7 @@ export function ResultsPage() {
 
   const handleAction = (action: ReviewAction, payload: { bankEntryId?: string; note?: string }) => {
     if (!jobId || !active) return;
+    setReviewError(null);
     review.mutate(
       {
         jobId,
@@ -93,6 +107,9 @@ export function ResultsPage() {
             setActive(null);
           }
           void results.refetch();
+        },
+        onError: (err: Error) => {
+          setReviewError(err.message || 'Review action failed');
         },
       },
     );
@@ -114,6 +131,12 @@ export function ResultsPage() {
           </Link>
         </div>
       </header>
+
+      {exportError && (
+        <p className="text-sm text-rose-600" role="alert">
+          {exportError}
+        </p>
+      )}
 
       {(hasReview || hasUnmatched) && (
         <div className="flex flex-col gap-3">
@@ -179,6 +202,12 @@ export function ResultsPage() {
           )}
         </CardContent>
       </Card>
+
+      {reviewError && (
+        <p className="text-sm text-rose-600" role="alert">
+          {reviewError}
+        </p>
+      )}
 
       <ReviewDrawer
         match={active}

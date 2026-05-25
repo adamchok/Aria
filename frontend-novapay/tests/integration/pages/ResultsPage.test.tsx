@@ -14,12 +14,11 @@ function Harness() {
 }
 
 describe('ResultsPage', () => {
-  it('renders summary, narrative, and export link', async () => {
+  it('renders summary, narrative, and export action', async () => {
     renderWithProviders(<Harness />, { initialEntries: [`/jobs/${JOB_ID}/results`] });
     expect(await screen.findByText(/Reconciliation results/i)).toBeInTheDocument();
     expect(screen.getByText(/ARIA reconciled 1 of 2 records/i)).toBeInTheDocument();
-    const exportLink = screen.getByRole('link', { name: /Export Excel/i });
-    expect(exportLink).toHaveAttribute('href', expect.stringMatching(/\/export$/));
+    expect(screen.getByRole('button', { name: /Export Excel/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open review queue/i })).toHaveAttribute(
       'href',
       `/jobs/${JOB_ID}/review`,

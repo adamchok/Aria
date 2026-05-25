@@ -162,6 +162,7 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 | --- | --- | --- |
 | `WEBHOOK_MAX_RETRIES` | `3` | Maximum delivery attempts per webhook event |
 | `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS` | `5` | Base delay for exponential backoff; attempt N waits `base × 2^(N-1)` seconds |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | *(falls back to `JWT_SECRET_KEY`)* | Fernet key material for encrypting webhook signing secrets at rest |
 
 ### Application
 

@@ -57,6 +57,21 @@ async def test_create_job_accepts_pdf_bank_statement(api_client, fixtures_dir: P
 
 
 @pytest.mark.asyncio
+async def test_create_job_rejects_unsupported_proof_type(api_client, fixtures_dir: Path):
+    files = _files(fixtures_dir)
+    resp = await api_client.post(
+        "/api/v1/jobs",
+        files={
+            "payment_proofs": ("bad.exe", b"MZ", "application/x-msdownload"),
+            "bank_statement": files["bank_statement"],
+        },
+        data={"base_currency": "MYR"},
+    )
+    assert resp.status_code == 400
+    assert "Unsupported payment proof type" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_create_job_rejects_missing_bank_statement(api_client, fixtures_dir: Path):
     files = _files(fixtures_dir)
     resp = await api_client.post(

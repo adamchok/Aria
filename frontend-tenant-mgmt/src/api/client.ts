@@ -73,6 +73,8 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  me: (): Promise<UserResponse> => request<UserResponse>('/api/v1/auth/me'),
+
   getAIPerformance: (params?: { period_start?: string; period_end?: string }): Promise<AIPerformanceSummary> => {
     const qs = new URLSearchParams();
     if (params?.period_start) qs.set('period_start', params.period_start);

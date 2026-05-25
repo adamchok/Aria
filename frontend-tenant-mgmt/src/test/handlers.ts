@@ -32,6 +32,8 @@ export const handlers = [
     return HttpResponse.json(loginResponseFixture);
   }),
 
+  http.get('http://localhost/api/v1/auth/me', () => HttpResponse.json(tenantUserFixture)),
+
   http.get('http://localhost/api/v1/analytics/summary', () =>
     HttpResponse.json(analyticsFixture),
   ),

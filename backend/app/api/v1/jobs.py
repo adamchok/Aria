@@ -196,6 +196,14 @@ async def create_job(
 
     proof_keys: list[str] = []
     for f in payment_proofs:
+        if f.content_type and f.content_type not in _ACCEPTED_PROOF_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unsupported payment proof type: {f.content_type!r}. "
+                    f"Accepted: JPEG, PNG, WEBP, PDF, XLSX, CSV."
+                ),
+            )
         body = await f.read()
         key = storage.put_object(body, f.filename or "proof", content_type=f.content_type)
         proof_keys.append(key)

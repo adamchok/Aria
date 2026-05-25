@@ -24,6 +24,8 @@ export const handlers = [
     return HttpResponse.json(loginResponseFixture);
   }),
 
+  http.get('http://localhost/api/v1/auth/me', () => HttpResponse.json(adminUserFixture)),
+
   http.get('http://localhost/api/v1/tenants', () => HttpResponse.json(tenants)),
 
   http.post('http://localhost/api/v1/tenants', async ({ request }) => {

@@ -33,3 +33,22 @@ def test_jwt_create_and_decode_includes_role():
     assert payload["sub"] == "user-1"
     assert payload["role"] == "admin"
     assert payload.get("tenant_id") is None
+
+
+def test_webhook_secret_encrypt_roundtrip():
+    from app.core.security import decrypt_webhook_secret, encrypt_webhook_secret
+
+    settings = get_settings()
+    raw = "whsec_test_secret_value"
+    encrypted = encrypt_webhook_secret(
+        raw,
+        encryption_key="test-encryption-key",
+        fallback_secret=settings.jwt_secret_key,
+    )
+    assert not encrypted.startswith("whsec_")
+    restored = decrypt_webhook_secret(
+        encrypted,
+        encryption_key="test-encryption-key",
+        fallback_secret=settings.jwt_secret_key,
+    )
+    assert restored == raw

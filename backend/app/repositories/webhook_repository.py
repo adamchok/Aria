@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import WebhookNotFoundError
-from app.core.security import generate_webhook_secret
+from app.core.config import get_settings
+from app.core.security import encrypt_webhook_secret, generate_webhook_secret
 from app.models.database import WebhookDeliveryORM, WebhookORM
 from app.models.enums import WebhookDeliveryStatus
 
@@ -28,12 +29,18 @@ class WebhookRepository:
     ) -> tuple[WebhookORM, str]:
         """Return (WebhookORM, raw_secret). raw_secret shown once."""
         raw_secret, secret_hash = generate_webhook_secret()
+        settings = get_settings()
+        encrypted = encrypt_webhook_secret(
+            raw_secret,
+            encryption_key=settings.webhook_secret_encryption_key,
+            fallback_secret=settings.jwt_secret_key,
+        )
         webhook = WebhookORM(
             tenant_id=str(tenant_id),
             url=url,
             events=events,
             secret_hash=secret_hash,
-            secret=raw_secret,
+            secret=encrypted,
             label=label,
         )
         self._s.add(webhook)
