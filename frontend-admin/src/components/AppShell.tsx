@@ -87,7 +87,6 @@ const navSections: NavSection[] = [
       { to: '/tenants', label: 'Tenants', icon: <LayoutIcon /> },
       { to: '/users', label: 'Users', icon: <KeyIcon /> },
       { to: '/analytics', label: 'Analytics', icon: <ChartIcon /> },
-      { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
     ],
   },
 ];
