@@ -49,30 +49,8 @@ callouts:
     title: Tip
     color: green
 
-# Grouped sidebar navigation
-nav:
-  - title: Overview
-    url: /
-  - title: Product
-    children:
-      - title: Problem Statement
-        url: /problem-statement
-      - title: Solution
-        url: /solution
-  - title: Technical
-    children:
-      - title: Architecture
-        url: /architecture
-      - title: API Reference
-        url: /api-reference
-  - title: Setup
-    children:
-      - title: Getting Started
-        url: /getting-started
-      - title: Configuration
-        url: /configuration
-  - title: Development
-    url: /development
+# Sidebar order is set via nav_order in each page's front matter (Just the Docs).
+# External links below append after all pages.
 
 nav_external_links:
   - title: GitHub

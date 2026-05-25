@@ -2,6 +2,7 @@
 title: Problem Statement
 layout: default
 description: "The cross-border reconciliation gap for SMEs"
+nav_order: 2
 ---
 
 # Problem Statement

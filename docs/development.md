@@ -2,6 +2,7 @@
 title: Development
 layout: default
 description: "Testing, project conventions, and contribution guide"
+nav_order: 8
 ---
 
 # Development
@@ -141,7 +142,7 @@ alembic downgrade -1
 | Mode | Strict TypeScript — no `any` |
 | Components | Presentational; data fetching in pages/hooks |
 | Server state | TanStack Query |
-| UI state | Zustand (upload draft only) |
+| UI state | Zustand — NovaPay: `auth-store` (demo UI session) + `upload-store`; admin/tenant-mgmt: `auth-store` (JWT) |
 | Amounts | Preserve as decimal strings from API |
 
 ### Commit messages

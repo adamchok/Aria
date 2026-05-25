@@ -13,7 +13,7 @@
 
     <article class="aria-pipeline-widget__pane" data-step-pane="process" hidden>
       <h3>Process</h3>
-      <p>Worker runs the OpenAI Agents SDK pipeline; status moves to <span class="aria-badge aria-badge--progress">RUNNING</span>.</p>
+      <p>Worker runs the OpenAI Agents SDK pipeline; status progresses through stage-specific values (<code>INGESTING</code>, <code>NORMALISING</code>, <code>MATCHING</code>, <code>REPORTING</code>).</p>
       <ul>
         <li>Progress updated per agent stage (<code>progress_pct</code>, <code>agents_completed</code>).</li>
         <li>SSE stream: <code>GET /api/v1/jobs/{job_id}/stream</code> — poll fallback via <code>GET /jobs/{id}</code>.</li>

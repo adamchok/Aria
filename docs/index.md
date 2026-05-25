@@ -3,6 +3,7 @@ title: Overview
 layout: default
 description: "ARIA — Autonomous Reconciliation Intelligence Agent"
 permalink: /
+nav_order: 1
 ---
 
 <div class="aria-hero">
@@ -109,7 +110,7 @@ docker compose up --build
 
 | Service | URL | Notes |
 | --- | --- | --- |
-| NovaPay (reference client) | [localhost:5173](http://localhost:5173) | Simulates external SME system using ARIA API — tenant user login |
+| NovaPay (reference client) | [localhost:5173](http://localhost:5173) | Demo UI login; API calls use `X-API-Key` via `VITE_API_KEY` |
 | Admin UI | [localhost:5174](http://localhost:5174) | Platform admin — seed credentials |
 | Tenant mgmt UI | [localhost:5175](http://localhost:5175) | Keys, webhooks, bank accounts |
 | API (Swagger) | [localhost:8000/docs](http://localhost:8000/docs) | Interactive OpenAPI |
@@ -117,7 +118,7 @@ docker compose up --build
 | MinIO console | [localhost:9001](http://localhost:9001) | `ariaadmin` / `ariaadmin` |
 
 {: .tip }
-> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user, then sign in to NovaPay (:5173) or Tenant mgmt (:5175). See [Getting Started]({{ '/getting-started' | relative_url }}).
+> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user. Sign in to **Tenant mgmt** (:5175) with the tenant user. For **NovaPay** (:5173), use demo credentials (`finance@novapay.demo` / `novapay2026`) and set `VITE_API_KEY` in `frontend-novapay/.env` (see [Getting Started]({{ '/getting-started' | relative_url }})).
 
 {: .tip }
 > **Progressive disclosure:** Mock mode explores the full pipeline at zero LLM cost. Switch to live Claude extraction when ready — see [Configuration]({{ '/configuration' | relative_url }}).

@@ -52,7 +52,7 @@
 
     <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
       <h3>Review</h3>
-      <p>Uncertain matches (confidence 0.50–0.74) never auto-confirm — finance officers decide with full context.</p>
+      <p>Uncertain matches (confidence 0.50–0.74) are flagged during matching but the report stage always runs first. Jobs finish as <code>AWAITING_REVIEW</code> when human decisions are needed.</p>
       <ul>
         <li><strong>NovaPay:</strong> <code>/jobs/{id}/review</code> — side-by-side proof vs candidate bank lines.</li>
         <li>Actions: confirm, reject, or manual match with bank entry picker.</li>

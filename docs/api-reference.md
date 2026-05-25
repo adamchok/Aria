@@ -2,6 +2,7 @@
 title: API Reference
 layout: default
 description: "REST API endpoints, request/response shapes, and job lifecycle"
+nav_order: 5
 ---
 
 # API Reference
@@ -30,7 +31,7 @@ All v1 routes are prefixed with `/api/v1`.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/health</span>
@@ -53,7 +54,7 @@ Returns service status and version.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/jobs</span>
@@ -83,6 +84,12 @@ Returns service status and version.
 }
 ```
 
+**Query parameters**
+
+| Param | Type | Default | Description |
+| --- | --- | --- | --- |
+| `dry_run` | bool | `false` | When `true`, runs the pipeline inline and returns the full report in the response (no Celery enqueue). Useful for integration tests. |
+
 **Errors**
 
 | Status | Cause |
@@ -104,7 +111,7 @@ curl -X POST http://localhost:8000/api/v1/jobs \
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}</span>
@@ -117,7 +124,7 @@ curl -X POST http://localhost:8000/api/v1/jobs \
 ```json
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "RUNNING",
+  "status": "MATCHING",
   "progress_pct": 50.0,
   "agents_completed": ["ingestion", "normalisation"],
   "error": null,
@@ -131,10 +138,14 @@ curl -X POST http://localhost:8000/api/v1/jobs \
 | Status | Meaning | Badge |
 | --- | --- | --- |
 | `PENDING` | Queued, not yet started | <span class="aria-badge aria-badge--neutral">Pending</span> |
-| `RUNNING` | Pipeline in progress | <span class="aria-badge aria-badge--progress">Running</span> |
+| `INGESTING` | Extraction stage in progress | <span class="aria-badge aria-badge--progress">Ingesting</span> |
+| `NORMALISING` | FX conversion and tolerance calculation | <span class="aria-badge aria-badge--progress">Normalising</span> |
+| `MATCHING` | Match scoring and LLM reasoning | <span class="aria-badge aria-badge--progress">Matching</span> |
+| `REPORTING` | Report synthesis and Excel preparation | <span class="aria-badge aria-badge--progress">Reporting</span> |
 | `COMPLETED` | Finished successfully | <span class="aria-badge aria-badge--matched">Complete</span> |
 | `AWAITING_REVIEW` | Uncertain items need review | <span class="aria-badge aria-badge--uncertain">Review</span> |
 | `FAILED` | Unrecoverable error | <span class="aria-badge aria-badge--unmatched">Failed</span> |
+| `CANCELLED` | Cancelled via `POST …/cancel` | <span class="aria-badge aria-badge--neutral">Cancelled</span> |
 
 **Errors:** `404` if job not found.
 
@@ -143,7 +154,7 @@ The frontend polls this endpoint every **2 seconds** until a terminal status is 
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/results</span>
@@ -188,7 +199,7 @@ Each match in `matches` includes:
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/review</span>
@@ -216,7 +227,7 @@ Returns an empty array when no uncertain items remain.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/bank-entries</span>
@@ -232,7 +243,7 @@ Returns uncleared ledger entries (when the job used a bank account or statement)
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/review/{match_id}</span>
@@ -277,7 +288,7 @@ Returns uncleared ledger entries (when the job used a bank account or statement)
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/export</span>
@@ -299,7 +310,8 @@ Uses the same **live hydrated report** as `GET /results` (reflects human review 
 **Example**
 
 ```bash
-curl -OJ http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/export
+curl -H "Authorization: Bearer YOUR_JWT" -OJ \
+  http://localhost:8000/api/v1/jobs/YOUR_JOB_ID/export
 ```
 </div>
 
@@ -357,14 +369,14 @@ Legacy **admin API key** (`ADMIN_API_KEY`) still works for programmatic tenant m
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/users` | Create user (`admin` or `tenant_user`; `tenant_id` required for tenant users) |
-| `GET` | `/api/v1/users` | List users (optional `tenant_id` filter) |
+| `GET` | `/api/v1/users` | List users (optional `tenant_id`, `page`, `page_size` query params) |
 | `DELETE` | `/api/v1/users/{user_id}` | Deactivate user |
 
 ---
 
 ## Platform endpoints
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs</span>
@@ -409,7 +421,7 @@ Returns a paginated list of jobs scoped to the authenticated tenant.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/stream</span>
@@ -445,12 +457,17 @@ data: {"status": "COMPLETED", "summary": {"matched": 10, "uncertain": 1, "unmatc
 
 The frontend `useJobStream` hook wraps `EventSource`, reconnects on transient errors, and hydrates the TanStack Query cache on each event. Polling via `GET /jobs/{id}` is retained as a fallback.
 
-**Authentication:** Browsers cannot send `Authorization` headers on `EventSource`. Pass the JWT as a query parameter: `GET /api/v1/jobs/{job_id}/stream?access_token=YOUR_JWT`. Restrict this to the stream path only.
+**Authentication:** Browsers cannot send `Authorization` headers on `EventSource`. Pass credentials as query parameters:
+
+- `?access_token=YOUR_JWT` — tenant or admin JWT from login
+- `?api_key=aria_…` — tenant API key (used by the NovaPay reference client)
+
+Both are accepted on the stream path only.
 </div>
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/tenants</span>
@@ -465,7 +482,7 @@ Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/tenants</span>
@@ -494,7 +511,7 @@ Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/tenants/{tenant_id}/keys</span>
@@ -517,7 +534,7 @@ Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
   "label": "Production webhook integration",
   "enabled": true,
   "created_at": "2026-05-23T10:00:00Z",
-  "key": "aria_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  "key": "aria_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 }
 ```
 
@@ -531,7 +548,7 @@ Requires admin JWT or `X-API-Key: {ADMIN_API_KEY}`.
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/ingest/transactions</span>
@@ -576,7 +593,7 @@ Push raw transactions from external systems into the buffer. Transactions are au
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/webhooks</span>
@@ -594,7 +611,7 @@ Push raw transactions from external systems into the buffer. Transactions are au
 }
 ```
 
-Supported events: `job.completed`, `job.failed`, `job.review_required`
+Supported events: `job.created`, `job.stage_completed`, `job.completed`, `job.review_required`, `job.failed`
 
 **Response `201`**
 
@@ -628,7 +645,7 @@ Delivery is retried up to 3 times with exponential backoff. Payloads that do not
 
 ---
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--get">GET</span>
     <span class="aria-endpoint__path">/api/v1/analytics/summary</span>
@@ -675,7 +692,7 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 
 **Ledger amount convention:** positive = deposit/credit (money in), negative = withdrawal/debit (money out). PDF parsers read separate Withdrawal/Deposit columns when present (e.g. CIMB) and never store the running balance as the transaction amount.
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/bank-accounts</span>
@@ -709,7 +726,7 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 | `PATCH` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Edit a pending ledger entry |
 | `DELETE` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Delete a pending ledger entry (409 if cleared) |
 
-<div class="aria-endpoint">
+<div class="aria-endpoint" markdown="1">
   <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/bank-statements</span>
@@ -736,18 +753,46 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 
 ---
 
+## Additional platform endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/jobs/{job_id}/cancel` | Cancel a non-terminal job (`PENDING` through `REPORTING`) |
+| `DELETE` | `/api/v1/jobs/{job_id}` | Delete a job and its stored artifacts |
+| `GET` | `/api/v1/schedules` | List reconciliation schedules for the tenant |
+| `POST` | `/api/v1/schedules` | Create a schedule (cron + bank account + corridor) |
+| `PUT` | `/api/v1/schedules/{id}` | Update a schedule |
+| `DELETE` | `/api/v1/schedules/{id}` | Delete a schedule |
+| `GET` | `/api/v1/analytics/performance` | Tenant AI performance metrics |
+| `GET` | `/api/v1/analytics/escalation-breakdown` | Escalation counts by reason |
+| `POST` | `/api/v1/webhooks/{id}/deliveries/{delivery_id}/resend` | Retry a failed webhook delivery |
+
+---
+
 ## Job lifecycle
 
 ```mermaid
 stateDiagram-v2
   [*] --> PENDING
-  PENDING --> RUNNING
-  RUNNING --> COMPLETED
-  RUNNING --> AWAITING_REVIEW
-  RUNNING --> FAILED
+  PENDING --> INGESTING
+  INGESTING --> NORMALISING
+  NORMALISING --> MATCHING
+  MATCHING --> REPORTING
+  REPORTING --> COMPLETED
+  REPORTING --> AWAITING_REVIEW
+  REPORTING --> FAILED
+  INGESTING --> FAILED
+  NORMALISING --> FAILED
+  MATCHING --> FAILED
+  PENDING --> CANCELLED: cancel
+  INGESTING --> CANCELLED: cancel
+  NORMALISING --> CANCELLED: cancel
+  MATCHING --> CANCELLED: cancel
+  REPORTING --> CANCELLED: cancel
   AWAITING_REVIEW --> COMPLETED: human review
   COMPLETED --> [*]
   FAILED --> [*]
+  CANCELLED --> [*]
 ```
 
 {% include aria-workflow-job-lifecycle.html %}

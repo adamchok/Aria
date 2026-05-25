@@ -2,6 +2,7 @@
 title: Solution
 layout: default
 description: "ARIA's value proposition and key differentiators"
+nav_order: 3
 ---
 
 # Solution
@@ -31,10 +32,11 @@ flowchart LR
   E --> N[Normalise FX]
   N --> M[Match + score]
   M --> R[Report + Excel]
-  M --> H{Confidence 0.5–0.75?}
-  H -->|Yes| Q[Human review queue]
-  H -->|No| R
-  Q --> R
+  R --> T{Uncertain items?}
+  T -->|Yes| Q[AWAITING_REVIEW]
+  T -->|No| D[COMPLETED]
+  Q --> H[Human review]
+  H --> D
 ```
 
 {% include aria-workflow-solution.html %}

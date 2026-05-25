@@ -2,6 +2,7 @@
 title: Getting Started
 layout: default
 description: "Prerequisites, installation, and step-by-step local run instructions"
+nav_order: 6
 ---
 
 # Getting Started
@@ -101,9 +102,9 @@ Wait until all health checks pass and you see the API listening on port 8000.
 
 | Service | URL | Credentials |
 | --- | --- | --- |
-| **NovaPay** (reference client) | [http://localhost:5173](http://localhost:5173) | Tenant user JWT (see Step 5) |
+| **NovaPay** (reference client) | [http://localhost:5173](http://localhost:5173) | Demo UI: `finance@novapay.demo` / `novapay2026`; API: `VITE_API_KEY` (see Step 5) |
 | **Admin UI** | [http://localhost:5174](http://localhost:5174) | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` |
-| **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant user JWT |
+| **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant user JWT (create in Admin UI) |
 | **API Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | — |
 | **Health check** | [http://localhost:8000/health](http://localhost:8000/health) | — |
 | **MinIO console** | [http://localhost:9001](http://localhost:9001) | ariaadmin / ariaadmin |
@@ -114,9 +115,15 @@ Wait until all health checks pass and you see the API listening on port 8000.
 2. Sign in with `DEFAULT_ADMIN_EMAIL` (default `admin@aria.local`) and your `DEFAULT_ADMIN_PASSWORD`
 3. Create a **tenant** (Tenants → New tenant)
 4. Create a **tenant user** assigned to that tenant (Users → New user, role `tenant_user`)
-5. Sign in to **NovaPay** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials
+5. Sign in to **Tenant mgmt** (:5175) with the tenant user credentials
+6. Create a **tenant API key** in Tenant mgmt → Keys — required for NovaPay API calls
 
-Optional: create a programmatic **API key** in Tenant mgmt → Keys for curl/SDK integrations (`X-API-Key` header).
+**NovaPay** (:5173) uses a separate UI gate: sign in with demo credentials `finance@novapay.demo` / `novapay2026` (no backend auth call). All NovaPay API requests send `X-API-Key` from `VITE_API_KEY`.
+
+{: .important }
+> **Docker full stack:** the NovaPay container is built without a tenant API key. API calls return `401` until you set `VITE_API_KEY` at build time (add `ARG VITE_API_KEY` to `frontend-novapay/Dockerfile` before `npm run build`) or use **Option 2 (hybrid dev)** with `frontend-novapay/.env`.
+
+Optional: use the same tenant API key for curl/SDK integrations (`X-API-Key` header).
 
 ### Step 6: Run a reconciliation in the UI
 
@@ -131,7 +138,7 @@ Optional: create a programmatic **API key** in Tenant mgmt → Keys for curl/SDK
 
 ### Step 7: Smoke test via curl (optional)
 
-From the repository root, with the stack running. Replace `YOUR_JWT` with a token from login, or use `X-API-Key: aria_live_...` from Tenant mgmt → Keys.
+From the repository root, with the stack running. Replace `YOUR_JWT` with a token from login, or use `X-API-Key: aria_…` from Tenant mgmt → Keys.
 
 ```bash
 # Obtain JWT (tenant user or admin)
@@ -232,19 +239,19 @@ celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
 > **Windows (Git Bash / hybrid dev):** Use `--pool=solo`. The default prefork pool fails on Windows (`WinError 5`), and the threads pool can conflict with async database drivers.
 
 {: .warning }
-> Without the Celery worker, jobs are enqueued but not processed unless Redis is down (in which case the API runs the pipeline inline as a fallback).
+> Without the Celery worker, jobs stay at `PENDING` — the API only runs the pipeline inline when **Celery task dispatch fails** (broker unreachable), not when the worker process is simply not running.
 
 ### Step 4: Start the frontend apps
 
 In **three terminals** (hybrid dev):
 
 ```bash
-cd frontend-novapay && npm install && cp .env.example .env && npm run dev   # :5173
+cd frontend-novapay && npm install && cp .env.example .env && npm run dev   # :5173 — set VITE_API_KEY after creating a tenant key
 cd frontend-tenant-mgmt && npm install && cp .env.example .env && npm run dev  # :5175
 cd frontend-admin && npm install && cp .env.example .env && npm run dev        # :5174
 ```
 
-Set `DEFAULT_ADMIN_PASSWORD` in `backend/.env`, restart API, then sign in to the admin app with `DEFAULT_ADMIN_EMAIL` / password. Create a tenant and tenant user from the admin console before using ops/mgmt apps.
+Set `DEFAULT_ADMIN_PASSWORD` in `backend/.env`, restart API, then sign in to the admin app with `DEFAULT_ADMIN_EMAIL` / password. Create a tenant, tenant user, and API key from the admin/tenant-mgmt consoles before using NovaPay or mgmt apps.
 
 Open http://localhost:5173 (NovaPay), http://localhost:5175 (mgmt), http://localhost:5174 (admin). Each app proxies `/api` to `http://localhost:8000`.
 
@@ -254,7 +261,7 @@ Open http://localhost:5173 (NovaPay), http://localhost:5175 (mgmt), http://local
 | --- | --- |
 | [http://localhost:8000/health](http://localhost:8000/health) | `{"status":"ok",...}` |
 | [http://localhost:8000/docs](http://localhost:8000/docs) | Swagger UI loads |
-| [http://localhost:5173/upload](http://localhost:5173/upload) | NovaPay upload page renders (after tenant user login) |
+| [http://localhost:5173/upload](http://localhost:5173/upload) | NovaPay upload page renders (demo login + `VITE_API_KEY` set) |
 | Celery worker logs | `celery@... ready` |
 
 ---
@@ -339,7 +346,8 @@ bundle exec jekyll serve --livereload
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Job stuck at `PENDING` / `RUNNING` | Celery worker not running | Start worker (Option 2 Step 3) with `--pool=solo` on Windows |
+| Job stuck at `PENDING` | Celery worker not running | Start worker (Option 2 Step 3) with `--pool=solo` on Windows |
+| Job stuck at `INGESTING` / `MATCHING` / etc. | Worker crashed mid-pipeline | Check worker logs; restart worker |
 | Celery `WinError 5` on Windows | Prefork pool unsupported | Add `--pool=solo` to the worker command |
 | `Event loop is closed` in Celery (Windows) | Threads pool + asyncpg | Use `--pool=solo`; restart worker after code changes |
 | Results unchanged after review | Stale browser cache / old API | Refresh results page; ensure uvicorn was restarted after backend updates |

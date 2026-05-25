@@ -2,6 +2,7 @@
 title: Configuration
 layout: default
 description: "Environment variables, API keys, and tuning parameters"
+nav_order: 7
 ---
 
 # Configuration
@@ -73,7 +74,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in values as needed.
 | --- | --- | --- |
 | `LANGSMITH_API_KEY` | *(empty)* | LangSmith API key for agent tracing |
 | `LANGSMITH_PROJECT` | `aria` | Project name in LangSmith UI |
-| `LANGSMITH_TRACING` | `true` in example | Set `true` to enable trace export |
+| `LANGSMITH_TRACING` | `false` | Set `true` to enable trace export (`backend/.env.example` recommends `true` for demos) |
 
 ### Database
 
@@ -142,7 +143,7 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ADMIN_API_KEY` | `aria-dev-admin` | Legacy bootstrap key for programmatic admin endpoints |
+| `ADMIN_API_KEY` | *(empty)* | Legacy bootstrap key for programmatic admin endpoints; Docker Compose defaults to `aria-dev-admin` |
 | `JWT_SECRET_KEY` | *(dev default in code)* | HS256 signing secret — **change in production** |
 | `JWT_ALGORITHM` | `HS256` | JWT algorithm |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token lifetime (24h) |
@@ -266,9 +267,9 @@ CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
 BATCH_SIZE_THRESHOLD: ${BATCH_SIZE_THRESHOLD:-50}
 BATCH_TIME_WINDOW_MINUTES: ${BATCH_TIME_WINDOW_MINUTES:-15}
 CELERY_BEAT_INTERVAL_MINUTES: ${CELERY_BEAT_INTERVAL_MINUTES:-2}
-WEBHOOK_MAX_RETRIES: ${WEBHOOK_MAX_RETRIES:-3}
-WEBHOOK_RETRY_BACKOFF_BASE_SECONDS: ${WEBHOOK_RETRY_BACKOFF_BASE_SECONDS:-5}
 ```
+
+Webhook retry vars (`WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`) are read from `backend/.env` when running the API/worker locally but are **not** currently passed through in `docker-compose.yml` — add them to service `environment` blocks if you need non-default values in Docker.
 
 Copy `.env.example` → `.env` at the repo root to get started. For hybrid development, put the full configuration in `backend/.env` and run the API/worker locally.
 
@@ -280,7 +281,7 @@ These values drive routing logic and should not be lowered in production without
 
 | Level | Threshold | Action |
 | --- | --- | --- |
-| Field flag | &lt; 0.70 | Flag field in UI |
+| Field flag | &lt; 0.70 | Flagged in ingestion prompts when field confidence is low |
 | Extraction escalation | &lt; 0.50 (record avg) | Route to human review queue |
 | Match uncertain | 0.50 – 0.74 | Review queue; never auto-confirm |
 | Match confident | ≥ 0.75 | Auto-match allowed |

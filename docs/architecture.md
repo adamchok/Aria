@@ -2,6 +2,7 @@
 title: Architecture
 layout: default
 description: "System design, agent pipeline, and technology stack"
+nav_order: 4
 ---
 
 # Architecture
@@ -73,13 +74,14 @@ A **ReconciliationOrchestrator** manager agent coordinates specialist stages wit
 flowchart TD
   ORCH[ReconciliationOrchestrator] --> IN[IngestionSpecialist]
   ORCH --> BS[BankStatementSpecialist]
-  IN -->|confidence &lt; 0.5| HR[Human review queue]
+  IN -->|confidence &lt; 0.5| ESC[Escalate extraction]
   IN -->|confidence ≥ 0.5| NO[NormalisationStage\nFX service — no LLM]
   BS --> NO
   NO --> MA[MatchingSpecialist]
-  MA -->|0.5 ≤ conf &lt; 0.75| HR
   MA --> RE[ReportSpecialist]
-  HR --> RE
+  RE --> END[COMPLETED or AWAITING_REVIEW]
+  END -->|uncertain items| HR[Human review queue]
+  HR --> COMP[COMPLETED]
 ```
 
 {% include aria-workflow-architecture.html %}
@@ -152,7 +154,7 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 2. **Amount filter** — within `[tolerance_low, tolerance_high]`
 3. **LLM reasoning** — semantic match on reference, payer, residual variance
 
-**Performance:** Phase 1 pre-scoring (`rapidfuzz` similarity) runs via `asyncio.gather` + `loop.run_in_executor` so all records score in parallel (rapidfuzz releases the GIL). Borderline scores (0.45–0.65) route directly to human review without a second Opus escalation call — outcomes are identical and the extra call added latency without changing the result. Matching uses Sonnet throughout.
+**Performance:** Phase 1 pre-scoring (`rapidfuzz` similarity) runs via `asyncio.gather` + `loop.run_in_executor` so all records score in parallel (rapidfuzz releases the GIL). Matching uses Sonnet throughout for LLM reasoning on pending records.
 
 ## Data flow
 
@@ -165,7 +167,7 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 | 5. Report | Agent 4 | All match results | `ReconciliationReport` | 3–5 s |
 | 6. Review | Human | UNCERTAIN items | Confirmed / rejected matches | Async; results re-hydrated from DB |
 
-Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Redis is unreachable, the API falls back to inline execution for developer convenience. On **Windows**, run the worker with `--pool=solo`.
+Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Celery **task dispatch** fails (broker unreachable), the API falls back to inline execution. On **Windows**, run the worker with `--pool=solo`.
 
 ## Webhook events
 
@@ -177,7 +179,7 @@ ARIA delivers signed HMAC-SHA256 `POST` payloads to registered tenant endpoints 
 | `job.stage_completed` | Each pipeline stage finishes (ingestion, normalisation, matching, report) | `stage` — the stage name |
 | `job.completed` | Pipeline finished; all matches auto-resolved | `summary` (matched/uncertain/unmatched/total counts) |
 | `job.review_required` | Pipeline finished with items needing human review (status `AWAITING_REVIEW`) | `summary` (same shape) |
-| `job.failed` | Pipeline failed or job was cancelled | `error` — reason string |
+| `job.failed` | Pipeline failed | `error` — reason string |
 
 Register endpoints and inspect delivery history in the **Tenant Management** UI (`/webhooks`) or via the REST API (`POST /api/v1/webhooks`). Deliveries are retried up to `WEBHOOK_MAX_RETRIES` times with exponential backoff.
 
@@ -231,17 +233,17 @@ Three role-scoped React apps plus **NovaPay**, a reference external client, shar
 | App | Port | Role | Primary screens |
 | --- | --- | --- | --- |
 | `frontend-novapay` | 5173 | External SME client (demo) | Upload, jobs, results, review, ingest simulation |
-| `frontend-admin` | 5174 | Platform admin | Tenants, users, cross-tenant analytics/queue |
+| `frontend-admin` | 5174 | Platform admin | Tenants, users, cross-tenant analytics |
 | `frontend-tenant-mgmt` | 5175 | Tenant admin | API keys, webhooks, bank accounts, tenant analytics |
 
-**NovaPay** is not part of ARIA's internal operator tooling. It simulates how a tenant's finance system (ERP, treasury portal, payment ops tool) consumes the ARIA REST API — JWT auth, job submission, SSE progress, ingest endpoints, and human review — so integrators can see a working reference without building from scratch.
+**NovaPay** is not part of ARIA's internal operator tooling. It simulates how a tenant's finance system (ERP, treasury portal, payment ops tool) consumes the ARIA REST API — demo UI login plus `X-API-Key` (`VITE_API_KEY`) for all backend calls, plus SSE progress, ingest endpoints, and human review — so integrators can see a working reference without building from scratch.
 
 | Component | Technology |
 | --- | --- |
 | Framework | React 18 + TypeScript (strict) |
 | Build | Vite |
 | Styling | Tailwind CSS |
-| Auth | JWT via `auth-store`; `LoginPage` + `AuthRoute`; role guards |
+| Auth | JWT via `auth-store` in admin/tenant-mgmt; NovaPay uses demo UI login + `VITE_API_KEY` for API calls |
 | Server state | TanStack Query + SSE (`useJobStream` in NovaPay) |
 | UI state | Zustand (`auth-store`, `upload-store` in NovaPay only) |
 | Tables | AG Grid Community |
@@ -264,12 +266,12 @@ Three role-scoped React apps plus **NovaPay**, a reference external client, shar
 
 ## Security considerations
 
-- **Authentication** — `AuthMiddleware` accepts JWT Bearer tokens (browser apps) or `X-API-Key` (programmatic). API keys validated via SHA-256 hash; raw keys never stored. SSE streams accept `?access_token=` because `EventSource` cannot send headers.
+- **Authentication** — `AuthMiddleware` accepts JWT Bearer tokens (browser apps) or `X-API-Key` (programmatic). API keys validated via SHA-256 hash; raw keys never stored. SSE streams accept `?access_token=` (JWT) or `?api_key=` because `EventSource` cannot send headers.
 - **Roles** — `admin` (platform), `tenant_user` (scoped to one tenant). Admin may impersonate a tenant via `X-Tenant-ID` header.
 - **Multi-tenancy** — row-level isolation: all queries filter by `tenant_id`; MinIO object paths prefixed with `{tenant_id}/`
 - **Webhook signing** — HMAC-SHA256 (Stripe model); 5-minute timestamp tolerance prevents replay
 - **SSRF guard** — webhook URLs validated against a blocklist before registration (no private/loopback addresses)
-- Documents stored encrypted at rest (AES-256 via S3/MinIO)
+- Documents optionally encrypted at rest when `S3_SERVER_SIDE_ENCRYPTION=AES256` is set (AWS S3). Default Docker MinIO stack stores objects without SSE — leave unset locally
 - Presigned URLs expire in 15 minutes (`S3_PRESIGN_TTL_SECONDS=900`)
 - No payment PII in debug logs (payer names masked where applicable)
 - Every LLM reasoning chain persisted in audit log
@@ -286,7 +288,10 @@ backend/
 │   │   ├── auth.py          Login, /me
 │   │   ├── users.py         Platform user CRUD (admin)
 │   │   ├── tenant_settings.py  Tenant-scoped keys + users
-│   │   ├── jobs.py          Job CRUD + list
+│   │   ├── jobs.py          Job CRUD, list, cancel, dry_run
+│   │   ├── review.py        Human review actions
+│   │   ├── export.py        Excel export
+│   │   ├── schedules.py     Reconciliation schedules
 │   │   ├── stream.py        SSE endpoint
 │   │   ├── tenants.py       Tenant + API key management (admin)
 │   │   ├── ingest.py        Transaction ingestion + queue
@@ -295,14 +300,14 @@ backend/
 │   │   ├── bank_accounts.py Bank accounts, statements, ledger
 │   │   └── bank_statements.py Standalone statement upload/list
 │   ├── agents/sdk/          OpenAI Agents SDK orchestrator, stages, prompts, LLMService
-│   ├── graph/               StateGraph, routing, state model
+│   ├── graph/               ReconciliationState + pipeline alias (`builder.py`)
 │   ├── models/              Pydantic + SQLAlchemy models
 │   ├── repositories/        DB access layers
 │   ├── services/            FX, storage, LLM client, Excel export
 │   ├── tools/               File parsers, FX/SWIFT tools
 │   ├── workers/             Celery app, pipeline task, Beat, webhook delivery
 │   └── core/                Config, security, middleware, logging, database
-├── alembic/                 DB migrations (0001–0008)
+├── alembic/                 DB migrations (0001–0013)
 └── tests/                   Unit, integration, agent tests
 
 frontend-novapay/            NovaPay: external SME API client demo
