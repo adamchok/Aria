@@ -5,6 +5,7 @@ import {
   STMT_ID,
   TENANT_ID,
   WEBHOOK_ID,
+  aiPerformanceFixture,
   analyticsFixture,
   apiKeyFixture,
   bankAccountFixture,
@@ -33,6 +34,10 @@ export const handlers = [
 
   http.get('http://localhost/api/v1/analytics/summary', () =>
     HttpResponse.json(analyticsFixture),
+  ),
+
+  http.get('http://localhost/api/v1/analytics/performance', () =>
+    HttpResponse.json(aiPerformanceFixture),
   ),
 
   http.get('http://localhost/api/v1/ingest/queue', () => HttpResponse.json(queueFixture)),

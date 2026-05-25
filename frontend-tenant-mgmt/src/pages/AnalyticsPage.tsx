@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatPercent } from '@/lib/format';
-import type { AIPerformanceSummary, ConfidenceBucket, JobProcessingPoint } from '@/types/api';
+import type { ConfidenceBucket, JobProcessingPoint } from '@/types/api';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -208,18 +208,23 @@ function ProcessingSparkline({ jobs, targetSeconds = 60 }: { jobs: JobProcessing
         ))}
 
         {/* X axis labels: first + last */}
-        {jobs.length > 0 && (
-          <>
-            <text x={toX(0)} y={H - 4} fontSize={8} textAnchor="middle" fill="#94a3b8">
-              {jobs[0].created_at.slice(5, 10)}
-            </text>
-            {jobs.length > 1 && (
-              <text x={toX(jobs.length - 1)} y={H - 4} fontSize={8} textAnchor="middle" fill="#94a3b8">
-                {jobs[jobs.length - 1].created_at.slice(5, 10)}
+        {(() => {
+          const first = jobs[0];
+          const last = jobs[jobs.length - 1];
+          if (!first) return null;
+          return (
+            <>
+              <text x={toX(0)} y={H - 4} fontSize={8} textAnchor="middle" fill="#94a3b8">
+                {first.created_at.slice(5, 10)}
               </text>
-            )}
-          </>
-        )}
+              {last && last !== first && (
+                <text x={toX(jobs.length - 1)} y={H - 4} fontSize={8} textAnchor="middle" fill="#94a3b8">
+                  {last.created_at.slice(5, 10)}
+                </text>
+              )}
+            </>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -354,7 +359,7 @@ export function AnalyticsPage() {
           {/* ── Hackathon target scorecard ── */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Hackathon benchmarks</CardTitle>
+              <CardTitle>AI Benchmarks</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-2.5">

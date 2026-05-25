@@ -1,4 +1,5 @@
 import type {
+  AIPerformanceSummary,
   AnalyticsSummary,
   ApiKeyResponse,
   BankAccountResponse,
@@ -69,6 +70,41 @@ export const analyticsFixture: AnalyticsSummary = {
   by_corridor: [
     { corridor: 'USD/MYR', job_count: 8, record_count: 160, avg_match_rate: 0.925 },
     { corridor: 'EUR/MYR', job_count: 4, record_count: 80, avg_match_rate: 0.9 },
+  ],
+};
+
+export const aiPerformanceFixture: AIPerformanceSummary = {
+  period_start: '2026-04-01',
+  period_end: '2026-05-01',
+  total_records: 240,
+  avg_confidence: 0.83,
+  confidence_buckets: [
+    { label: '< 50%', min_val: 0.0, max_val: 0.5, count: 5, pct: 0.021 },
+    { label: '50–75%', min_val: 0.5, max_val: 0.75, count: 15, pct: 0.063 },
+    { label: '75–90%', min_val: 0.75, max_val: 0.9, count: 80, pct: 0.333 },
+    { label: '≥ 90%', min_val: 0.9, max_val: 1.0, count: 140, pct: 0.583 },
+  ],
+  auto_matched_count: 210,
+  human_confirmed_count: 12,
+  human_rejected_count: 3,
+  human_review_confirmation_rate: 0.8,
+  match_rate_target_met: true,
+  escalation_in_target_range: true,
+  processing_target_met: true,
+  avg_processing_seconds: 38.5,
+  recent_jobs: [
+    {
+      job_id: '11111111-1111-1111-1111-111111111111',
+      created_at: '2026-04-15T10:00:00Z',
+      processing_seconds: 32.1,
+      record_count: 20,
+    },
+    {
+      job_id: '22222222-2222-2222-2222-222222222222',
+      created_at: '2026-04-22T10:00:00Z',
+      processing_seconds: 45.7,
+      record_count: 30,
+    },
   ],
 };
 
