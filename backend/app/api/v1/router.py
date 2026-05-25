@@ -13,6 +13,7 @@ from app.api.v1 import (
     ingest,
     jobs,
     review,
+    schedules,
     stream,
     tenant_settings,
     tenants,
@@ -40,3 +41,4 @@ api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"]
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(bank_statements.router, prefix="/bank-statements", tags=["bank-statements"])
 api_router.include_router(bank_accounts.router, prefix="/bank-accounts", tags=["bank-accounts"])
+api_router.include_router(schedules.router, prefix="/schedules", tags=["schedules"])

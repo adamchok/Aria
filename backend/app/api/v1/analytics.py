@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
@@ -19,6 +20,8 @@ from app.models.schemas import (
     AnalyticsCorridorBreakdown,
     AnalyticsSummary,
     ConfidenceBucket,
+    EscalationBreakdownResponse,
+    EscalationPayeeBreakdown,
     JobProcessingPoint,
 )
 
@@ -397,4 +400,71 @@ async def admin_analytics_summary(
         avg_match_rate=avg_match_rate,
         escalation_rate=escalation_rate,
         by_tenant=sorted(by_tenant, key=lambda t: t.total_records, reverse=True),
+    )
+
+
+@router.get("/escalation-breakdown", response_model=EscalationBreakdownResponse)
+async def escalation_breakdown(
+    tenant_id: str = Depends(require_tenant),
+    group_by: Literal["payee", "corridor"] = Query(default="payee"),
+    period_start: date = Query(default=None),
+    period_end: date = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> EscalationBreakdownResponse:
+    today = date.today()
+    if period_end is None:
+        period_end = today
+    if period_start is None:
+        period_start = today - timedelta(days=30)
+
+    jobs_result = await session.execute(
+        select(JobORM).where(
+            JobORM.tenant_id == tenant_id,
+            JobORM.status == JobStatus.COMPLETED.value,
+            func.date(JobORM.created_at) >= period_start,
+            func.date(JobORM.created_at) <= period_end,
+        )
+    )
+    jobs = jobs_result.scalars().all()
+    job_ids = [j.id for j in jobs]
+
+    if not job_ids:
+        return EscalationBreakdownResponse(
+            group_by=group_by,
+            period_start=period_start,
+            period_end=period_end,
+            breakdowns=[],
+        )
+
+    matches_result = await session.execute(select(MatchORM).where(MatchORM.job_id.in_(job_ids)))
+    all_matches = matches_result.scalars().all()
+
+    groups: dict[str, list[MatchORM]] = {}
+    for m in all_matches:
+        payload = m.payload or {}
+        nr = payload.get("normalised_record", {})
+        payment = nr.get("payment", {})
+        if group_by == "payee":
+            key = payment.get("payee", "Unknown")
+        else:
+            key = payment.get("currency", "Unknown")
+        groups.setdefault(key, []).append(m)
+
+    breakdowns = [
+        EscalationPayeeBreakdown(
+            group_key=key,
+            total_count=len(group_matches),
+            escalated_count=sum(
+                1 for m in group_matches
+                if m.human_reviewed or m.status == MatchStatus.UNCERTAIN.value
+            ),
+        )
+        for key, group_matches in sorted(groups.items(), key=lambda kv: len(kv[1]), reverse=True)
+    ]
+
+    return EscalationBreakdownResponse(
+        group_by=group_by,
+        period_start=period_start,
+        period_end=period_end,
+        breakdowns=breakdowns,
     )

@@ -44,6 +44,9 @@ class TenantORM(Base):
     webhooks: Mapped[list[WebhookORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     bank_statements: Mapped[list[BankStatementORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
     bank_accounts: Mapped[list[BankAccountORM]] = relationship(back_populates="tenant", cascade="all, delete-orphan", lazy="noload")
+    schedules: Mapped[list["ReconciliationScheduleORM"]] = relationship(
+        "ReconciliationScheduleORM", back_populates="tenant", cascade="all, delete-orphan", lazy="noload"
+    )
 
 
 class ApiKeyORM(Base):
@@ -252,6 +255,27 @@ class BankAccountORM(Base):
     statements: Mapped[list[BankStatementORM]] = relationship(
         back_populates="account", cascade="all, delete-orphan", lazy="noload"
     )
+
+
+class ReconciliationScheduleORM(Base):
+    """Tenant-configured schedule for automatic reconciliation jobs."""
+
+    __tablename__ = "reconciliation_schedules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    run_time_utc: Mapped[str] = mapped_column(String(5), nullable=False)  # "HH:MM"
+    days_of_week: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    bank_account_id: Mapped[str] = mapped_column(
+        ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    base_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="MYR")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    tenant: Mapped[TenantORM] = relationship("TenantORM", foreign_keys=[tenant_id], lazy="noload")
 
 
 class BankStatementORM(Base):

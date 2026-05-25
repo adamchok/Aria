@@ -39,6 +39,11 @@ async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None
     if settings.llm_mode == "live":
         llm._get_anthropic()
 
+    vendor_index: dict[str, list[dict]] = {}
+    for rule in ctx.vendor_rules:
+        if rule.get("payee_pattern"):
+            vendor_index.setdefault(rule["payee_pattern"], []).append(rule)
+
     loop = asyncio.get_running_loop()
     n = len(ctx.state.payment_documents)
     max_workers = min(n, 10) if n else 1
@@ -47,7 +52,7 @@ async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None
     if n:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             tasks = [
-                loop.run_in_executor(pool, _extract_one, doc, ctx, llm)
+                loop.run_in_executor(pool, _extract_one, doc, ctx, llm, vendor_index)
                 for doc in ctx.state.payment_documents
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -65,7 +70,7 @@ async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None
     logger.info("ingestion.complete", count=len(records), parallel=True)
 
 
-def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService) -> PaymentRecord:
+def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService, vendor_index: dict[str, list[dict]] | None = None) -> PaymentRecord:
     data = doc.bytes_data if doc.bytes_data is not None else ctx.storage.get_object(doc.storage_key)
     fmt = detect_source_format(doc.filename, doc.content_type)
     settings = ctx.settings
@@ -106,7 +111,7 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
     except Exception as exc:
         raise ExtractionError(f"LLM extraction failed for {doc.filename}: {exc}") from exc
 
-    payload = _apply_vendor_rules(payload, ctx.vendor_rules)
+    payload = _apply_vendor_rules(payload, vendor_index or {})
 
     return PaymentRecord(
         payer=payload["payer"],
@@ -127,37 +132,37 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
     )
 
 
-def _apply_vendor_rules(payload: dict, vendor_rules: list[dict]) -> dict:
+def _apply_vendor_rules(payload: dict, vendor_index: dict[str, list[dict]]) -> dict:
     """Override LLM-extracted fields with stored vendor corrections."""
-    if not vendor_rules:
+    if not vendor_index:
         return payload
     payee_normalized = normalize_payee(payload.get("payee", ""))
     if not payee_normalized:
         return payload
 
     applied = False
-    for rule in vendor_rules:
-        pattern = rule["payee_pattern"]
+    for pattern, rules in vendor_index.items():
         if not pattern:
             continue
         # Substring match after normalization: "moonshot ai" ⊂ "moonshot ai pte ltd"
         if pattern in payee_normalized or payee_normalized in pattern:
-            field = rule["field_name"]
-            corrected = rule["corrected_value"]
-            if payload.get(field) != corrected:
-                if not applied:
-                    payload = dict(payload)
-                    applied = True
-                payload[field] = corrected
-                fc = dict(payload.get("field_confidences") or {})
-                fc[field] = 0.90
-                payload["field_confidences"] = fc
-                logger.info(
-                    "vendor_rule.applied",
-                    payee=payload.get("payee"),
-                    field=field,
-                    corrected=corrected,
-                )
+            for rule in rules:
+                field = rule["field_name"]
+                corrected = rule["corrected_value"]
+                if payload.get(field) != corrected:
+                    if not applied:
+                        payload = dict(payload)
+                        applied = True
+                    payload[field] = corrected
+                    fc = dict(payload.get("field_confidences") or {})
+                    fc[field] = 0.90
+                    payload["field_confidences"] = fc
+                    logger.info(
+                        "vendor_rule.applied",
+                        payee=payload.get("payee"),
+                        field=field,
+                        corrected=corrected,
+                    )
     return payload
 
 

@@ -73,6 +73,9 @@ def render_excel_report(
         "Amount (MYR)",
         "Bank entry date",
         "Bank entry amount (MYR)",
+        "Bank description",
+        "Bank reference",
+        "Bank counterparty",
         "Confidence",
         "Variance (MYR)",
         "Reference",
@@ -93,6 +96,9 @@ def render_excel_report(
             str(nr.amount_myr_at_settlement_rate),
             bank.value_date.isoformat() if bank else "",
             str(bank.amount) if bank else "",
+            bank.description or "" if bank else "",
+            bank.reference or "" if bank else "",
+            bank.counterparty or "" if bank else "",
             f"{m.confidence:.2f}",
             str(m.amount_variance_myr),
             nr.payment.reference or "",
@@ -117,12 +123,16 @@ def render_excel_report(
         "Tolerance high",
         "Confidence",
         "Reason",
+        "Bank description",
+        "Bank reference",
+        "Bank counterparty",
     ])
     _style_header(ws)
     for m in report.matches:
         if m.status.value == "MATCHED":
             continue
         nr = m.normalised_record
+        bank = m.bank_entry
         ws.append([
             str(m.id),
             m.status.value,
@@ -134,6 +144,9 @@ def render_excel_report(
             str(nr.tolerance_high),
             f"{m.confidence:.2f}",
             m.variance_explanation,
+            bank.description if bank else "",
+            bank.reference if bank else "",
+            bank.counterparty if bank else "",
         ])
     for row in ws.iter_rows(min_row=2):
         fill = _AMBER_FILL if row[1].value == "UNCERTAIN" else _RED_FILL

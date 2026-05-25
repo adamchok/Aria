@@ -98,17 +98,25 @@ class StaticFallbackProvider:
 
 
 class FXService:
-    """FX retrieval with provider chain and TTL cache keyed on (source, target, date)."""
+    """FX retrieval with provider chain, Redis cache, and in-memory TTL cache."""
 
     def __init__(
         self,
         providers: list[FXProvider] | None = None,
         settings: Settings | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._cache: dict[tuple[str, str, str], tuple[Decimal, float]] = {}
+        self._redis = None
         if providers is None:
-            client = httpx.AsyncClient()
+            # Redis cache only on the default provider chain; tests pass explicit providers.
+            try:
+                import redis.asyncio as aioredis  # type: ignore[import]
+                self._redis = aioredis.from_url(self._settings.redis_url, decode_responses=False)
+            except Exception:
+                pass
+            client = http_client or httpx.AsyncClient()
             providers = []
             # Prefer Open Exchange Rates — ExchangeRate-API free tier lacks historical endpoints.
             if self._settings.openexchangerates_app_id:
@@ -129,6 +137,18 @@ class FXService:
             return Decimal("1")
 
         cache_key = (source, target, on_date.isoformat())
+        redis_key = f"aria:fx:{source}:{target}:{on_date.isoformat()}"
+
+        # Redis cache layer
+        if self._redis:
+            try:
+                cached_bytes = await self._redis.get(redis_key)
+                if cached_bytes:
+                    return Decimal(cached_bytes.decode())
+            except Exception:
+                pass
+
+        # In-memory cache
         cached = self._cache.get(cache_key)
         if cached:
             rate, expires_at = cached
@@ -139,10 +159,13 @@ class FXService:
         for provider in self._providers:
             try:
                 rate = await provider.get_rate(source, target, on_date)
-                self._cache[cache_key] = (
-                    rate,
-                    time.time() + self._settings.fx_cache_ttl_seconds,
-                )
+                ttl = self._settings.fx_cache_ttl_seconds
+                if self._redis:
+                    try:
+                        await self._redis.setex(redis_key, ttl, str(rate))
+                    except Exception:
+                        pass
+                self._cache[cache_key] = (rate, time.time() + ttl)
                 logger.info(
                     "fx.rate.retrieved",
                     source=source,

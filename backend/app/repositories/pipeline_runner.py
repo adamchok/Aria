@@ -84,6 +84,13 @@ async def _emit(job_id: str, tenant_id: str | None, event: str, data: dict) -> N
         except Exception:  # noqa: BLE001
             pass
 
+    if event == "agent_complete" and tenant_id:
+        try:
+            from app.workers.tasks import trigger_webhooks
+            await trigger_webhooks(tenant_id, job_id, "job.stage_completed")
+        except Exception:  # noqa: BLE001
+            pass
+
 
 async def execute_job(job_id: UUID | str) -> None:
     """Load the job from the database, run the pipeline, persist results."""

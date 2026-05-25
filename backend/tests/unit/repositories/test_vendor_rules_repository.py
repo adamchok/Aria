@@ -28,27 +28,27 @@ def test_apply_vendor_rules_overrides_currency():
         "amount_original": "5.00",
         "field_confidences": {"currency": 0.6},
     }
-    rules = [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]
-    result = _apply_vendor_rules(payload, rules)
+    vendor_index = {"moonshot ai": [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]}
+    result = _apply_vendor_rules(payload, vendor_index)
     assert result["currency"] == "USD"
     assert result["field_confidences"]["currency"] == 0.90
 
 
 def test_apply_vendor_rules_noop_when_already_correct():
     payload = {"payee": "MOONSHOT AI PTE. LTD.", "currency": "USD", "field_confidences": {}}
-    rules = [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]
-    result = _apply_vendor_rules(payload, rules)
+    vendor_index = {"moonshot ai": [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]}
+    result = _apply_vendor_rules(payload, vendor_index)
     assert result is payload  # no copy made
 
 
 def test_apply_vendor_rules_no_match():
     payload = {"payee": "Anthropic PBC", "currency": "SGD", "field_confidences": {}}
-    rules = [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]
-    result = _apply_vendor_rules(payload, rules)
+    vendor_index = {"moonshot ai": [{"payee_pattern": "moonshot ai", "field_name": "currency", "corrected_value": "USD"}]}
+    result = _apply_vendor_rules(payload, vendor_index)
     assert result["currency"] == "SGD"
 
 
 def test_apply_vendor_rules_empty_rules():
     payload = {"payee": "MOONSHOT AI PTE. LTD.", "currency": "SGD", "field_confidences": {}}
-    result = _apply_vendor_rules(payload, [])
+    result = _apply_vendor_rules(payload, {})
     assert result is payload

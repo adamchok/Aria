@@ -49,7 +49,8 @@ async def test_normalisation_skips_on_fx_failure(monkeypatch):
 
     ctx = ReconciliationContext(state=state, settings=Settings(_env_file=None))
     await run_normalisation_stage(ctx, fx_service=_FailFX(settings=Settings(_env_file=None)))
-    assert state.normalised_records == []
+    assert len(state.normalised_records) == 1
+    assert state.normalised_records[0].fx_unavailable is True
     assert any(e.action == "fx_unavailable" for e in state.audit_log)
 
 

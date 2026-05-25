@@ -15,7 +15,7 @@ from app.models.database import VendorRuleORM
 
 logger = get_logger(__name__)
 
-SUPPORTED_FIELDS = frozenset({"currency"})
+SUPPORTED_FIELDS = frozenset({"currency", "payee", "reference"})
 
 _LEGAL_SUFFIXES = re.compile(
     r"\b(pte\.?\s*ltd\.?|ltd\.?|inc\.?|p\.?b\.?c\.?|llc\.?|corp\.?|\bco\.?)\b",

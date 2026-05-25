@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     webhook_max_retries: int = 3
     webhook_retry_backoff_base_seconds: int = 5
 
+    # Email notifications
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@aria.local"
+    smtp_use_tls: bool = True
+    notification_email_enabled: bool = False
+
     # App
     app_env: Literal["development", "test", "staging", "production"] = "development"
     log_level: str = "INFO"

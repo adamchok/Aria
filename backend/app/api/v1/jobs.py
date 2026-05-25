@@ -25,6 +25,7 @@ _CANCELLABLE_STATUSES = {
 }
 from app.models.schemas import (
     BankEntry,
+    DryRunResponse,
     JobCreateResponse,
     JobListItem,
     JobListResponse,
@@ -99,7 +100,7 @@ async def list_jobs(
     return JobListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("", response_model=JobCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_job(
     request: Request,
     payment_proofs: Annotated[list[UploadFile], File(description="Payment proofs (multi-file)")],
@@ -121,9 +122,10 @@ async def create_job(
         ),
     ] = None,
     base_currency: Annotated[str, Form()] = "MYR",
+    dry_run: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session),
     tenant_id: str | None = Depends(require_tenant),
-) -> JobCreateResponse:
+) -> JobCreateResponse | DryRunResponse:
     validated_currency = _validate_currency(base_currency)
 
     if not payment_proofs:
@@ -214,6 +216,47 @@ async def create_job(
             stmt_body,
             bank_statement.filename or "statement",
             content_type=bank_statement.content_type,
+        )
+
+    if dry_run:
+        from datetime import datetime
+        from uuid import uuid4
+
+        from app.agents.sdk.runner import run_reconciliation
+        from app.graph.state import DocumentInput, ReconciliationState
+        from app.repositories.vendor_rules_repository import VendorRulesRepository
+
+        tmp_id = uuid4()
+        docs = [DocumentInput(storage_key=k, filename=k.rsplit("/", 1)[-1]) for k in proof_keys]
+        for doc in docs:
+            doc.bytes_data = storage.get_object(doc.storage_key)
+
+        stmt_input = None
+        if stmt_key:
+            stmt_input = DocumentInput(storage_key=stmt_key, filename=stmt_key.rsplit("/", 1)[-1])
+            stmt_input.bytes_data = storage.get_object(stmt_key)
+
+        dry_state = ReconciliationState(
+            job_id=tmp_id,
+            base_currency=validated_currency,
+            payment_documents=docs,
+            bank_statement_input=stmt_input,
+            started_at=datetime.utcnow(),
+        )
+        vendor_rules: list[dict] = []
+        if tenant_id:
+            rules_repo = VendorRulesRepository(session, tenant_id=tenant_id)
+            vendor_rules = await rules_repo.find_for_tenant()
+
+        dry_state = await run_reconciliation(dry_state, tenant_id=tenant_id, vendor_rules=vendor_rules)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content=DryRunResponse(
+                job_id=tmp_id,
+                dry_run=True,
+                report=dry_state.report,
+            ).model_dump(mode="json"),
         )
 
     repo = JobRepository(session, tenant_id=tenant_id)

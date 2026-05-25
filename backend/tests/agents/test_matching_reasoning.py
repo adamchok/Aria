@@ -5,6 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import uuid4
 
+import asyncio
+
 import pytest
 
 from app.agents.sdk.context import ReconciliationContext
@@ -47,7 +49,7 @@ class _StubLLM:
 def test_unmatched_when_no_candidates(normalised_record_usd):
     state = _state(normalised_record_usd, [])
     ctx = ReconciliationContext(state=state)
-    run_matching_stage(ctx, llm=_StubLLM(0.0))  # type: ignore[arg-type]
+    asyncio.run(run_matching_stage(ctx, llm=_StubLLM(0.0)))  # type: ignore[arg-type]
     assert len(state.match_results) == 1
     assert state.match_results[0].status == MatchStatus.UNMATCHED
     assert state.match_results[0].confidence == 0.0
@@ -64,7 +66,7 @@ def test_matched_when_strong_candidate(normalised_record_usd):
     )
     state = _state(normalised_record_usd, [entry])
     ctx = ReconciliationContext(state=state)
-    run_matching_stage(ctx, llm=_StubLLM(0.9))  # type: ignore[arg-type]
+    asyncio.run(run_matching_stage(ctx, llm=_StubLLM(0.9)))  # type: ignore[arg-type]
     result = state.match_results[0]
     assert result.status == MatchStatus.MATCHED
     assert result.confidence >= 0.75
@@ -86,8 +88,8 @@ def test_threshold_enforcement(normalised_record_usd, confidence_value, expected
     entry = BankEntry(value_date=normalised_record_usd.payment.value_date, amount=midpoint)
     state = _state(normalised_record_usd, [entry])
     ctx = ReconciliationContext(state=state)
-    run_matching_stage(
+    asyncio.run(run_matching_stage(
         ctx,
         llm=_StubLLM(confidence_value),  # type: ignore[arg-type]
-    )
+    ))
     assert state.match_results[0].status == expected_status

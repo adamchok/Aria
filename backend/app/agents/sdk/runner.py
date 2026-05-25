@@ -69,7 +69,7 @@ async def run_reconciliation(
 
         if should_run_matching(ctx):
             # Stage 3: Matching
-            run_matching_stage(ctx, llm=llm)
+            await run_matching_stage(ctx, llm=llm)
             if on_stage_complete:
                 await on_stage_complete(state, "matching")
 
