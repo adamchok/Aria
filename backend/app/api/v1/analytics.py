@@ -15,8 +15,11 @@ from app.models.enums import JobStatus, MatchStatus
 from app.models.schemas import (
     AdminAnalyticsSummary,
     AdminTenantAnalytics,
+    AIPerformanceSummary,
     AnalyticsCorridorBreakdown,
     AnalyticsSummary,
+    ConfidenceBucket,
+    JobProcessingPoint,
 )
 
 router = APIRouter()
@@ -124,6 +127,167 @@ async def analytics_summary(
         avg_processing_seconds=avg_processing_seconds,
         escalation_rate=escalation_rate,
         by_corridor=sorted(by_corridor, key=lambda c: c.record_count, reverse=True),
+    )
+
+
+@router.get("/performance", response_model=AIPerformanceSummary)
+async def ai_performance_summary(
+    tenant_id: str = Depends(require_tenant),
+    period_start: date = Query(default=None),
+    period_end: date = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> AIPerformanceSummary:
+    today = date.today()
+    if period_end is None:
+        period_end = today
+    if period_start is None:
+        period_start = today - timedelta(days=30)
+
+    jobs_result = await session.execute(
+        select(JobORM).where(
+            JobORM.tenant_id == tenant_id,
+            JobORM.status == JobStatus.COMPLETED.value,
+            func.date(JobORM.created_at) >= period_start,
+            func.date(JobORM.created_at) <= period_end,
+        )
+    )
+    jobs = jobs_result.scalars().all()
+    job_ids = [j.id for j in jobs]
+
+    empty = AIPerformanceSummary(
+        period_start=period_start,
+        period_end=period_end,
+        total_records=0,
+        avg_confidence=0.0,
+        confidence_buckets=[
+            ConfidenceBucket(label="< 50%", min_val=0.0, max_val=0.5, count=0, pct=0.0),
+            ConfidenceBucket(label="50–75%", min_val=0.5, max_val=0.75, count=0, pct=0.0),
+            ConfidenceBucket(label="75–90%", min_val=0.75, max_val=0.9, count=0, pct=0.0),
+            ConfidenceBucket(label="≥ 90%", min_val=0.9, max_val=1.0, count=0, pct=0.0),
+        ],
+        auto_matched_count=0,
+        human_confirmed_count=0,
+        human_rejected_count=0,
+        human_review_confirmation_rate=0.0,
+        match_rate_target_met=False,
+        escalation_in_target_range=False,
+        processing_target_met=False,
+        avg_processing_seconds=0.0,
+        recent_jobs=[],
+    )
+
+    if not job_ids:
+        return empty
+
+    matches_result = await session.execute(
+        select(MatchORM).where(MatchORM.job_id.in_(job_ids))
+    )
+    all_matches = matches_result.scalars().all()
+
+    if not all_matches:
+        return empty
+
+    total_records = len(all_matches)
+    avg_confidence = sum(m.confidence for m in all_matches) / total_records
+
+    # Confidence buckets
+    buckets = [
+        {"label": "< 50%", "min_val": 0.0, "max_val": 0.5, "count": 0},
+        {"label": "50–75%", "min_val": 0.5, "max_val": 0.75, "count": 0},
+        {"label": "75–90%", "min_val": 0.75, "max_val": 0.9, "count": 0},
+        {"label": "≥ 90%", "min_val": 0.9, "max_val": 1.0, "count": 0},
+    ]
+    for m in all_matches:
+        c = m.confidence
+        if c < 0.5:
+            buckets[0]["count"] += 1
+        elif c < 0.75:
+            buckets[1]["count"] += 1
+        elif c < 0.9:
+            buckets[2]["count"] += 1
+        else:
+            buckets[3]["count"] += 1
+
+    confidence_buckets = [
+        ConfidenceBucket(
+            label=b["label"],
+            min_val=b["min_val"],
+            max_val=b["max_val"],
+            count=b["count"],
+            pct=b["count"] / total_records if total_records > 0 else 0.0,
+        )
+        for b in buckets
+    ]
+
+    # Human review outcomes
+    # auto-matched: status=MATCHED, not human_reviewed
+    # human-confirmed: human_reviewed=True, status=MATCHED
+    # human-rejected: human_reviewed=True, status=UNMATCHED
+    auto_matched_count = sum(
+        1 for m in all_matches
+        if not m.human_reviewed and m.status == MatchStatus.MATCHED.value
+    )
+    human_confirmed_count = sum(
+        1 for m in all_matches
+        if m.human_reviewed and m.status == MatchStatus.MATCHED.value
+    )
+    human_rejected_count = sum(
+        1 for m in all_matches
+        if m.human_reviewed and m.status == MatchStatus.UNMATCHED.value
+    )
+    total_reviewed = human_confirmed_count + human_rejected_count
+    human_review_confirmation_rate = (
+        human_confirmed_count / total_reviewed if total_reviewed > 0 else 0.0
+    )
+
+    # Target checks
+    matched_count = sum(1 for m in all_matches if m.status == MatchStatus.MATCHED.value)
+    uncertain_count = sum(1 for m in all_matches if m.status == MatchStatus.UNCERTAIN.value)
+    match_rate = matched_count / total_records if total_records > 0 else 0.0
+    escalation_rate = uncertain_count / total_records if total_records > 0 else 0.0
+
+    processing_times = [
+        (j.updated_at - j.created_at).total_seconds()
+        for j in jobs
+        if j.updated_at and j.created_at
+    ]
+    avg_processing_seconds = (
+        sum(processing_times) / len(processing_times) if processing_times else 0.0
+    )
+
+    # Per-job processing points (last 20, newest first)
+    job_match_count: dict[str, int] = {}
+    for m in all_matches:
+        job_match_count[m.job_id] = job_match_count.get(m.job_id, 0) + 1
+
+    sorted_jobs = sorted(jobs, key=lambda j: j.created_at, reverse=True)[:20]
+    recent_jobs = [
+        JobProcessingPoint(
+            job_id=j.id,
+            created_at=j.created_at,
+            processing_seconds=(j.updated_at - j.created_at).total_seconds()
+            if j.updated_at and j.created_at
+            else 0.0,
+            record_count=job_match_count.get(j.id, 0),
+        )
+        for j in reversed(sorted_jobs)
+    ]
+
+    return AIPerformanceSummary(
+        period_start=period_start,
+        period_end=period_end,
+        total_records=total_records,
+        avg_confidence=avg_confidence,
+        confidence_buckets=confidence_buckets,
+        auto_matched_count=auto_matched_count,
+        human_confirmed_count=human_confirmed_count,
+        human_rejected_count=human_rejected_count,
+        human_review_confirmation_rate=human_review_confirmation_rate,
+        match_rate_target_met=match_rate >= 0.9,
+        escalation_in_target_range=0.05 <= escalation_rate <= 0.20,
+        processing_target_met=avg_processing_seconds < 60.0,
+        avg_processing_seconds=avg_processing_seconds,
+        recent_jobs=recent_jobs,
     )
 
 

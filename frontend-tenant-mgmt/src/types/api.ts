@@ -384,6 +384,38 @@ export interface AnalyticsSummary {
   by_corridor: AnalyticsCorridorBreakdown[];
 }
 
+export interface ConfidenceBucket {
+  label: string;
+  min_val: number;
+  max_val: number;
+  count: number;
+  pct: number;
+}
+
+export interface JobProcessingPoint {
+  job_id: UUID;
+  created_at: ISODateTime;
+  processing_seconds: number;
+  record_count: number;
+}
+
+export interface AIPerformanceSummary {
+  period_start: ISODate;
+  period_end: ISODate;
+  total_records: number;
+  avg_confidence: number;
+  confidence_buckets: ConfidenceBucket[];
+  auto_matched_count: number;
+  human_confirmed_count: number;
+  human_rejected_count: number;
+  human_review_confirmation_rate: number;
+  match_rate_target_met: boolean;
+  escalation_in_target_range: boolean;
+  processing_target_met: boolean;
+  avg_processing_seconds: number;
+  recent_jobs: JobProcessingPoint[];
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'tenant_user';

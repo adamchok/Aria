@@ -520,6 +520,38 @@ class AdminAnalyticsSummary(_Base):
     by_tenant: list[AdminTenantAnalytics]
 
 
+class ConfidenceBucket(_Base):
+    label: str
+    min_val: float
+    max_val: float
+    count: int
+    pct: float
+
+
+class JobProcessingPoint(_Base):
+    job_id: UUID
+    created_at: datetime
+    processing_seconds: float
+    record_count: int
+
+
+class AIPerformanceSummary(_Base):
+    period_start: date
+    period_end: date
+    total_records: int
+    avg_confidence: float
+    confidence_buckets: list[ConfidenceBucket]
+    auto_matched_count: int
+    human_confirmed_count: int
+    human_rejected_count: int
+    human_review_confirmation_rate: float
+    match_rate_target_met: bool
+    escalation_in_target_range: bool
+    processing_target_met: bool
+    avg_processing_seconds: float
+    recent_jobs: list[JobProcessingPoint]
+
+
 class AdminQueueTenantStatus(_Base):
     tenant_id: UUID
     tenant_name: str

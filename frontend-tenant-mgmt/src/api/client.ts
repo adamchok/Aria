@@ -1,4 +1,5 @@
 import type {
+  AIPerformanceSummary,
   AnalyticsSummary,
   ApiKeyResponse,
   BankAccountCreate,
@@ -71,6 +72,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+
+  getAIPerformance: (params?: { period_start?: string; period_end?: string }): Promise<AIPerformanceSummary> => {
+    const qs = new URLSearchParams();
+    if (params?.period_start) qs.set('period_start', params.period_start);
+    if (params?.period_end) qs.set('period_end', params.period_end);
+    const query = qs.toString();
+    return request<AIPerformanceSummary>(`/api/v1/analytics/performance${query ? `?${query}` : ''}`);
+  },
 
   getAnalytics: (params?: { period_start?: string; period_end?: string }): Promise<AnalyticsSummary> => {
     const qs = new URLSearchParams();
