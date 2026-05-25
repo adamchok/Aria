@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/stores/auth-store';
-import { Button } from '@/components/ui/Button';
 
 interface AppShellProps {
   children: ReactNode;
@@ -89,6 +88,14 @@ function MenuIcon() {
   );
 }
 
+function LogOutIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+    </svg>
+  );
+}
+
 const navSections: NavSection[] = [
   {
     items: [
@@ -118,33 +125,35 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-slate-100">
+      {/* Dark sidebar — distinguishes this as external client portal */}
       <aside
         className={cn(
-          'flex h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200',
+          'flex h-screen shrink-0 flex-col border-r border-slate-800 bg-slate-950 transition-all duration-200',
           sidebarOpen ? 'w-56' : 'w-14',
         )}
       >
         {/* Logo + toggle */}
-        <div className="flex h-14 items-center justify-between border-b border-slate-200 px-3">
+        <div className="flex h-14 items-center justify-between border-b border-slate-800 px-3">
           {sidebarOpen && (
             <Link
               to="/dashboard"
-              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
-              <img
-                src="/aria-logo-full.png"
-                alt="ARIA Reconciliation"
-                className="h-7 w-auto"
-                width={120}
-                height={28}
-              />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">
+                A
+              </span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-white">ARIA Portal</span>
+                <span className="text-[9px] font-medium uppercase tracking-widest text-teal-400">
+                  Client
+                </span>
+              </div>
             </Link>
           )}
           <button
             onClick={() => setSidebarOpen((o) => !o)}
-            className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             {sidebarOpen ? <ChevronIcon open={false} /> : <MenuIcon />}
@@ -152,11 +161,11 @@ export function AppShell({ children }: AppShellProps) {
         </div>
 
         {/* Nav sections */}
-        <nav className="flex-1 overflow-y-auto py-3" aria-label="Primary">
+        <nav className="sidebar-scroll flex-1 overflow-y-auto py-3" aria-label="Primary">
           {navSections.map((section, si) => (
             <div key={si} className={si > 0 ? 'mt-4' : ''}>
               {section.label && sidebarOpen && (
-                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                   {section.label}
                 </p>
               )}
@@ -169,8 +178,8 @@ export function AppShell({ children }: AppShellProps) {
                     cn(
                       'flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors',
                       isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        ? 'bg-teal-500/10 text-teal-400 border-r-2 border-teal-500'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200',
                     )
                   }
                 >
@@ -182,10 +191,10 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
 
-        {/* Upload CTA + user */}
-        <div className="border-t border-slate-200 p-3 space-y-2">
+        {/* Upload CTA + user footer */}
+        <div className="border-t border-slate-800 p-3 space-y-2">
           {sidebarOpen && user && (
-            <div className="px-2 text-xs text-slate-500 truncate" title={user.email}>
+            <div className="px-2 text-xs text-slate-600 truncate" title={user.email}>
               {user.email}
             </div>
           )}
@@ -195,8 +204,8 @@ export function AppShell({ children }: AppShellProps) {
               cn(
                 'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900',
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-teal-500/15 text-teal-400 hover:bg-teal-500/25 hover:text-teal-300',
                 !sidebarOpen && 'justify-center',
               )
             }
@@ -205,10 +214,22 @@ export function AppShell({ children }: AppShellProps) {
             <span className="flex-shrink-0"><UploadIcon /></span>
             {sidebarOpen && <span>Upload</span>}
           </NavLink>
-          {sidebarOpen && (
-            <Button variant="secondary" className="w-full" onClick={handleLogout}>
-              Sign out
-            </Button>
+          {sidebarOpen ? (
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              <LogOutIcon />
+              <span>Sign out</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="flex w-full items-center justify-center rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              <LogOutIcon />
+            </button>
           )}
         </div>
       </aside>
@@ -216,8 +237,12 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main content */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
-        <footer className="border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-500">
-          AI Marathon 2026 · Track 3 — Global Treasury Agent
+        <footer className="border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-400">
+          <span className="font-medium text-slate-600">ARIA Reconciliation</span>
+          {' · '}
+          <span>Client Portal</span>
+          {' · '}
+          <span>AI Marathon 2026 — Track 3</span>
         </footer>
       </div>
     </div>

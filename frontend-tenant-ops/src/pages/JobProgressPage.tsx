@@ -70,7 +70,7 @@ export function JobProgressPage() {
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full rounded-full bg-blue-600 transition-all duration-500"
+              className="h-full rounded-full bg-teal-600 transition-all duration-500"
               style={{ width: `${Math.min(100, Math.max(0, data.progress_pct))}%` }}
               role="progressbar"
               aria-valuenow={data.progress_pct}

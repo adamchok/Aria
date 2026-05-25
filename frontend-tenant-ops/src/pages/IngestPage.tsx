@@ -110,7 +110,7 @@ export function IngestPage() {
             ) : accounts?.length === 0 ? (
               <p className="text-sm text-slate-600">
                 No bank accounts yet.{' '}
-                <Link to="/bank-accounts" className="text-blue-600 underline hover:text-blue-800">
+                <Link to="/bank-accounts" className="text-teal-600 underline hover:text-teal-800">
                   Add a bank account
                 </Link>{' '}
                 first.
@@ -126,7 +126,7 @@ export function IngestPage() {
                       setStatementMessage(null);
                     }}
                     aria-label="Bank account"
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   >
                     <option value="">Select an account…</option>
                     {accounts?.map((acc) => (
@@ -205,7 +205,7 @@ export function IngestPage() {
                 id="corridor"
                 value={corridor}
                 onChange={(e) => setCorridor(e.target.value as Corridor)}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               >
                 <option value="">Auto-detect from document</option>
                 {CORRIDORS.map((c) => (

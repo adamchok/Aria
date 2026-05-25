@@ -61,7 +61,7 @@ function JobRow({ job }: { job: JobListItem }) {
       <td className="py-3 pl-3 pr-4 text-right">
         <Link
           to={`/jobs/${job.job_id}`}
-          className="text-xs font-medium text-blue-600 hover:text-blue-800"
+          className="text-xs font-medium text-teal-600 hover:text-teal-800"
         >
           View
         </Link>
@@ -120,7 +120,7 @@ export function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle>Recent Jobs</CardTitle>
-          <Link to="/jobs" className="text-xs font-medium text-blue-600 hover:text-blue-800">
+          <Link to="/jobs" className="text-xs font-medium text-teal-600 hover:text-teal-800">
             View all
           </Link>
         </CardHeader>
@@ -145,7 +145,7 @@ export function DashboardPage() {
           {!isLoading && !isError && items.length === 0 && (
             <p className="p-6 text-center text-sm text-slate-500">
               No jobs yet.{' '}
-              <Link to="/upload" className="font-medium text-blue-600 hover:text-blue-800">
+              <Link to="/upload" className="font-medium text-teal-600 hover:text-teal-800">
                 Upload files to start reconciling.
               </Link>
             </p>

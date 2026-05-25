@@ -45,6 +45,10 @@ export const handlers = [
   }),
 
   http.post('http://localhost/api/v1/jobs', () => HttpResponse.json(jobCreateResponse, { status: 201 })),
+  http.delete('http://localhost/api/v1/jobs/:jobId', ({ params }) => {
+    jobListItems = jobListItems.filter((j) => j.job_id !== params.jobId);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}`, () => HttpResponse.json(jobStatusCompleted)),
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}/results`, () => HttpResponse.json(reportFixture)),
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}/review`, () => HttpResponse.json([uncertainItem])),

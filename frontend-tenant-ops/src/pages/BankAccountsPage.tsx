@@ -48,7 +48,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Account name
             <input
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="Main Operating Account"
               value={form.name}
               onChange={field('name')}
@@ -59,7 +59,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Bank name
             <input
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="Maybank"
               value={form.bank_name}
               onChange={field('bank_name')}
@@ -70,7 +70,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Account number (masked)
             <input
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="****1234"
               value={form.account_number_masked}
               onChange={field('account_number_masked')}
@@ -81,7 +81,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Currency
             <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               value={form.currency}
               onChange={field('currency')}
             >
@@ -160,7 +160,7 @@ export function BankAccountsPage() {
             <Link
               key={acc.id}
               to={`/bank-accounts/${acc.id}`}
-              className="block rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="block rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">

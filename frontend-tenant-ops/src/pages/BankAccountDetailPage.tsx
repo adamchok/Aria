@@ -162,19 +162,19 @@ function EditAccountModal({
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Account name
-            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.name ?? ''} onChange={field('name')} />
+            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.name ?? ''} onChange={field('name')} />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Bank name
-            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.bank_name ?? ''} onChange={field('bank_name')} />
+            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.bank_name ?? ''} onChange={field('bank_name')} />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Account number (masked)
-            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.account_number_masked ?? ''} onChange={field('account_number_masked')} />
+            <input className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.account_number_masked ?? ''} onChange={field('account_number_masked')} />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Currency
-            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.currency ?? ''} onChange={field('currency')}>
+            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" value={form.currency ?? ''} onChange={field('currency')}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
@@ -587,7 +587,7 @@ export function BankAccountDetailPage() {
           <button
             key={t}
             onClick={() => setActiveTab(t)}
-            className={`px-3 py-2 text-sm font-medium capitalize transition-colors ${activeTab === t ? 'border-b-2 border-blue-600 text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-3 py-2 text-sm font-medium capitalize transition-colors ${activeTab === t ? 'border-b-2 border-teal-600 text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}
           >
             {t}
           </button>

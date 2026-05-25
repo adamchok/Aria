@@ -35,6 +35,46 @@ const CANCELLABLE_STATUSES: Set<JobStatusType> = new Set([
 
 const PAGE_SIZE = 20;
 
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  loading,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: React.ReactNode;
+  confirmLabel: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+    >
+      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 text-left shadow-xl">
+        <h2 id="confirm-dialog-title" className="text-lg font-semibold text-slate-900">
+          {title}
+        </h2>
+        <div className="mt-2 text-sm text-slate-600">{message}</div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="danger" loading={loading} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmButton({
   label,
   confirmLabel,
@@ -82,6 +122,7 @@ function ConfirmButton({
 
 function JobActions({ job }: { job: JobListItem }) {
   const qc = useQueryClient();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const cancelMutation = useMutation({
     mutationFn: () => api.cancelJob(job.job_id as UUID),
@@ -90,37 +131,61 @@ function JobActions({ job }: { job: JobListItem }) {
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteJob(job.job_id as UUID),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['jobs', 'list'] }),
+    onSuccess: () => {
+      setShowDeleteDialog(false);
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+    },
   });
 
   const isTerminal = TERMINAL_STATUSES.has(job.status);
   const isCancellable = CANCELLABLE_STATUSES.has(job.status);
 
   return (
-    <span className="flex items-center justify-end gap-3">
-      <Link
-        to={`/jobs/${job.job_id}`}
-        className="text-xs font-medium text-blue-600 hover:text-blue-800"
-      >
-        View
-      </Link>
-      {isCancellable && (
-        <ConfirmButton
-          label={cancelMutation.isPending ? 'Cancelling…' : 'Cancel'}
-          confirmLabel="Yes, cancel"
-          onClick={() => cancelMutation.mutate()}
-          className="text-amber-700 hover:text-amber-900"
+    <>
+      <span className="flex items-center justify-end gap-3">
+        <Link
+          to={`/jobs/${job.job_id}`}
+          className="text-xs font-medium text-teal-600 hover:text-teal-800"
+        >
+          View
+        </Link>
+        {isCancellable && (
+          <ConfirmButton
+            label={cancelMutation.isPending ? 'Cancelling…' : 'Cancel'}
+            confirmLabel="Yes, cancel"
+            onClick={() => cancelMutation.mutate()}
+            className="text-amber-700 hover:text-amber-900"
+          />
+        )}
+        {isTerminal && (
+          <button
+            type="button"
+            onClick={() => setShowDeleteDialog(true)}
+            className="text-xs font-medium text-rose-600 underline hover:text-rose-800"
+            aria-label={`Delete job ${job.job_id}`}
+          >
+            Delete
+          </button>
+        )}
+      </span>
+
+      {showDeleteDialog && (
+        <ConfirmDialog
+          title="Delete job?"
+          message={
+            <>
+              This permanently removes job{' '}
+              <span className="font-mono text-slate-800">{job.job_id.slice(0, 8)}…</span> and its
+              reconciliation data. This cannot be undone.
+            </>
+          }
+          confirmLabel="Delete job"
+          loading={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate()}
+          onClose={() => setShowDeleteDialog(false)}
         />
       )}
-      {isTerminal && (
-        <ConfirmButton
-          label={deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-          confirmLabel="Yes, delete"
-          onClick={() => deleteMutation.mutate()}
-          className="text-rose-600 hover:text-rose-800"
-        />
-      )}
-    </span>
+    </>
   );
 }
 
@@ -170,7 +235,7 @@ export function JobsPage() {
             onClick={() => handleStatusFilter(f.value)}
             className={`px-3 py-2 text-sm font-medium transition-colors ${
               statusFilter === f.value
-                ? 'border-b-2 border-blue-600 text-blue-700'
+                ? 'border-b-2 border-teal-600 text-teal-700'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >

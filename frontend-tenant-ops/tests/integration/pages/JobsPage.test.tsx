@@ -31,4 +31,21 @@ describe('JobsPage', () => {
       expect(screen.getByText(/no jobs match the current filter/i)).toBeInTheDocument(),
     );
   });
+
+  it('opens a confirmation modal before deleting a job', async () => {
+    renderWithProviders(<JobsPage />);
+    await waitFor(() => expect(screen.getByText(/11111111/)).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /delete job/i }));
+
+    expect(screen.getByRole('heading', { name: /delete job\?/i })).toBeInTheDocument();
+    expect(screen.queryByText(/yes, delete/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^delete job$/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /delete job\?/i })).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(screen.queryByText(/11111111/)).not.toBeInTheDocument());
+  });
 });

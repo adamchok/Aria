@@ -48,7 +48,7 @@ export function QueuePage() {
         <p className="mt-1 text-sm text-slate-500">
           Buffered transactions waiting for auto-batching into reconciliation jobs. After a flush,
           monitor progress on the{' '}
-          <Link to="/jobs" className="text-blue-600 underline hover:text-blue-800">
+          <Link to="/jobs" className="text-teal-600 underline hover:text-teal-800">
             jobs
           </Link>{' '}
           screen.
@@ -110,7 +110,7 @@ export function QueuePage() {
               {data.by_corridor.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 p-6 text-center">
                   <p className="text-sm text-slate-500">Queue is empty — no transactions buffered.</p>
-                  <Link to="/ingest" className="text-sm text-blue-600 underline hover:text-blue-800">
+                  <Link to="/ingest" className="text-sm text-teal-600 underline hover:text-teal-800">
                     Simulate ingest API
                   </Link>
                 </div>
