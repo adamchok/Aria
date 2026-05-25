@@ -197,6 +197,16 @@ export interface ApiKeyResponse {
 
 // ─── Transaction ingestion ────────────────────────────────────────────────────
 
+export interface TransactionIngestItem {
+  payment_proof_b64?: string | null;
+  storage_key?: string | null;
+  corridor?: string | null;
+}
+
+export interface TransactionIngestRequest {
+  transactions: TransactionIngestItem[];
+}
+
 export interface TransactionIngestResponse {
   buffered: number;
   tenant_id: UUID;
