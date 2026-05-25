@@ -586,6 +586,7 @@ export function BankAccountDetailPage() {
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [clearedFilter, setClearedFilter] = useState<ClearedFilter>('all');
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<'ledger' | 'statements'>('ledger');
   const [editingEntry, setEditingEntry] = useState<LedgerEntryItem | null>(null);
@@ -677,6 +678,26 @@ export function BankAccountDetailPage() {
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setShowEditAccount(true)}>
             Edit
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                const blob = await api.exportAccountLedger(accountId!);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ledger-${account?.name.replace(/\s+/g, '_') ?? accountId}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } finally {
+                setExporting(false);
+              }
+            }}
+          >
+            {exporting ? 'Exporting…' : 'Export Excel'}
           </Button>
           <Button variant="secondary" onClick={() => setShowUpload(true)}>
             Upload statement

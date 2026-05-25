@@ -175,3 +175,30 @@ class BankAccountRepository:
             for entry, filename in rows
         ]
         return items, total
+
+    async def get_all_for_export(
+        self,
+        account_id: UUID | str,
+        *,
+        date_from: "date | None" = None,
+        date_to: "date | None" = None,
+        cleared: bool | None = None,
+    ) -> list[tuple]:
+        """Return (BankEntryORM, filename) for every matching entry, unpaginated."""
+        from datetime import date as _date  # noqa: F401 (used in type comment above)
+        q = (
+            select(BankEntryORM, BankStatementORM.filename)
+            .join(BankStatementORM, BankEntryORM.statement_id == BankStatementORM.id)
+            .where(BankStatementORM.account_id == str(account_id))
+        )
+        if self._tenant_id is not None:
+            q = q.where(BankEntryORM.tenant_id == self._tenant_id)
+        if cleared is not None:
+            q = q.where(BankEntryORM.cleared == cleared)
+        if date_from is not None:
+            q = q.where(BankEntryORM.value_date >= date_from)
+        if date_to is not None:
+            q = q.where(BankEntryORM.value_date <= date_to)
+        q = q.order_by(BankEntryORM.value_date.asc())
+        rows = (await self._s.execute(q)).all()
+        return [(entry, filename) for entry, filename in rows]

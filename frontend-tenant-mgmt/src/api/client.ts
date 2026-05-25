@@ -200,6 +200,23 @@ export const api = {
   deleteLedgerEntry: (accountId: UUID, entryId: UUID): Promise<void> =>
     request<void>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, { method: 'DELETE' }),
 
+  exportAccountLedger: async (
+    accountId: UUID,
+    params?: { date_from?: string; date_to?: string; cleared?: boolean },
+  ): Promise<Blob> => {
+    const qs = new URLSearchParams();
+    if (params?.date_from) qs.set('date_from', params.date_from);
+    if (params?.date_to) qs.set('date_to', params.date_to);
+    if (params?.cleared !== undefined) qs.set('cleared', String(params.cleared));
+    const url = `${API_BASE}/api/v1/bank-accounts/${accountId}/ledger/export${qs.toString() ? `?${qs}` : ''}`;
+    const token = getAccessToken();
+    const response = await fetch(url, {
+      headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new ApiError(response.status, null, `Export failed: HTTP ${response.status}`);
+    return response.blob();
+  },
+
   deleteAccountStatement: (accountId: UUID, statementId: UUID): Promise<void> =>
     request<void>(`/api/v1/bank-accounts/${accountId}/statements/${statementId}`, {
       method: 'DELETE',

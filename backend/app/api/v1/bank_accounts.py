@@ -11,7 +11,10 @@ import asyncio
 from typing import Annotated
 from uuid import UUID
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.sdk.stages.bank_statement import extract_bank_statement
@@ -359,6 +362,52 @@ async def create_ledger_entries_bulk(
     created, stmt = await ledger_repo.create_entries(account_id, entries_data, acc.currency)
     items = [_ledger_item(e, stmt.filename) for e in created]
     return LedgerBulkCreateResponse(created_count=len(items), items=items)
+
+
+@router.get("/{account_id}/ledger/export")
+async def export_account_ledger(
+    account_id: UUID,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+    date_from: date | None = Query(default=None, description="Earliest value_date to include (YYYY-MM-DD)"),
+    date_to: date | None = Query(default=None, description="Latest value_date to include (YYYY-MM-DD)"),
+    cleared: bool | None = Query(default=None, description="Filter by cleared status"),
+) -> StreamingResponse:
+    """Download a 5-sheet Excel workbook: Cover, All Transactions, Cleared, Uncleared, FX Summary."""
+    from sqlalchemy import select
+    from app.models.database import JobORM
+    from app.services.bank_ledger_export import render_ledger_excel
+
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    account = await acc_repo.get(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    entries_with_filenames = await acc_repo.get_all_for_export(
+        account_id, date_from=date_from, date_to=date_to, cleared=cleared
+    )
+
+    # Load report blobs for all jobs referenced by cleared entries (one query)
+    job_ids = {
+        e.cleared_by_job_id
+        for e, _ in entries_with_filenames
+        if e.cleared_by_job_id
+    }
+    job_blobs: dict[str, dict] = {}
+    if job_ids:
+        result = await session.execute(
+            select(JobORM.id, JobORM.report_blob).where(JobORM.id.in_(job_ids))
+        )
+        job_blobs = {row.id: row.report_blob or {} for row in result}
+
+    xlsx = render_ledger_excel(account, entries_with_filenames, job_blobs, date_from, date_to)
+    date_suffix = f"{date_from or 'all'}_{date_to or 'all'}"
+    filename = f"ledger_{account.name.replace(' ', '_')}_{date_suffix}.xlsx"
+    return StreamingResponse(
+        iter([xlsx]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{account_id}/ledger", response_model=LedgerPageResponse)
