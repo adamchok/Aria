@@ -34,14 +34,26 @@ def test_stage1_date_filter_outside_window(normalised_record_usd, bank_entry_myr
 
 
 def test_stage2_amount_filter_in_window(normalised_record_usd, bank_entry_myr):
-    settings = _settings()
-    kept = _stage2_amount_filter(normalised_record_usd, [bank_entry_myr], settings)
+    kept = _stage2_amount_filter(normalised_record_usd, [bank_entry_myr])
+    assert len(kept) == 1
+
+
+def test_stage2_amount_filter_debit_in_window(normalised_record_usd, bank_entry_myr):
+    # Debit entries are negative; abs() must be used for comparison.
+    debit = BankEntry(
+        value_date=bank_entry_myr.value_date,
+        amount=-bank_entry_myr.amount,
+        currency=bank_entry_myr.currency,
+        description=bank_entry_myr.description,
+    )
+    kept = _stage2_amount_filter(normalised_record_usd, [debit])
     assert len(kept) == 1
 
 
 def test_stage2_amount_filter_outside_window(normalised_record_usd):
-    settings = _settings()
-    low = normalised_record_usd.tolerance_low - Decimal("1000")
-    entry = BankEntry(value_date=normalised_record_usd.payment.value_date, amount=low)
-    kept = _stage2_amount_filter(normalised_record_usd, [entry], settings)
+    entry = BankEntry(
+        value_date=normalised_record_usd.payment.value_date,
+        amount=normalised_record_usd.tolerance_low - Decimal("1000"),
+    )
+    kept = _stage2_amount_filter(normalised_record_usd, [entry])
     assert kept == []

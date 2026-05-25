@@ -128,7 +128,7 @@ def _match_one(
     else:
         status = MatchStatus.UNMATCHED
 
-    variance = (top_entry.amount - nr.amount_myr_at_settlement_rate).quantize(Decimal("0.01"))
+    variance = (abs(top_entry.amount) - nr.amount_myr_at_settlement_rate).quantize(Decimal("0.01"))
 
     return MatchResult(
         normalised_record=nr,
@@ -156,7 +156,8 @@ def _stage2_amount_filter(nr, entries) -> list[BankEntry]:
     slack = Decimal("0.005") * nr.amount_myr_at_settlement_rate
     lo = nr.tolerance_low - slack
     hi = nr.tolerance_high + slack
-    return [e for e in entries if lo <= e.amount <= hi]
+    # Bank debits are stored as negative; compare absolute value.
+    return [e for e in entries if lo <= abs(e.amount) <= hi]
 
 
 def _score(nr: NormalisedRecord, entry: BankEntry, settings) -> CandidateScore:
@@ -165,10 +166,11 @@ def _score(nr: NormalisedRecord, entry: BankEntry, settings) -> CandidateScore:
         (nr.tolerance_high - nr.tolerance_low) / Decimal("2"),
         nr.amount_myr_at_settlement_rate * Decimal("0.025"),
     )
+    entry_amount_abs = abs(entry.amount)
     if spread_half == 0:
-        amount_score = 1.0 if entry.amount == target_amount else 0.0
+        amount_score = 1.0 if entry_amount_abs == target_amount else 0.0
     else:
-        dist = abs(entry.amount - target_amount)
+        dist = abs(entry_amount_abs - target_amount)
         amount_score = max(0.0, 1.0 - float(dist / spread_half))
 
     delta = abs((entry.value_date - nr.payment.value_date).days)

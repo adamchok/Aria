@@ -51,6 +51,13 @@ class PaymentRecord(_Base):
     def _upper_currency(cls, v: str) -> str:
         return v.upper()
 
+    @field_validator("field_confidences", mode="before")
+    @classmethod
+    def _drop_none_confidences(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k: val for k, val in v.items() if val is not None}
+        return v
+
 
 class NormalisedRecord(_Base):
     payment: PaymentRecord
