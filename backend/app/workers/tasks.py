@@ -276,14 +276,14 @@ async def _batch_one_tenant(
 # ─── Webhook delivery ────────────────────────────────────────────────────────
 
 @celery_app.task(name="aria.deliver_webhook", bind=True, max_retries=3)
-def deliver_webhook_task(self, webhook_id: str, job_id: str | None, event: str) -> None:
+def deliver_webhook_task(self, webhook_id: str, job_id: str | None, event: str, stage: str | None = None) -> None:
     try:
-        asyncio.run(_deliver_webhook(self, webhook_id, job_id, event))
+        asyncio.run(_deliver_webhook(self, webhook_id, job_id, event, stage=stage))
     finally:
         _dispose_engine()
 
 
-async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str) -> None:
+async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str, *, stage: str | None = None) -> None:
     from app.core.database import session_scope
     from app.models.enums import WebhookDeliveryStatus
     from app.repositories.webhook_repository import WebhookRepository
@@ -321,6 +321,8 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
                 job_data["job_updated_at"] = job.updated_at.isoformat() + "Z"
                 if event == "job.failed" and job.error:
                     job_data["error"] = job.error
+                if event == "job.stage_completed" and stage:
+                    job_data["stage"] = stage
                 summary = (job.report_blob or {}).get("summary", {})
                 if summary:
                     job_data["record_count"] = summary.get("total_records", 0)
@@ -464,7 +466,7 @@ async def _run_scheduled_jobs_async() -> None:
         )
 
 
-async def trigger_webhooks(tenant_id: str, job_id: str, event: str) -> None:
+async def trigger_webhooks(tenant_id: str, job_id: str, event: str, *, stage: str | None = None) -> None:
     """Called from pipeline_runner at status transitions."""
     from app.core.database import session_scope
     from app.repositories.webhook_repository import WebhookRepository
@@ -474,4 +476,4 @@ async def trigger_webhooks(tenant_id: str, job_id: str, event: str) -> None:
         webhooks = await repo.get_enabled_for_event(tenant_id, event)
 
     for webhook in webhooks:
-        deliver_webhook_task.delay(webhook.id, job_id, event)
+        deliver_webhook_task.delay(webhook.id, job_id, event, stage)

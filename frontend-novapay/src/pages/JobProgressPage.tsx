@@ -1,15 +1,80 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { JobStepper } from '@/components/JobStepper';
 import { useJobStream } from '@/hooks/useJobStream';
 import { isTerminalStatus, useJobStatus } from '@/hooks/useJobStatus';
 import { formatPercent } from '@/lib/format';
+import { api } from '@/api/client';
+import { JobStatus } from '@/types/api';
+import type { UUID } from '@/types/api';
+
+const CANCELLABLE_STATUSES = new Set([
+  JobStatus.PENDING,
+  JobStatus.INGESTING,
+  JobStatus.NORMALISING,
+  JobStatus.MATCHING,
+  JobStatus.REPORTING,
+]);
+
+function CancelJobModal({ jobId, onClose }: { jobId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  const cancelMutation = useMutation({
+    mutationFn: () => api.cancelJob(jobId as UUID),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['job', jobId] });
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      onClose();
+      navigate(`/jobs/${jobId}/results`, { replace: true });
+    },
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
+      <div className="mx-4 w-full max-w-sm rounded-xl bg-white shadow-xl">
+        <div className="px-6 py-5">
+          <h2 className="text-base font-semibold text-slate-900">Cancel job?</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            The pipeline will stop at its current stage. Results processed so far will be preserved,
+            but the job cannot be resumed.
+          </p>
+          {cancelMutation.isError && (
+            <p className="mt-3 rounded bg-rose-50 px-3 py-2 text-xs text-rose-600">
+              {cancelMutation.error instanceof Error
+                ? cancelMutation.error.message
+                : 'Failed to cancel job.'}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-6 py-4">
+          <Button variant="secondary" onClick={onClose} disabled={cancelMutation.isPending}>
+            Keep running
+          </Button>
+          <button
+            onClick={() => cancelMutation.mutate()}
+            disabled={cancelMutation.isPending}
+            className="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            {cancelMutation.isPending ? 'Cancelling…' : 'Yes, cancel job'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function JobProgressPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   // SSE stream — hydrates the cache; polling is the fallback
   useJobStream(jobId ?? null);
@@ -94,12 +159,26 @@ export function JobProgressPage() {
               )}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">
-              ARIA is reconciling your documents. You can leave this page — the job continues in the background.
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-slate-500">
+                ARIA is reconciling your documents. You can leave this page — the job continues in the background.
+              </p>
+              {CANCELLABLE_STATUSES.has(data.status as never) && (
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="flex-shrink-0 text-xs font-medium text-slate-400 hover:text-rose-600"
+                >
+                  Cancel job
+                </button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {showCancelModal && jobId && (
+        <CancelJobModal jobId={jobId} onClose={() => setShowCancelModal(false)} />
+      )}
     </div>
   );
 }

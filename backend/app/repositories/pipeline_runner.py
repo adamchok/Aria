@@ -101,7 +101,8 @@ async def _emit(job_id: str, tenant_id: str | None, event: str, data: dict) -> N
     if event == "agent_complete" and tenant_id:
         try:
             from app.workers.tasks import trigger_webhooks
-            await trigger_webhooks(tenant_id, job_id, "job.stage_completed")
+            stage = data.get("agent") if isinstance(data, dict) else None
+            await trigger_webhooks(tenant_id, job_id, "job.stage_completed", stage=stage)
         except Exception:  # noqa: BLE001
             pass
 
