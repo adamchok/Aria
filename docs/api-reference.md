@@ -270,7 +270,7 @@ Returns uncleared ledger entries (when the job used a bank account or statement)
 
 **Idempotency:** Re-submitting `confirm` or `reject` on an already-reviewed match returns the current state without error. `manual_match` may be submitted again to change the linked bank entry and note.
 
-**Side effects:** Updates the match row, refreshes the stored report blob (matches + summary), and sets job status to `COMPLETED` when no uncertain items remain.
+**Side effects:** Updates the match row, refreshes the stored report blob (matches + summary), and sets job status to `COMPLETED` when no uncertain items remain. For jobs tied to a bank account or statement ledger, `confirm` and `manual_match` mark the linked bank entry **cleared** (same as auto-matched rows at pipeline completion).
 
 **Errors:** `404` match not found · `409` invalid job state
 </div>
@@ -672,7 +672,7 @@ Aggregated reconciliation statistics for the authenticated tenant.
 
 ## Bank accounts and ledger
 
-Tenants register named bank accounts, upload monthly statements, and browse a persistent ledger. Entries are marked **cleared** when matched by a reconciliation job.
+Tenants register named bank accounts, upload monthly statements, and browse a persistent ledger. Entries are marked **cleared** when matched by a reconciliation job (auto-match at pipeline completion, or human `confirm` / `manual_match` during review).
 
 **Ledger amount convention:** positive = deposit/credit (money in), negative = withdrawal/debit (money out). PDF parsers read separate Withdrawal/Deposit columns when present (e.g. CIMB) and never store the running balance as the transaction amount.
 

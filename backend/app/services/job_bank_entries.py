@@ -60,6 +60,18 @@ async def list_job_bank_entries(
     return list(seen.values())
 
 
+async def clear_ledger_entry_for_review_match(
+    job: JobORM,
+    entry_id: UUID,
+    job_id: UUID,
+    ledger_repo: BankLedgerRepository,
+) -> int:
+    """Mark a persisted ledger row cleared when human review confirms a match."""
+    if not job.bank_account_id and not job.bank_statement_id:
+        return 0
+    return await ledger_repo.clear_entries([entry_id], job_id)
+
+
 async def resolve_manual_match_bank_entry(
     job: JobORM,
     entry_id: UUID,

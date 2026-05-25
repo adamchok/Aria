@@ -18,7 +18,10 @@ from app.models.schemas import BankEntry, MatchResult, ReviewActionRequest, Revi
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.vendor_rules_repository import VendorRulesRepository
-from app.services.job_bank_entries import resolve_manual_match_bank_entry
+from app.services.job_bank_entries import (
+    clear_ledger_entry_for_review_match,
+    resolve_manual_match_bank_entry,
+)
 from app.services.report_hydration import hydrate_report
 
 logger = get_logger(__name__)
@@ -110,6 +113,31 @@ async def submit_review_action(
     response_bank_entry: BankEntry | None = None
     if updated.payload and updated.payload.get("bank_entry"):
         response_bank_entry = BankEntry.model_validate(updated.payload["bank_entry"])
+
+    if new_status == MatchStatus.MATCHED:
+        entry_id_to_clear: UUID | None = None
+        if payload.action == ReviewAction.MANUAL_MATCH and response_bank_entry is not None:
+            entry_id_to_clear = response_bank_entry.id
+        elif payload.action == ReviewAction.CONFIRM:
+            confirmed = MatchResult.model_validate(dict(match.payload or {}))
+            if confirmed.bank_entry is not None:
+                entry_id_to_clear = confirmed.bank_entry.id
+        if entry_id_to_clear is not None:
+            job_for_ledger = await repo.get(job_id)
+            ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+            cleared = await clear_ledger_entry_for_review_match(
+                job_for_ledger,
+                entry_id_to_clear,
+                job_id,
+                ledger_repo,
+            )
+            if cleared:
+                logger.info(
+                    "review.ledger_cleared",
+                    job_id=str(job_id),
+                    entry_id=str(entry_id_to_clear),
+                    count=cleared,
+                )
 
     job = await repo.get(job_id)
     if job.report_blob:
