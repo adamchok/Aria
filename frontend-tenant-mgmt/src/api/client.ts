@@ -125,6 +125,11 @@ export const api = {
   listWebhookDeliveries: (webhookId: UUID): Promise<WebhookDeliveryResponse[]> =>
     request<WebhookDeliveryResponse[]>(`/api/v1/webhooks/${webhookId}/deliveries`),
 
+  resendWebhookDelivery: (webhookId: UUID, deliveryId: UUID): Promise<{ status: string }> =>
+    request<{ status: string }>(`/api/v1/webhooks/${webhookId}/deliveries/${deliveryId}/resend`, {
+      method: 'POST',
+    }),
+
   listBankAccounts: (): Promise<BankAccountResponse[]> =>
     request<BankAccountResponse[]>('/api/v1/bank-accounts'),
 

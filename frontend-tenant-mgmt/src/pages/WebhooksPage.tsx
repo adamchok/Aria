@@ -22,6 +22,7 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
   const qc = useQueryClient();
   const [tested, setTested] = useState(false);
   const [showDeliveries, setShowDeliveries] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const deliveriesQuery = useQuery({
     queryKey: ['webhooks', webhook.id, 'deliveries'],
@@ -38,7 +39,18 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
     mutationFn: () => api.testWebhook(webhook.id),
     onSuccess: () => {
       setTested(true);
+      setShowDeliveries(true);
+      void qc.invalidateQueries({ queryKey: ['webhooks', webhook.id, 'deliveries'] });
       setTimeout(() => setTested(false), 3_000);
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: (deliveryId: string) => api.resendWebhookDelivery(webhook.id, deliveryId),
+    onMutate: (deliveryId) => setResendingId(deliveryId),
+    onSettled: () => {
+      setResendingId(null);
+      void qc.invalidateQueries({ queryKey: ['webhooks', webhook.id, 'deliveries'] });
     },
   });
 
@@ -115,7 +127,8 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
                     <th className="px-2 py-2 text-[10px] font-medium text-slate-500">Status</th>
                     <th className="px-2 py-2 text-[10px] font-medium text-slate-500">HTTP</th>
                     <th className="px-2 py-2 text-[10px] font-medium text-slate-500">Attempts</th>
-                    <th className="py-2 pl-2 pr-3 text-[10px] font-medium text-slate-500">Date</th>
+                    <th className="px-2 py-2 text-[10px] font-medium text-slate-500">Date</th>
+                    <th className="py-2 pl-2 pr-3 text-[10px] font-medium text-slate-500"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -129,7 +142,18 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
                       </td>
                       <td className="px-2 py-2 text-[10px] tabular-nums text-slate-500">{d.response_code ?? '—'}</td>
                       <td className="px-2 py-2 text-[10px] tabular-nums text-slate-500">{d.attempt_count}</td>
-                      <td className="py-2 pl-2 pr-3 text-[10px] text-slate-400">{d.created_at.slice(0, 10)}</td>
+                      <td className="px-2 py-2 text-[10px] text-slate-400">{d.created_at.slice(0, 10)}</td>
+                      <td className="py-2 pl-2 pr-3">
+                        {(d.status === 'FAILED' || d.status === 'PENDING') && (
+                          <button
+                            onClick={() => resendMutation.mutate(d.id)}
+                            disabled={resendingId === d.id}
+                            className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                          >
+                            {resendingId === d.id ? 'Queued…' : 'Resend'}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

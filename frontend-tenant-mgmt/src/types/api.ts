@@ -237,7 +237,7 @@ export interface WebhookResponse {
 export interface WebhookDeliveryResponse {
   id: UUID;
   webhook_id: UUID;
-  job_id: UUID;
+  job_id: UUID | null;
   event: string;
   status: string;
   attempt_count: number;

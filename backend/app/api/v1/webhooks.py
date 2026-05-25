@@ -86,8 +86,28 @@ async def test_webhook(
     tenant_id: str = Depends(require_tenant),
 ) -> dict:
     from app.workers.tasks import deliver_webhook_task
-    deliver_webhook_task.delay(str(webhook_id), "test-job-id", "job.test")
+    deliver_webhook_task.delay(str(webhook_id), None, "job.test")
     return {"status": "test_queued", "webhook_id": str(webhook_id)}
+
+
+@router.post("/{webhook_id}/deliveries/{delivery_id}/resend", status_code=202)
+async def resend_delivery(
+    webhook_id: UUID,
+    delivery_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> dict:
+    from app.workers.tasks import deliver_webhook_task
+
+    repo = WebhookRepository(session)
+    delivery = await repo.get_delivery(delivery_id, webhook_id, tenant_id)
+    if delivery is None:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+
+    deliver_webhook_task.delay(str(webhook_id), delivery.job_id, delivery.event)
+    logger.info("webhook.resend_queued", webhook_id=str(webhook_id), delivery_id=str(delivery_id))
+    return {"status": "resend_queued", "webhook_id": str(webhook_id), "delivery_id": str(delivery_id)}
 
 
 @router.get("/{webhook_id}/deliveries", response_model=list[WebhookDeliveryResponse])
@@ -103,7 +123,7 @@ async def list_deliveries(
         WebhookDeliveryResponse(
             id=UUID(d.id),
             webhook_id=UUID(d.webhook_id),
-            job_id=UUID(d.job_id),
+            job_id=UUID(d.job_id) if d.job_id else None,
             event=d.event,
             status=d.status,
             attempt_count=d.attempt_count,

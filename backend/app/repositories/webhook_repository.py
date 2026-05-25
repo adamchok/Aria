@@ -76,7 +76,7 @@ class WebhookRepository:
         return [w for w in result.scalars().all() if event in (w.events or [])]
 
     async def create_delivery(
-        self, webhook_id: str, job_id: str, event: str
+        self, webhook_id: str, job_id: str | None, event: str
     ) -> WebhookDeliveryORM:
         delivery = WebhookDeliveryORM(
             webhook_id=webhook_id,
@@ -122,3 +122,15 @@ class WebhookRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def get_delivery(
+        self, delivery_id: UUID | str, webhook_id: UUID | str, tenant_id: UUID | str
+    ) -> WebhookDeliveryORM | None:
+        await self.get(webhook_id, tenant_id)  # access check
+        result = await self._s.execute(
+            select(WebhookDeliveryORM).where(
+                WebhookDeliveryORM.id == str(delivery_id),
+                WebhookDeliveryORM.webhook_id == str(webhook_id),
+            )
+        )
+        return result.scalar_one_or_none()
