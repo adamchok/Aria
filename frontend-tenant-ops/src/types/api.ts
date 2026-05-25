@@ -151,6 +151,7 @@ export interface ReviewActionResponse {
   status: MatchStatus;
   human_reviewed: boolean;
   note: string | null;
+  bank_entry: BankEntry | null;
 }
 
 // ─── Job list ────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ from app.core.logging import bind_job_id, get_logger
 from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, SourceFormat
 from app.models.schemas import (
+    BankEntry,
     JobCreateResponse,
     JobListItem,
     JobListResponse,
@@ -24,6 +25,7 @@ from app.models.schemas import (
 from app.repositories.bank_account_repository import BankAccountRepository
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
+from app.services.job_bank_entries import list_job_bank_entries
 from app.services.report_hydration import hydrate_report
 from app.services.storage import StorageService
 from app.tools.file_parsers import detect_source_format
@@ -292,3 +294,21 @@ async def get_review_queue(
 
     matches = await repo.list_matches(job_id, status=MatchStatus.UNCERTAIN)
     return [MatchResult.model_validate(m.payload) for m in matches]
+
+
+@router.get("/{job_id}/bank-entries", response_model=list[BankEntry])
+async def get_job_bank_entries(
+    job_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str | None = Depends(require_tenant),
+) -> list[BankEntry]:
+    """Bank ledger rows available for manual match in the review queue."""
+    repo = JobRepository(session, tenant_id=tenant_id)
+    try:
+        job = await repo.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    ledger = BankLedgerRepository(session, tenant_id=tenant_id)
+    return await list_job_bank_entries(job, repo, ledger)

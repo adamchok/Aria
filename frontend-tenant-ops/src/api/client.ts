@@ -1,5 +1,6 @@
 import type {
   BankAccountResponse,
+  BankEntry,
   BankStatementSummary,
   JobCreateResponse,
   JobListResponse,
@@ -114,6 +115,9 @@ export const api = {
 
   getReviewQueue: (jobId: UUID): Promise<MatchResult[]> =>
     request<MatchResult[]>(`/api/v1/jobs/${jobId}/review`),
+
+  getJobBankEntries: (jobId: UUID): Promise<BankEntry[]> =>
+    request<BankEntry[]>(`/api/v1/jobs/${jobId}/bank-entries`),
 
   submitReviewAction: (
     jobId: UUID,

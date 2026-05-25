@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -7,16 +7,32 @@ import { ReconciliationGrid } from '@/components/ReconciliationGrid';
 import { ReviewDrawer } from '@/components/ReviewDrawer';
 import { SummaryCards } from '@/components/SummaryCards';
 import { api } from '@/api/client';
+import { useJobBankEntries } from '@/hooks/useJobBankEntries';
 import { useResults } from '@/hooks/useResults';
 import { useReviewActions } from '@/hooks/useReviewActions';
 import { formatNarrative } from '@/lib/format';
+import { mergeReviewResponse } from '@/lib/reviewMatch';
 import type { MatchResult, ReviewAction } from '@/types/api';
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const [active, setActive] = useState<MatchResult | null>(null);
   const results = useResults(jobId ?? null);
   const review = useReviewActions(jobId ?? null);
-  const [active, setActive] = useState<MatchResult | null>(null);
+  const bankEntries = useJobBankEntries(jobId ?? null, Boolean(active));
+
+  useEffect(() => {
+    if (!active || !results.data) return;
+    const fresh = results.data.matches.find((m) => m.id === active.id);
+    if (!fresh) return;
+    if (
+      fresh.bank_entry?.id !== active.bank_entry?.id ||
+      fresh.review_notes !== active.review_notes ||
+      fresh.status !== active.status
+    ) {
+      setActive(fresh);
+    }
+  }, [results.data, active?.id]);
 
   if (results.isLoading) {
     return <p className="text-sm text-slate-500">Loading reconciliation report…</p>;
@@ -52,8 +68,13 @@ export function ResultsPage() {
         },
       },
       {
-        onSuccess: () => {
-          setActive(null);
+        onSuccess: (response, variables) => {
+          if (variables.payload.action === 'manual_match' && active) {
+            const selected = bankEntries.data?.find((e) => e.id === variables.payload.bank_entry_id);
+            setActive(mergeReviewResponse(active, response, selected));
+          } else {
+            setActive(null);
+          }
           void results.refetch();
         },
       },
@@ -145,6 +166,9 @@ export function ResultsPage() {
       <ReviewDrawer
         match={active}
         baseCurrency={report.base_currency}
+        bankEntries={bankEntries.data ?? []}
+        bankEntriesLoading={bankEntries.isLoading}
+        bankEntriesError={bankEntries.error}
         pending={review.isPending}
         onClose={() => setActive(null)}
         onAction={handleAction}

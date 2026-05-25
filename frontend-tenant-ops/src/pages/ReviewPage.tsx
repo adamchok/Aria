@@ -5,16 +5,19 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ReviewDrawer } from '@/components/ReviewDrawer';
+import { useJobBankEntries } from '@/hooks/useJobBankEntries';
 import { useReviewQueue } from '@/hooks/useReviewQueue';
 import { useReviewActions } from '@/hooks/useReviewActions';
 import { formatAmount } from '@/lib/format';
+import { mergeReviewResponse } from '@/lib/reviewMatch';
 import type { MatchResult, ReviewAction } from '@/types/api';
 
 export function ReviewPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const [active, setActive] = useState<MatchResult | null>(null);
   const queue = useReviewQueue(jobId ?? null);
   const review = useReviewActions(jobId ?? null);
-  const [active, setActive] = useState<MatchResult | null>(null);
+  const bankEntries = useJobBankEntries(jobId ?? null, Boolean(active));
 
   if (queue.isLoading) {
     return <p className="text-sm text-slate-500">Loading review queue…</p>;
@@ -47,7 +50,14 @@ export function ReviewPage() {
         },
       },
       {
-        onSuccess: () => setActive(null),
+        onSuccess: (response, variables) => {
+          if (variables.payload.action === 'manual_match') {
+            const selected = bankEntries.data?.find((e) => e.id === variables.payload.bank_entry_id);
+            setActive(mergeReviewResponse(active, response, selected));
+            return;
+          }
+          setActive(null);
+        },
       },
     );
   };
@@ -138,6 +148,9 @@ export function ReviewPage() {
       <ReviewDrawer
         match={active}
         baseCurrency={items[0]?.normalised_record.base_currency ?? 'MYR'}
+        bankEntries={bankEntries.data ?? []}
+        bankEntriesLoading={bankEntries.isLoading}
+        bankEntriesError={bankEntries.error}
         pending={review.isPending}
         onClose={() => setActive(null)}
         onAction={handleAction}

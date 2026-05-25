@@ -1,32 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { cn } from '@/lib/cn';
 import { formatAmount } from '@/lib/format';
-import type { MatchResult, ReviewAction, UUID } from '@/types/api';
+import type { BankEntry, MatchResult, ReviewAction, UUID } from '@/types/api';
 
 interface ReviewDrawerProps {
   match: MatchResult | null;
   baseCurrency: string;
+  bankEntries?: BankEntry[];
+  bankEntriesLoading?: boolean;
+  bankEntriesError?: Error | null;
   pending?: boolean;
   onClose: () => void;
   onAction: (action: ReviewAction, payload: { bankEntryId?: UUID; note?: string }) => void;
 }
 
-export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }: ReviewDrawerProps) {
+export function ReviewDrawer({
+  match,
+  baseCurrency,
+  bankEntries = [],
+  bankEntriesLoading,
+  bankEntriesError,
+  pending,
+  onClose,
+  onAction,
+}: ReviewDrawerProps) {
   const [note, setNote] = useState('');
-  const [manualBankEntryId, setManualBankEntryId] = useState('');
+  const [selectedBankEntryId, setSelectedBankEntryId] = useState('');
+
+  const sortedEntries = useMemo(
+    () => [...bankEntries].sort((a, b) => b.value_date.localeCompare(a.value_date)),
+    [bankEntries],
+  );
 
   useEffect(() => {
-    setNote('');
-    setManualBankEntryId('');
-  }, [match?.id]);
+    if (!match) return;
+    setNote(match.review_notes ?? '');
+    setSelectedBankEntryId(match.bank_entry?.id ?? '');
+  }, [match?.id, match?.bank_entry?.id, match?.review_notes]);
 
   if (!match) return null;
   const nr = match.normalised_record;
   const bank = match.bank_entry;
+  const reviewed = match.human_reviewed;
 
   return (
     <div
@@ -92,7 +111,7 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
                 </>
               ) : (
                 <p className="text-sm text-slate-500">
-                  No candidate bank entry was retained. Use Manual match below if you can identify one.
+                  No candidate bank entry was retained. Choose a ledger row below to manual match.
                 </p>
               )}
             </CardContent>
@@ -124,7 +143,9 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
           </CardHeader>
           <CardContent className="space-y-3">
             <label className="block text-sm">
-              <span className="font-medium text-slate-700">Note (optional)</span>
+              <span className="font-medium text-slate-700">
+                {reviewed ? 'Reviewer note' : 'Note (optional)'}
+              </span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -133,51 +154,104 @@ export function ReviewDrawer({ match, baseCurrency, pending, onClose, onAction }
                 aria-label="Reviewer note"
               />
             </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
-                loading={pending}
-                onClick={() => onAction('confirm', { note: note || undefined })}
-              >
-                Confirm match
-              </Button>
-              <Button
-                variant="danger"
-                loading={pending}
-                onClick={() => onAction('reject', { note: note || undefined })}
-              >
-                Reject
-              </Button>
-            </div>
-            <div className="rounded border border-slate-200 bg-white px-3 py-2">
+            {!reviewed ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="primary"
+                  loading={pending}
+                  onClick={() => onAction('confirm', { note: note || undefined })}
+                >
+                  Confirm match
+                </Button>
+                <Button
+                  variant="danger"
+                  loading={pending}
+                  onClick={() => onAction('reject', { note: note || undefined })}
+                >
+                  Reject
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600" role="status">
+                Review recorded. Select a different ledger row below to change the manual match.
+              </p>
+            )}
+            <div className="rounded border border-slate-200 bg-white px-3 py-3">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Manual match
+                {reviewed ? 'Change manual match' : 'Manual match'}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Paste the bank entry ID you want to attach. Confirms with that entry id.
+                Select the bank ledger row that settles this payment proof. Your note is saved with
+                this decision.
               </p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="text"
-                  value={manualBankEntryId}
-                  onChange={(e) => setManualBankEntryId(e.target.value)}
-                  placeholder="bank entry id"
-                  aria-label="Manual bank entry id"
-                  className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:outline-none"
-                />
+              {bankEntriesLoading ? (
+                <p className="mt-3 text-sm text-slate-500">Loading ledger entries…</p>
+              ) : bankEntriesError ? (
+                <p className="mt-3 text-sm text-red-600">
+                  Unable to load ledger entries. {bankEntriesError.message}
+                </p>
+              ) : sortedEntries.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">
+                  No bank ledger rows are available for this job.
+                </p>
+              ) : (
+                <ul
+                  className="mt-3 max-h-56 space-y-2 overflow-y-auto"
+                  role="listbox"
+                  aria-label="Bank ledger entries"
+                >
+                  {sortedEntries.map((entry) => {
+                    const selected = selectedBankEntryId === entry.id;
+                    const label = [
+                      entry.value_date,
+                      formatAmount(entry.amount, entry.currency),
+                      entry.counterparty || entry.reference || entry.description || 'Ledger row',
+                    ].join(' · ');
+                    return (
+                      <li key={entry.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => setSelectedBankEntryId(entry.id)}
+                          className={cn(
+                            'w-full rounded border px-3 py-2 text-left text-sm transition-colors',
+                            selected
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : 'border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-white',
+                          )}
+                        >
+                          <span className="block font-medium tabular-nums">{label}</span>
+                          {(entry.reference || entry.description) && (
+                            <span
+                              className={cn(
+                                'mt-0.5 block text-xs',
+                                selected ? 'text-slate-200' : 'text-slate-500',
+                              )}
+                            >
+                              {[entry.reference, entry.description].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="mt-3 flex justify-end">
                 <Button
                   variant="secondary"
                   size="sm"
                   loading={pending}
-                  disabled={!manualBankEntryId}
+                  disabled={!selectedBankEntryId || bankEntriesLoading}
                   onClick={() =>
                     onAction('manual_match', {
-                      bankEntryId: manualBankEntryId,
+                      bankEntryId: selectedBankEntryId,
                       note: note || undefined,
                     })
                   }
                 >
-                  Manual match
+                  {reviewed ? 'Update match' : 'Manual match'}
                 </Button>
               </div>
             </div>
@@ -203,7 +277,7 @@ function Row({ label, value, wrap = false }: { label: string; value: string; wra
       <span
         className={cn(
           'text-sm tabular-nums text-slate-900',
-          wrap ? 'min-w-0 text-left' : 'shrink-0 whitespace-nowrap text-right',
+          wrap ? 'min-w-0 text-right' : 'shrink-0 whitespace-nowrap text-right',
         )}
       >
         {value}

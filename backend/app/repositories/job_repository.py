@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -146,6 +147,7 @@ class JobRepository:
         human_reviewed: bool = True,
         review_notes: str | None = None,
         bank_entry_payload: dict[str, Any] | None = None,
+        amount_variance_myr: Decimal | None = None,
     ) -> MatchORM:
         match = await self.get_match(job_id, match_id)
         match.status = status
@@ -160,6 +162,8 @@ class JobRepository:
             payload["review_notes"] = review_notes
         if bank_entry_payload is not None:
             payload["bank_entry"] = bank_entry_payload
+        if amount_variance_myr is not None:
+            payload["amount_variance_myr"] = str(amount_variance_myr)
         match.payload = payload
 
         match.updated_at = datetime.utcnow()

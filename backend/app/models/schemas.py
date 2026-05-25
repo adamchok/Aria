@@ -132,6 +132,10 @@ class ReconciliationReport(_Base):
     job_id: UUID
     summary: ReconciliationSummary
     matches: list[MatchResult] = Field(default_factory=list)
+    bank_entries: list[BankEntry] = Field(
+        default_factory=list,
+        description="Bank statement rows used for this job (for manual match in review UI).",
+    )
     generated_at: datetime
     base_currency: str = "MYR"
     narrative: str = ""
@@ -178,6 +182,7 @@ class ReviewActionResponse(_Base):
     status: MatchStatus
     human_reviewed: bool = True
     note: str | None = None
+    bank_entry: BankEntry | None = None
 
 
 # ─── Job list ────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import type {
   BankAccountResponse,
+  BankEntry,
   BankStatementSummary,
   JobCreateResponse,
   JobListItem,
@@ -184,6 +185,19 @@ export const uncertainItem: MatchResult = {
   status: 'UNCERTAIN',
   variance_explanation: 'Amount inside tolerance but payer name match is weak.',
 };
+
+export const bankEntryPickerFixture: BankEntry[] = [
+  matchedItem.bank_entry!,
+  {
+    id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    value_date: '2026-05-21',
+    amount: '5200.00',
+    currency: 'MYR',
+    description: 'Inward TT Other Corp',
+    reference: 'INV-999',
+    counterparty: 'OTHER CORP',
+  },
+];
 
 export const reportFixture: ReconciliationReport = {
   job_id: JOB_ID,

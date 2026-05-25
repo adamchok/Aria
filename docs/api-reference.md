@@ -218,6 +218,22 @@ Returns an empty array when no uncertain items remain.
 
 <div class="aria-endpoint">
   <div class="aria-endpoint__header">
+    <span class="aria-method aria-method--get">GET</span>
+    <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/bank-entries</span>
+  </div>
+
+### List bank ledger rows for manual match
+
+Returns uncleared ledger entries (when the job used a bank account or statement) or the bank statement snapshot stored on the job report (file upload jobs). Used by the review UI ledger picker.
+
+**Response `200`** — array of `BankEntry` objects (`id`, `value_date`, `amount`, `currency`, `description`, `reference`, `counterparty`).
+
+</div>
+
+---
+
+<div class="aria-endpoint">
+  <div class="aria-endpoint__header">
     <span class="aria-method aria-method--post">POST</span>
     <span class="aria-endpoint__path">/api/v1/jobs/{job_id}/review/{match_id}</span>
   </div>
@@ -237,7 +253,7 @@ Returns an empty array when no uncertain items remain.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `action` | enum | Yes | `confirm` \| `reject` \| `manual_match` |
-| `bank_entry_id` | UUID | For `manual_match` only | Target bank entry (API integrators; the web UI uses `confirm` / `reject` only) |
+| `bank_entry_id` | UUID | For `manual_match` only | Target bank entry from `GET .../bank-entries` |
 | `note` | string | No | Optional reviewer note |
 
 **Response `200`**
@@ -246,11 +262,13 @@ Returns an empty array when no uncertain items remain.
 {
   "match_id": "...",
   "status": "MATCHED",
-  "human_reviewed": true
+  "human_reviewed": true,
+  "note": "Matched to Moonshot debit",
+  "bank_entry": { "id": "...", "value_date": "2026-04-30", "amount": "-20.20", "currency": "MYR" }
 }
 ```
 
-**Idempotency:** Re-submitting `confirm` or `reject` on an already-reviewed match returns the current state without error.
+**Idempotency:** Re-submitting `confirm` or `reject` on an already-reviewed match returns the current state without error. `manual_match` may be submitted again to change the linked bank entry and note.
 
 **Side effects:** Updates the match row, refreshes the stored report blob (matches + summary), and sets job status to `COMPLETED` when no uncertain items remain.
 

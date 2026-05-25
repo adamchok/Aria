@@ -72,6 +72,7 @@ def run_report_stage(ctx: ReconciliationContext, llm: LLMService | None = None) 
         job_id=ctx.job_id,
         summary=summary,
         matches=matches,
+        bank_entries=list(ctx.state.bank_statement.entries) if ctx.state.bank_statement else [],
         generated_at=finished,
         base_currency=ctx.base_currency,
         narrative=narrative,

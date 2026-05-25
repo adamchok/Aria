@@ -83,10 +83,16 @@ async def test_manual_match_requires_bank_entry_id(api_client, db_session, norma
 
     good = await api_client.post(
         f"/api/v1/jobs/{job_id}/review/{match_id}",
-        json={"action": "manual_match", "bank_entry_id": str(uuid4())},
+        json={"action": "manual_match", "bank_entry_id": str(bank_entry_myr.id)},
     )
     assert good.status_code == 200
     assert good.json()["status"] == "MATCHED"
+
+    missing = await api_client.post(
+        f"/api/v1/jobs/{job_id}/review/{match_id}",
+        json={"action": "manual_match", "bank_entry_id": str(uuid4())},
+    )
+    assert missing.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -119,3 +125,53 @@ async def test_review_action_is_idempotent(api_client, db_session, normalised_re
         f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
     )
     assert first.json() == second.json()
+
+
+@pytest.mark.asyncio
+async def test_manual_match_without_candidate_persists_bank_entry(
+    api_client, db_session, normalised_record_usd, bank_entry_myr
+):
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    job = await repo.create_job(base_currency="MYR", payment_proof_keys=[], bank_statement_key="k/stmt.csv")
+    match = MatchResult(
+        normalised_record=normalised_record_usd,
+        bank_entry=None,
+        confidence=0.62,
+        status=MatchStatus.UNCERTAIN,
+    )
+    await repo.replace_matches(job.id, [match])
+    rows = await repo.list_matches(job.id)
+    report = ReconciliationReport(
+        job_id=UUID(str(job.id)),
+        summary=ReconciliationSummary(
+            total_records=1,
+            matched_count=0,
+            uncertain_count=1,
+            unmatched_count=0,
+            total_value_myr=match.normalised_record.amount_myr_at_settlement_rate,
+            matched_value_myr=Decimal("0"),
+            total_variance_myr=Decimal("0"),
+            processing_seconds=1.0,
+        ),
+        matches=[match],
+        bank_entries=[bank_entry_myr],
+        generated_at=datetime.utcnow(),
+    )
+    await repo.save_report(job.id, report.model_dump(mode="json"))
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job.id}/review/{rows[0].id}",
+        json={
+            "action": "manual_match",
+            "bank_entry_id": str(bank_entry_myr.id),
+            "note": "Matched to Moonshot debit",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "MATCHED"
+    assert body["note"] == "Matched to Moonshot debit"
+    assert body["bank_entry"]["id"] == str(bank_entry_myr.id)
+
+    results = await api_client.get(f"/api/v1/jobs/{job.id}/results")
+    assert results.json()["matches"][0]["bank_entry"]["id"] == str(bank_entry_myr.id)

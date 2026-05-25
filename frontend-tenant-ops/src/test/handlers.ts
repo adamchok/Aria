@@ -3,6 +3,7 @@ import {
   ACCOUNT_ID,
   JOB_ID,
   bankAccountFixture,
+  bankEntryPickerFixture,
   jobCreateResponse,
   jobListItemFixture,
   jobStatusCompleted,
@@ -45,6 +46,9 @@ export const handlers = [
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}`, () => HttpResponse.json(jobStatusCompleted)),
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}/results`, () => HttpResponse.json(reportFixture)),
   http.get(`http://localhost/api/v1/jobs/${JOB_ID}/review`, () => HttpResponse.json([uncertainItem])),
+  http.get(`http://localhost/api/v1/jobs/${JOB_ID}/bank-entries`, () =>
+    HttpResponse.json(bankEntryPickerFixture),
+  ),
   http.post(
     `http://localhost/api/v1/jobs/${JOB_ID}/review/:matchId`,
     async ({ params, request }) => {
@@ -54,6 +58,10 @@ export const handlers = [
         status: body.action === 'reject' ? 'UNMATCHED' : 'MATCHED',
         human_reviewed: true,
         note: body.note ?? null,
+        bank_entry:
+          body.action === 'manual_match' && body.bank_entry_id
+            ? bankEntryPickerFixture.find((e) => e.id === body.bank_entry_id) ?? null
+            : null,
       };
       return HttpResponse.json(resp);
     },

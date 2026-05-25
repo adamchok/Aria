@@ -39,13 +39,15 @@ describe('ReviewPage', () => {
     expect(await screen.findByText(/No uncertain items/i)).toBeInTheDocument();
   });
 
-  it('manual_match button is disabled until a bank entry id is entered', async () => {
+  it('shows ledger rows for manual match selection', async () => {
     renderWithProviders(<Harness />, { initialEntries: [`/jobs/${JOB_ID}/review`] });
     await userEvent.click(await screen.findByRole('button', { name: /Review$/ }));
     const dialog = await screen.findByRole('dialog');
-    const manualBtn = within(dialog).getByRole('button', { name: /Manual match/i });
-    expect(manualBtn).toBeDisabled();
-    await userEvent.type(within(dialog).getByLabelText(/Manual bank entry id/i), 'bank-x');
+    expect(await within(dialog).findByRole('listbox', { name: /Bank ledger entries/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: /OTHER CORP/i })).toBeInTheDocument();
+    const manualBtn = within(dialog).getByRole('button', { name: /^Manual match$/i });
+    expect(manualBtn).toBeEnabled();
+    await userEvent.click(within(dialog).getByRole('option', { name: /OTHER CORP/i }));
     expect(manualBtn).toBeEnabled();
   });
 });
