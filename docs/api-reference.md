@@ -623,8 +623,8 @@ Delivery is retried up to 3 times with exponential backoff. Payloads that do not
 | --- | --- | --- |
 | `GET` | `/api/v1/webhooks` | List all webhooks |
 | `DELETE` | `/api/v1/webhooks/{id}` | Remove webhook |
-| `POST` | `/api/v1/webhooks/{id}/test` | Send test event |
-| `GET` | `/api/v1/webhooks/{id}/deliveries` | Delivery history |
+| `POST` | `/api/v1/webhooks/{id}/test` | Queue `job.test` delivery (no real job row; requires Celery worker) |
+| `GET` | `/api/v1/webhooks/{id}/deliveries` | Delivery history (`job_id` is null for test events) |
 </div>
 
 ---

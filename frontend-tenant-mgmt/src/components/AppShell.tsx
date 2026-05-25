@@ -116,11 +116,11 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex flex-shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200',
+          'flex h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200',
           sidebarOpen ? 'w-56' : 'w-14',
         )}
       >
@@ -195,7 +195,7 @@ export function AppShell({ children }: AppShellProps) {
       </aside>
 
       {/* Main content */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
         <footer className="border-t border-slate-200 bg-white px-6 py-2 text-xs text-slate-500">
           AI Marathon 2026 · Track 3 — Global Treasury Agent

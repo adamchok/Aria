@@ -216,7 +216,7 @@ class WebhookDeliveryORM(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     webhook_id: Mapped[str] = mapped_column(ForeignKey("webhooks.id", ondelete="CASCADE"), index=True, nullable=False)
-    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True, nullable=False)
+    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), index=True, nullable=True)
     event: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[WebhookDeliveryStatus] = mapped_column(
         Enum(WebhookDeliveryStatus, native_enum=False, length=16),
@@ -229,7 +229,7 @@ class WebhookDeliveryORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     webhook: Mapped[WebhookORM] = relationship(back_populates="deliveries")
-    job: Mapped[JobORM] = relationship(back_populates="webhook_deliveries")
+    job: Mapped[JobORM | None] = relationship(back_populates="webhook_deliveries")
 
 
 # ─── Bank account ledger ─────────────────────────────────────────────────────

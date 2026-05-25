@@ -46,6 +46,8 @@ export function ReviewDrawer({
   const nr = match.normalised_record;
   const bank = match.bank_entry;
   const reviewed = match.human_reviewed;
+  const isReviewPending = match.status === 'UNCERTAIN' && !reviewed;
+  const canUpdateMatch = match.status === 'MATCHED' || reviewed;
 
   return (
     <div
@@ -154,7 +156,15 @@ export function ReviewDrawer({
                 aria-label="Reviewer note"
               />
             </label>
-            {!reviewed ? (
+            {!isReviewPending ? (
+              <p className="text-sm text-slate-600" role="status">
+                {reviewed
+                  ? 'Review recorded. Select a different ledger row below to change the linked bank entry.'
+                  : match.status === 'MATCHED'
+                    ? 'ARIA matched this automatically. Select a different ledger row below if the link is wrong.'
+                    : 'No automatic match — select the bank ledger row that settles this payment proof.'}
+              </p>
+            ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="primary"
@@ -171,18 +181,15 @@ export function ReviewDrawer({
                   Reject
                 </Button>
               </div>
-            ) : (
-              <p className="text-sm text-slate-600" role="status">
-                Review recorded. Select a different ledger row below to change the manual match.
-              </p>
             )}
             <div className="rounded border border-slate-200 bg-white px-3 py-3">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                {reviewed ? 'Change manual match' : 'Manual match'}
+                {canUpdateMatch ? 'Update match' : 'Manual match'}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Select the bank ledger row that settles this payment proof. Your note is saved with
-                this decision.
+                {canUpdateMatch
+                  ? 'Select the bank ledger row that should settle this payment proof. Your note is saved with the update.'
+                  : 'Select the bank ledger row that settles this payment proof. Your note is saved with this decision.'}
               </p>
               {bankEntriesLoading ? (
                 <p className="mt-3 text-sm text-slate-500">Loading ledger entries…</p>
@@ -251,7 +258,7 @@ export function ReviewDrawer({
                     })
                   }
                 >
-                  {reviewed ? 'Update match' : 'Manual match'}
+                  {canUpdateMatch ? 'Update match' : 'Manual match'}
                 </Button>
               </div>
             </div>
