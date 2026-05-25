@@ -1,6 +1,5 @@
 import type {
   AdminAnalyticsSummary,
-  AdminQueueStatusResponse,
   ApiKeyResponse,
   LoginResponse,
   TenantResponse,
@@ -74,12 +73,10 @@ export const api = {
   }): Promise<UserResponse> =>
     request('/api/v1/users', { method: 'POST', body: JSON.stringify(payload) }),
 
-  getAdminAnalytics: (): Promise<AdminAnalyticsSummary> =>
-    request('/api/v1/analytics/admin/summary'),
-
-  getAdminQueue: (): Promise<AdminQueueStatusResponse> =>
-    request('/api/v1/ingest/admin/queue'),
-
-  flushAdminQueue: (tenantId: string): Promise<{ status: string }> =>
-    request(`/api/v1/ingest/admin/queue/flush/${tenantId}`, { method: 'POST' }),
+  getAdminAnalytics: (params?: { period_start?: string; period_end?: string }): Promise<AdminAnalyticsSummary> => {
+    const qs = params
+      ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString()
+      : '';
+    return request(`/api/v1/analytics/admin/summary${qs}`);
+  },
 };

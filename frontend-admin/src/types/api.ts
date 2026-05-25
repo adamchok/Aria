@@ -380,6 +380,8 @@ export interface AdminTenantAnalytics {
   total_jobs: number;
   total_records: number;
   matched_records: number;
+  uncertain_records: number;
+  unmatched_records: number;
   avg_match_rate: number;
   escalation_rate: number;
 }
@@ -388,6 +390,7 @@ export interface AdminAnalyticsSummary {
   period_start: ISODate;
   period_end: ISODate;
   total_tenants: number;
+  active_tenants: number;
   total_jobs: number;
   total_records: number;
   matched_records: number;
@@ -395,6 +398,7 @@ export interface AdminAnalyticsSummary {
   unmatched_records: number;
   avg_match_rate: number;
   escalation_rate: number;
+  avg_seconds_per_record: number;
   by_tenant: AdminTenantAnalytics[];
 }
 

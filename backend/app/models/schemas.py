@@ -515,6 +515,8 @@ class AdminTenantAnalytics(_Base):
     total_jobs: int
     total_records: int
     matched_records: int
+    uncertain_records: int
+    unmatched_records: int
     avg_match_rate: float
     escalation_rate: float
 
@@ -523,6 +525,7 @@ class AdminAnalyticsSummary(_Base):
     period_start: date
     period_end: date
     total_tenants: int
+    active_tenants: int
     total_jobs: int
     total_records: int
     matched_records: int
@@ -530,6 +533,7 @@ class AdminAnalyticsSummary(_Base):
     unmatched_records: int
     avg_match_rate: float
     escalation_rate: float
+    avg_seconds_per_record: float
     by_tenant: list[AdminTenantAnalytics]
 
 

@@ -56,15 +56,6 @@ function KeyIcon() {
   );
 }
 
-function InboxIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v12H4z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4-4h8l4 4" />
-    </svg>
-  );
-}
-
 function MenuIcon() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -87,7 +78,6 @@ const navSections: NavSection[] = [
       { to: '/tenants', label: 'Tenants', icon: <LayoutIcon /> },
       { to: '/users', label: 'Users', icon: <KeyIcon /> },
       { to: '/analytics', label: 'Analytics', icon: <ChartIcon /> },
-      { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
     ],
   },
 ];

@@ -339,6 +339,7 @@ async def admin_analytics_summary(
             period_start=period_start,
             period_end=period_end,
             total_tenants=len(tenants),
+            active_tenants=0,
             total_jobs=0,
             total_records=0,
             matched_records=0,
@@ -346,6 +347,7 @@ async def admin_analytics_summary(
             unmatched_records=0,
             avg_match_rate=0.0,
             escalation_rate=0.0,
+            avg_seconds_per_record=0.0,
             by_tenant=[],
         )
 
@@ -363,6 +365,10 @@ async def admin_analytics_summary(
     )
     escalation_rate = escalated / total_records if total_records > 0 else 0.0
 
+    timed_jobs = [(j, (j.updated_at - j.created_at).total_seconds()) for j in jobs if j.updated_at and j.created_at]
+    total_processing_seconds = sum(t for _, t in timed_jobs)
+    avg_seconds_per_record = total_processing_seconds / total_records if total_records > 0 else 0.0
+
     by_tenant: list[AdminTenantAnalytics] = []
     jobs_by_tenant: dict[str, list[JobORM]] = {}
     for j in jobs:
@@ -373,6 +379,8 @@ async def admin_analytics_summary(
         tjob_ids = {j.id for j in tjobs}
         tmatches = [m for m in all_matches if m.job_id in tjob_ids]
         tmatched = sum(1 for m in tmatches if m.status == MatchStatus.MATCHED.value)
+        tuncertain = sum(1 for m in tmatches if m.status == MatchStatus.UNCERTAIN.value)
+        tunmatched = sum(1 for m in tmatches if m.status == MatchStatus.UNMATCHED.value)
         trate = tmatched / len(tmatches) if tmatches else 0.0
         tescalated = sum(
             1 for m in tmatches
@@ -387,6 +395,8 @@ async def admin_analytics_summary(
                 total_jobs=len(tjobs),
                 total_records=len(tmatches),
                 matched_records=tmatched,
+                uncertain_records=tuncertain,
+                unmatched_records=tunmatched,
                 avg_match_rate=trate,
                 escalation_rate=terate,
             )
@@ -396,6 +406,7 @@ async def admin_analytics_summary(
         period_start=period_start,
         period_end=period_end,
         total_tenants=len(tenants),
+        active_tenants=len(jobs_by_tenant),
         total_jobs=len(jobs),
         total_records=total_records,
         matched_records=matched,
@@ -403,6 +414,7 @@ async def admin_analytics_summary(
         unmatched_records=unmatched,
         avg_match_rate=avg_match_rate,
         escalation_rate=escalation_rate,
+        avg_seconds_per_record=avg_seconds_per_record,
         by_tenant=sorted(by_tenant, key=lambda t: t.total_records, reverse=True),
     )
 
