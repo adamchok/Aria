@@ -37,20 +37,13 @@ flowchart LR
   Q --> R
 ```
 
-<div class="aria-pipeline">
-  <span class="aria-pipeline__step">Upload</span>
-  <span class="aria-pipeline__step">Extract</span>
-  <span class="aria-pipeline__step">Normalise</span>
-  <span class="aria-pipeline__step">Match</span>
-  <span class="aria-pipeline__step">Report</span>
-  <span class="aria-pipeline__step aria-pipeline__step--active">Review</span>
-</div>
+{% include aria-workflow-solution.html %}
 
 ### Web applications
 
 | App | Port | Audience | Login |
 | --- | --- | --- | --- |
-| **NovaPay** (`frontend-novapay`) | 5173 | External SME system (reference client) | Tenant user JWT |
+| **NovaPay** (`frontend-novapay`) | 5173 | External SME system (reference client) | Demo credentials (local only); API calls use `X-API-Key` via `VITE_API_KEY` |
 | **Admin** (`frontend-admin`) | 5174 | Platform operators | Admin JWT (seeded via `DEFAULT_ADMIN_PASSWORD`) |
 | **Tenant mgmt** (`frontend-tenant-mgmt`) | 5175 | Tenant administrators | Tenant user JWT |
 
@@ -63,7 +56,7 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 
 | Route | Screen | Purpose |
 | --- | --- | --- |
-| `/login` | Sign in | Email + password (tenant user JWT → Bearer on API calls) |
+| `/login` | Sign in | Hardcoded demo credentials (`finance@novapay.demo` / `novapay2026`); no backend call — all API requests use `X-API-Key` from `VITE_API_KEY` env var |
 | `/dashboard` | Pipeline dashboard | Job throughput, match-rate summary, recent jobs |
 | `/jobs` | Job monitor | Paginated, filterable job list |
 | `/jobs/{id}` | Job progress | Four-agent stepper driven by SSE (polling fallback) |
