@@ -75,6 +75,9 @@ class NormalisedRecord(_Base):
     tolerance_high: Decimal
     estimated_charges_myr: Decimal
     base_currency: str = "MYR"
+    # Set when FX rate retrieval failed; matching produces UNMATCHED immediately.
+    fx_unavailable: bool = False
+    fx_unavailable_reason: str = ""
 
 
 class BankEntry(_Base):
@@ -608,3 +611,56 @@ class TenantUserCreate(_Base):
 
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=128)
+
+
+# ─── Escalation breakdown ─────────────────────────────────────────────────────
+
+class EscalationPayeeBreakdown(_Base):
+    group: str
+    escalated_count: int
+    total_count: int
+    escalation_rate: float
+
+
+class EscalationBreakdownResponse(_Base):
+    group_by: str
+    period_start: date
+    period_end: date
+    breakdowns: list[EscalationPayeeBreakdown]
+
+
+# ─── Scheduled reconciliation ─────────────────────────────────────────────────
+
+class ReconciliationScheduleCreate(_Base):
+    """Configure an automatic reconciliation schedule for this tenant."""
+    run_time_utc: str = Field(
+        description="HH:MM time in UTC at which to trigger reconciliation, e.g. '09:00'",
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+    )
+    days_of_week: list[int] = Field(
+        default_factory=lambda: list(range(7)),
+        description="0=Mon … 6=Sun. Omit for daily.",
+    )
+    bank_account_id: UUID
+    base_currency: str = Field(default="MYR", min_length=3, max_length=3)
+    enabled: bool = True
+
+
+class ReconciliationScheduleResponse(_Base):
+    id: UUID
+    tenant_id: UUID
+    run_time_utc: str
+    days_of_week: list[int]
+    bank_account_id: UUID
+    base_currency: str
+    enabled: bool
+    created_at: datetime
+
+
+# ─── Dry-run ─────────────────────────────────────────────────────────────────
+
+class DryRunResponse(_Base):
+    """Returned by POST /jobs?dry_run=true — pipeline result without persistence."""
+    job_id: UUID
+    dry_run: bool = True
+    report: "ReconciliationReport"

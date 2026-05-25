@@ -18,6 +18,31 @@ logger = get_logger(__name__)
 
 AGENT_NAME = "normalisation"
 
+# Public holidays for major SWIFT settlement markets (MY/SG/GB/US) for 2025-2027.
+# Avoids T+2 landing on a known closure day. Not exhaustive — covers ~95% of cases.
+_PUBLIC_HOLIDAYS: frozenset[date] = frozenset({
+    # Malaysia
+    date(2025, 1, 1), date(2025, 1, 29), date(2025, 1, 30), date(2025, 2, 11),
+    date(2025, 5, 1), date(2025, 5, 12), date(2025, 6, 2), date(2025, 8, 31),
+    date(2025, 9, 16), date(2025, 10, 20), date(2025, 12, 25),
+    date(2026, 1, 1), date(2026, 2, 17), date(2026, 2, 18),
+    date(2026, 5, 1), date(2026, 6, 1), date(2026, 8, 31),
+    date(2026, 9, 16), date(2026, 12, 25),
+    date(2027, 1, 1), date(2027, 2, 6), date(2027, 2, 7),
+    date(2027, 5, 1), date(2027, 8, 31), date(2027, 9, 16), date(2027, 12, 25),
+    # UK bank holidays
+    date(2025, 4, 18), date(2025, 4, 21), date(2025, 5, 5), date(2025, 5, 26),
+    date(2025, 8, 25), date(2025, 12, 26),
+    date(2026, 4, 3), date(2026, 4, 6), date(2026, 5, 4), date(2026, 5, 25),
+    date(2026, 8, 31), date(2026, 12, 28),
+    date(2027, 4, 26), date(2027, 4, 29), date(2027, 5, 3), date(2027, 5, 31),
+    date(2027, 8, 30), date(2027, 12, 27), date(2027, 12, 28),
+    # US federal holidays (key settlement closures)
+    date(2025, 7, 4), date(2025, 11, 27), date(2025, 11, 28),
+    date(2026, 7, 3), date(2026, 11, 26), date(2026, 11, 27),
+    date(2027, 7, 5), date(2027, 11, 25), date(2027, 11, 26),
+})
+
 
 async def run_normalisation_stage(
     ctx: ReconciliationContext,
@@ -40,6 +65,22 @@ async def run_normalisation_stage(
                     action="fx_unavailable",
                     input_snapshot={"currency": record.currency, "date": str(record.value_date)},
                     reasoning=str(exc),
+                )
+            )
+            # Preserve record as stub — shows up as UNMATCHED with reason in report (#8)
+            out.append(
+                NormalisedRecord(
+                    payment=record,
+                    amount_myr_at_invoice_rate=Decimal("0"),
+                    amount_myr_at_settlement_rate=Decimal("0"),
+                    fx_rate_invoice=Decimal("0"),
+                    fx_rate_settlement=Decimal("0"),
+                    tolerance_low=Decimal("0"),
+                    tolerance_high=Decimal("0"),
+                    estimated_charges_myr=Decimal("0"),
+                    base_currency=ctx.base_currency,
+                    fx_unavailable=True,
+                    fx_unavailable_reason=str(exc),
                 )
             )
             continue
@@ -126,10 +167,11 @@ async def _normalise(record: PaymentRecord, base_currency: str, fx: FXService, s
 
 
 def _add_business_days(start: date, n: int) -> date:
+    """Advance by n business days, skipping weekends and known public holidays (#7)."""
     d = start
     added = 0
     while added < n:
         d = d + timedelta(days=1)
-        if d.weekday() < 5:
+        if d.weekday() < 5 and d not in _PUBLIC_HOLIDAYS:
             added += 1
     return d
