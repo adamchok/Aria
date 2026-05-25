@@ -147,7 +147,7 @@ function Donut({ slices, size = 120 }: { slices: DonutSlice[]; size?: number }) 
 
 // ─── Processing time sparkline ────────────────────────────────────────────────
 
-function ProcessingSparkline({ jobs, targetSeconds = 60 }: { jobs: JobProcessingPoint[]; targetSeconds?: number }) {
+function ProcessingSparkline({ jobs, targetSeconds = 3, targetLabel = '3s/rec' }: { jobs: JobProcessingPoint[]; targetSeconds?: number; targetLabel?: string }) {
   if (jobs.length === 0) {
     return <p className="py-4 text-center text-sm text-slate-400">No job data in period</p>;
   }
@@ -183,7 +183,7 @@ function ProcessingSparkline({ jobs, targetSeconds = 60 }: { jobs: JobProcessing
           strokeDasharray="4 3"
         />
         <text x={W - PAD.right + 2} y={targetY + 4} fontSize={9} fill="#b45309">
-          {targetSeconds}s
+          {targetLabel}
         </text>
 
         {/* Y ticks */}
@@ -375,8 +375,8 @@ export function AnalyticsPage() {
                 />
                 <TargetRow
                   met={perf.processing_target_met}
-                  label="Processing latency < 60s per batch"
-                  detail={`${perf.avg_processing_seconds.toFixed(1)}s avg`}
+                  label="Processing < 3s per record (batch-size normalized)"
+                  detail={`${perf.avg_seconds_per_record.toFixed(1)}s / record avg`}
                 />
                 <TargetRow
                   met={perf.total_records > 0}
@@ -419,11 +419,11 @@ export function AnalyticsPage() {
               }}
             />
             <MetricCard
-              label="Avg processing"
-              value={`${perf.avg_processing_seconds.toFixed(1)}s`}
-              description="< 60s target"
-              highlight={perf.processing_target_met ? 'green' : 'red'}
-              badge={{ text: perf.processing_target_met ? '< 60s ✓' : '> 60s', ok: perf.processing_target_met }}
+              label="Avg per record"
+              value={`${perf.avg_seconds_per_record.toFixed(1)}s`}
+              description={`${perf.avg_processing_seconds.toFixed(0)}s total avg · < 3s/rec target`}
+              highlight={perf.processing_target_met ? 'green' : 'amber'}
+              badge={{ text: perf.processing_target_met ? '< 3s ✓' : '> 3s', ok: perf.processing_target_met }}
             />
           </div>
 
@@ -483,13 +483,20 @@ export function AnalyticsPage() {
           {perf.recent_jobs.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Processing time per job</CardTitle>
+                <CardTitle>Processing time per record</CardTitle>
               </CardHeader>
               <CardContent>
-                <ProcessingSparkline jobs={perf.recent_jobs} targetSeconds={60} />
+                <ProcessingSparkline
+                  jobs={perf.recent_jobs.map((j) => ({
+                    ...j,
+                    processing_seconds: j.record_count > 0 ? j.processing_seconds / j.record_count : j.processing_seconds,
+                  }))}
+                  targetSeconds={3}
+                  targetLabel="3s/rec"
+                />
                 <p className="mt-1 text-xs text-slate-400">
-                  Amber dashed line = 60s target. Green dots = under target, amber = over.
-                  Showing last {perf.recent_jobs.length} completed job{perf.recent_jobs.length === 1 ? '' : 's'}.
+                  Y-axis: seconds per record (total ÷ record count). Amber dashed = 3s/record target.
+                  Green dots = under target, amber = over. Last {perf.recent_jobs.length} completed job{perf.recent_jobs.length === 1 ? '' : 's'}.
                 </p>
               </CardContent>
             </Card>

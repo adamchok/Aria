@@ -562,6 +562,7 @@ class AIPerformanceSummary(_Base):
     escalation_in_target_range: bool
     processing_target_met: bool
     avg_processing_seconds: float
+    avg_seconds_per_record: float
     recent_jobs: list[JobProcessingPoint]
 
 

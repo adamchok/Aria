@@ -417,6 +417,7 @@ export interface AIPerformanceSummary {
   escalation_in_target_range: boolean;
   processing_target_met: boolean;
   avg_processing_seconds: number;
+  avg_seconds_per_record: number;
   recent_jobs: JobProcessingPoint[];
 }
 

@@ -183,6 +183,7 @@ async def ai_performance_summary(
         escalation_in_target_range=False,
         processing_target_met=False,
         avg_processing_seconds=0.0,
+        avg_seconds_per_record=0.0,
         recent_jobs=[],
     )
 
@@ -260,19 +261,21 @@ async def ai_performance_summary(
     )
     escalation_rate = escalated_count / total_records if total_records > 0 else 0.0
 
-    processing_times = [
-        (j.updated_at - j.created_at).total_seconds()
-        for j in jobs
-        if j.updated_at and j.created_at
-    ]
-    avg_processing_seconds = (
-        sum(processing_times) / len(processing_times) if processing_times else 0.0
-    )
-
     # Per-job processing points (last 20, newest first)
     job_match_count: dict[str, int] = {}
     for m in all_matches:
         job_match_count[m.job_id] = job_match_count.get(m.job_id, 0) + 1
+
+    timed_jobs = [(j, (j.updated_at - j.created_at).total_seconds()) for j in jobs if j.updated_at and j.created_at]
+    avg_processing_seconds = (
+        sum(t for _, t in timed_jobs) / len(timed_jobs) if timed_jobs else 0.0
+    )
+    # Normalize by record count so the target is independent of batch size.
+    # 3.0 s/record is realistic for live LLM mode with concurrency.
+    total_timed_records = sum(job_match_count.get(j.id, 0) for j, _ in timed_jobs)
+    avg_seconds_per_record = (
+        sum(t for _, t in timed_jobs) / total_timed_records if total_timed_records > 0 else 0.0
+    )
 
     sorted_jobs = sorted(jobs, key=lambda j: j.created_at, reverse=True)[:20]
     recent_jobs = [
@@ -299,8 +302,9 @@ async def ai_performance_summary(
         human_review_confirmation_rate=human_review_confirmation_rate,
         match_rate_target_met=match_rate >= 0.9,
         escalation_in_target_range=0.05 <= escalation_rate <= 0.20,
-        processing_target_met=avg_processing_seconds < 60.0,
+        processing_target_met=avg_seconds_per_record < 3.0,
         avg_processing_seconds=avg_processing_seconds,
+        avg_seconds_per_record=avg_seconds_per_record,
         recent_jobs=recent_jobs,
     )
 
