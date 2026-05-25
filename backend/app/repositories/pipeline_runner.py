@@ -18,6 +18,16 @@ from app.services.storage import StorageService
 
 logger = get_logger(__name__)
 
+
+def _basename(storage_key: str) -> str:
+    """Return the filename portion of a storage key.
+
+    Storage keys are <uuid>/<filename>. Old keys from before the corridor-slash
+    fix may look like <uuid>/proof_USD/MYR.bin — take only the last segment so
+    detect_source_format gets a clean name without embedded path separators.
+    """
+    return storage_key.rsplit("/", 1)[-1]
+
 _STAGE_PROGRESS_PCT: dict[str, float] = {
     "ingestion": 25.0,
     "normalisation": 50.0,
@@ -108,13 +118,13 @@ async def execute_job(job_id: UUID | str) -> None:
         job_id=UUID(job_id_str),
         base_currency=base_currency,
         payment_documents=[
-            DocumentInput(storage_key=key, filename=key.split("/", 1)[-1])
+            DocumentInput(storage_key=key, filename=_basename(key))
             for key in payment_proof_keys
         ],
         bank_statement_input=(
             DocumentInput(
                 storage_key=bank_statement_key,
-                filename=bank_statement_key.split("/", 1)[-1],
+                filename=_basename(bank_statement_key),
             )
             if bank_statement_key
             else None

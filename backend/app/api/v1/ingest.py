@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -25,6 +26,29 @@ from app.repositories.job_repository import JobRepository
 from app.repositories.tenant_repository import TenantRepository
 from app.services.storage import StorageService
 from app.workers.tasks import enqueue_job
+
+
+def _proof_filename_and_type(raw: bytes) -> tuple[str, str]:
+    """Return (filename, content_type) for a proof file using magic-byte detection.
+
+    Filename is format-extension only — corridor name is intentionally excluded
+    to avoid path-separator collisions (e.g. 'USD/MYR' containing a literal '/').
+    The storage key UUID prefix already ensures uniqueness. The actual payment
+    currency is auto-detected by the LLM ingestion stage from the document
+    content, not derived from the corridor label.
+    """
+    if raw[:3] == b"\xff\xd8\xff":
+        return "proof.jpg", "image/jpeg"
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "proof.png", "image/png"
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "proof.webp", "image/webp"
+    if raw[:4] == b"%PDF":
+        return "proof.pdf", "application/pdf"
+    if raw[:4] == b"PK\x03\x04":
+        return "proof.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # Unknown binary — default to JPEG so Anthropic vision gets a usable media_type
+    return "proof.jpg", "image/jpeg"
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -74,16 +98,15 @@ async def ingest_transactions(
 
         # Store base64 proof content in object storage
         if tx.payment_proof_b64:
-            import base64
             try:
                 raw = base64.b64decode(tx.payment_proof_b64)
             except Exception as exc:
-                from fastapi import HTTPException
                 raise HTTPException(
                     status_code=422,
                     detail=f"Invalid base64 in payment_proof_b64 for corridor {tx.corridor}",
                 ) from exc
-            key = storage.put_object(raw, f"proof_{tx.corridor}.bin", content_type="application/octet-stream", tenant_id=tenant_id)
+            filename, content_type = _proof_filename_and_type(raw)
+            key = storage.put_object(raw, filename, content_type=content_type)
             item["storage_key"] = key
             item.pop("payment_proof_b64", None)
 
