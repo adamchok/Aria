@@ -21,16 +21,14 @@ logger = get_logger(__name__)
 
 
 def _dispose_engine() -> None:
-    """Synchronously dispose the async engine's connection pool.
+    """Drop stale asyncpg connections from the pool after asyncio.run() closes its loop.
 
-    asyncpg connections are bound to the event loop they were created in.
-    When asyncio.run() closes that loop, pooled connections become stale and
-    cause 'NoneType has no attribute send' / 'Event loop is closed' errors in
-    subsequent asyncio.run() calls within the same worker process.
-    sync_engine.dispose() tears down the pool without requiring a running loop.
+    close=False removes pool references without calling the async close() method —
+    avoids MissingGreenlet errors from SQLAlchemy trying to await inside a sync context.
+    The server-side connections are recycled when the OS reclaims the sockets.
     """
     from app.core.database import get_engine
-    get_engine().sync_engine.dispose()
+    get_engine().sync_engine.dispose(close=False)
 
 
 # ─── Pipeline ────────────────────────────────────────────────────────────────
@@ -254,8 +252,36 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
 
         delivery = await repo.create_delivery(webhook_id, job_id, event)
 
+    # Fetch job details for enriched payload
+    job_data: dict = {}
+    if job_id is not None:
+        async with session_scope() as session:
+            from sqlalchemy import select
+            from app.models.database import JobORM
+            result = await session.execute(select(JobORM).where(JobORM.id == job_id))
+            job = result.scalar_one_or_none()
+            if job is not None:
+                job_data["tenant_id"] = job.tenant_id
+                job_data["status"] = job.status
+                job_data["base_currency"] = job.base_currency
+                job_data["progress_pct"] = job.progress_pct
+                job_data["job_created_at"] = job.created_at.isoformat() + "Z"
+                job_data["job_updated_at"] = job.updated_at.isoformat() + "Z"
+                if event == "job.failed" and job.error:
+                    job_data["error"] = job.error
+                summary = (job.report_blob or {}).get("summary", {})
+                if summary:
+                    job_data["record_count"] = summary.get("total_records", 0)
+                    job_data["matched_count"] = summary.get("matched_count", 0)
+                    job_data["uncertain_count"] = summary.get("uncertain_count", 0)
+                    job_data["unmatched_count"] = summary.get("unmatched_count", 0)
+                    job_data["total_value_myr"] = summary.get("total_value_myr", "0")
+                    job_data["matched_value_myr"] = summary.get("matched_value_myr", "0")
+                    job_data["total_variance_myr"] = summary.get("total_variance_myr", "0")
+                    job_data["processing_seconds"] = summary.get("processing_seconds", 0)
+
     # Build payload
-    payload: dict[str, str] = {
+    payload: dict = {
         "event": event,
         "api_version": "2026-05-24",
         "webhook_id": webhook_id,
@@ -263,6 +289,10 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
     }
     if job_id is not None:
         payload["job_id"] = job_id
+    if job_data:
+        payload["data"] = job_data
+    elif event == "job.test":
+        payload["data"] = {"message": "Test event from ARIA webhook system"}
     body = json.dumps(payload).encode()
     timestamp = int(time.time())
     signature = sign_webhook_payload(webhook.secret, timestamp, body)
