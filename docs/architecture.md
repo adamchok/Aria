@@ -84,7 +84,9 @@ flowchart TD
   HR --> COMP[COMPLETED]
 ```
 
+{::nomarkdown}
 {% include aria-workflow-architecture.html %}
+{:/nomarkdown}
 
 ### Agent responsibilities
 

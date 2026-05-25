@@ -1,7 +1,7 @@
-<div class="aria-pipeline-widget" data-aria-pipeline>
+<div class="aria-pipeline-widget" data-aria-pipeline markdown="0">
   <div class="aria-pipeline-widget__panel" aria-live="polite">
     <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="upload">
-      <h3>Upload</h3>
+      <p class="aria-pipeline-widget__title">Upload</p>
       <p>Finance teams submit payment proofs (images, PDFs, Excel) plus bank data in one job.</p>
       <ul>
         <li><strong>NovaPay:</strong> <code>/upload</code> — drag proofs; attach a statement file <em>or</em> select a registered bank account (all pending ledger entries included).</li>
@@ -11,7 +11,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="extract" hidden>
-      <h3>Extract</h3>
+      <p class="aria-pipeline-widget__title">Extract</p>
       <p>Specialist agents turn unstructured documents into typed <code>PaymentRecord</code> and <code>BankEntry</code> rows.</p>
       <ul>
         <li><strong>Payment proofs:</strong> vision-first for images; structured parsers for PDF/Excel/CSV with LLM fallback.</li>
@@ -21,7 +21,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="normalise" hidden>
-      <h3>Normalise</h3>
+      <p class="aria-pipeline-widget__title">Normalise</p>
       <p>Every payment proof is converted to the job base currency (default MYR) with an FX-aware tolerance window.</p>
       <ul>
         <li>Live and historical FX rates at invoice date and settlement date.</li>
@@ -31,7 +31,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="match" hidden>
-      <h3>Match</h3>
+      <p class="aria-pipeline-widget__title">Match</p>
       <p>Three-stage matching combines deterministic filters with LLM reasoning and a composite confidence score.</p>
       <ul>
         <li><strong>Filter:</strong> date window ±5 days, amount within tolerance band.</li>
@@ -41,7 +41,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="report" hidden>
-      <h3>Report</h3>
+      <p class="aria-pipeline-widget__title">Report</p>
       <p>ARIA synthesises a reconciliation narrative and exports an audit-ready Excel workbook.</p>
       <ul>
         <li>Summary cards: matched, uncertain, unmatched counts and total value in base currency.</li>
@@ -51,7 +51,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
-      <h3>Review</h3>
+      <p class="aria-pipeline-widget__title">Review</p>
       <p>Uncertain matches (confidence 0.50–0.74) are flagged during matching but the report stage always runs first. Jobs finish as <code>AWAITING_REVIEW</code> when human decisions are needed.</p>
       <ul>
         <li><strong>NovaPay:</strong> <code>/jobs/{id}/review</code> — side-by-side proof vs candidate bank lines.</li>

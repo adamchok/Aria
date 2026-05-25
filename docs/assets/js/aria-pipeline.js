@@ -15,7 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
       panes.forEach((pane) => {
         const isActive = pane.dataset.stepPane === step;
         pane.classList.toggle('aria-pipeline-widget__pane--active', isActive);
-        pane.hidden = !isActive;
+        if (isActive) {
+          pane.removeAttribute('hidden');
+        } else {
+          pane.setAttribute('hidden', '');
+        }
       });
     }
 

@@ -795,7 +795,9 @@ stateDiagram-v2
   CANCELLED --> [*]
 ```
 
+{::nomarkdown}
 {% include aria-workflow-job-lifecycle.html %}
+{:/nomarkdown}
 
 ---
 

@@ -238,15 +238,16 @@ $aria-font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monos
   }
 
   &__pane {
-    display: none;
+    display: block;
 
-    &--active {
-      display: block;
+    &[hidden] {
+      display: none !important;
     }
 
-    h3 {
+    .aria-pipeline-widget__title {
       color: #0f172a;
       font-size: 1.0625rem;
+      font-weight: 600;
       margin: 0 0 0.5rem;
     }
 

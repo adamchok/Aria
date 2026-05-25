@@ -39,7 +39,9 @@ flowchart LR
   H --> D
 ```
 
+{::nomarkdown}
 {% include aria-workflow-solution.html %}
+{:/nomarkdown}
 
 ### Web applications
 

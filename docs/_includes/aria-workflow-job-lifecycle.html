@@ -1,7 +1,7 @@
-<div class="aria-pipeline-widget" data-aria-pipeline>
+<div class="aria-pipeline-widget" data-aria-pipeline markdown="0">
   <div class="aria-pipeline-widget__panel" aria-live="polite">
     <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="submit">
-      <h3>Submit</h3>
+      <p class="aria-pipeline-widget__title">Submit</p>
       <p>Client uploads payment proofs and bank data; the API persists files and enqueues work.</p>
       <ul>
         <li><strong>Endpoint:</strong> <code>POST /api/v1/jobs</code> (multipart) or continuous ingest → auto-batch.</li>
@@ -12,7 +12,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="process" hidden>
-      <h3>Process</h3>
+      <p class="aria-pipeline-widget__title">Process</p>
       <p>Worker runs the OpenAI Agents SDK pipeline; status progresses through stage-specific values (<code>INGESTING</code>, <code>NORMALISING</code>, <code>MATCHING</code>, <code>REPORTING</code>).</p>
       <ul>
         <li>Progress updated per agent stage (<code>progress_pct</code>, <code>agents_completed</code>).</li>
@@ -23,7 +23,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="complete" hidden>
-      <h3>Complete</h3>
+      <p class="aria-pipeline-widget__title">Complete</p>
       <p>Pipeline finishes; report stored and terminal status set.</p>
       <ul>
         <li><span class="aria-badge aria-badge--matched">COMPLETED</span> — all matches resolved above threshold.</li>
@@ -34,7 +34,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="review" hidden>
-      <h3>Review</h3>
+      <p class="aria-pipeline-widget__title">Review</p>
       <p>Optional human step when status is <span class="aria-badge aria-badge--uncertain">AWAITING_REVIEW</span>.</p>
       <ul>
         <li><code>GET /api/v1/jobs/{job_id}/review</code> — returns only <code>UNCERTAIN</code> items.</li>
@@ -45,7 +45,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="export" hidden>
-      <h3>Export</h3>
+      <p class="aria-pipeline-widget__title">Export</p>
       <p>Download audit-ready Excel once results are available.</p>
       <ul>
         <li><strong>Endpoint:</strong> <code>GET /api/v1/jobs/{job_id}/export</code></li>

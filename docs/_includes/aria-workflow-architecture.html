@@ -1,7 +1,7 @@
-<div class="aria-pipeline-widget" data-aria-pipeline>
+<div class="aria-pipeline-widget" data-aria-pipeline markdown="0">
   <div class="aria-pipeline-widget__panel" aria-live="polite">
     <article class="aria-pipeline-widget__pane aria-pipeline-widget__pane--active" data-step-pane="ingestion">
-      <h3>Ingestion</h3>
+      <p class="aria-pipeline-widget__title">Ingestion</p>
       <p>Two specialist agents extract structured records from uploaded documents into shared <code>ReconciliationState</code>.</p>
       <ul>
         <li><strong>IngestionSpecialist:</strong> Opus (images), Haiku (Excel/CSV), Sonnet (PDF) → <code>PaymentRecord</code>.</li>
@@ -12,7 +12,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="normalisation" hidden>
-      <h3>Normalisation</h3>
+      <p class="aria-pipeline-widget__title">Normalisation</p>
       <p>Deterministic FX service converts every record to base currency and computes tolerance bounds — no LLM call.</p>
       <ul>
         <li>FX cache pre-warmed for every (currency, date) pair; records processed concurrently via <code>asyncio.gather</code>.</li>
@@ -23,7 +23,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="matching" hidden>
-      <h3>Matching</h3>
+      <p class="aria-pipeline-widget__title">Matching</p>
       <p><code>MatchingSpecialist</code> (Sonnet) scores candidates after deterministic pre-filters.</p>
       <ul>
         <li><strong>Phase 1:</strong> date window ±5 days, amount within tolerance band; <code>rapidfuzz</code> pre-scoring in parallel.</li>
@@ -34,7 +34,7 @@
     </article>
 
     <article class="aria-pipeline-widget__pane" data-step-pane="report" hidden>
-      <h3>Report</h3>
+      <p class="aria-pipeline-widget__title">Report</p>
       <p><code>ReportSpecialist</code> synthesises the final <code>ReconciliationReport</code> and Excel export.</p>
       <ul>
         <li>Summary stats: matched, uncertain, unmatched counts and total value in base currency.</li>
