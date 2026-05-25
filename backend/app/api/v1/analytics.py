@@ -81,7 +81,14 @@ async def analytics_summary(
     unmatched = sum(1 for m in all_matches if m.status == MatchStatus.UNMATCHED.value)
 
     avg_match_rate = matched / total_records if total_records > 0 else 0.0
-    escalation_rate = uncertain / total_records if total_records > 0 else 0.0
+    # Escalation = records that were routed to human review, whether still pending
+    # (UNCERTAIN) or already resolved (human_reviewed=True, status changed to
+    # MATCHED/UNMATCHED). Counting only current UNCERTAIN misses all reviewed items.
+    escalated = sum(
+        1 for m in all_matches
+        if m.human_reviewed or m.status == MatchStatus.UNCERTAIN.value
+    )
+    escalation_rate = escalated / total_records if total_records > 0 else 0.0
 
     # Processing time — diff between created_at and updated_at for completed jobs
     processing_times = [
@@ -244,7 +251,11 @@ async def ai_performance_summary(
     matched_count = sum(1 for m in all_matches if m.status == MatchStatus.MATCHED.value)
     uncertain_count = sum(1 for m in all_matches if m.status == MatchStatus.UNCERTAIN.value)
     match_rate = matched_count / total_records if total_records > 0 else 0.0
-    escalation_rate = uncertain_count / total_records if total_records > 0 else 0.0
+    escalated_count = sum(
+        1 for m in all_matches
+        if m.human_reviewed or m.status == MatchStatus.UNCERTAIN.value
+    )
+    escalation_rate = escalated_count / total_records if total_records > 0 else 0.0
 
     processing_times = [
         (j.updated_at - j.created_at).total_seconds()
@@ -339,7 +350,11 @@ async def admin_analytics_summary(
     uncertain = sum(1 for m in all_matches if m.status == MatchStatus.UNCERTAIN.value)
     unmatched = sum(1 for m in all_matches if m.status == MatchStatus.UNMATCHED.value)
     avg_match_rate = matched / total_records if total_records > 0 else 0.0
-    escalation_rate = uncertain / total_records if total_records > 0 else 0.0
+    escalated = sum(
+        1 for m in all_matches
+        if m.human_reviewed or m.status == MatchStatus.UNCERTAIN.value
+    )
+    escalation_rate = escalated / total_records if total_records > 0 else 0.0
 
     by_tenant: list[AdminTenantAnalytics] = []
     jobs_by_tenant: dict[str, list[JobORM]] = {}
@@ -351,9 +366,12 @@ async def admin_analytics_summary(
         tjob_ids = {j.id for j in tjobs}
         tmatches = [m for m in all_matches if m.job_id in tjob_ids]
         tmatched = sum(1 for m in tmatches if m.status == MatchStatus.MATCHED.value)
-        tuncertain = sum(1 for m in tmatches if m.status == MatchStatus.UNCERTAIN.value)
         trate = tmatched / len(tmatches) if tmatches else 0.0
-        terate = tuncertain / len(tmatches) if tmatches else 0.0
+        tescalated = sum(
+            1 for m in tmatches
+            if m.human_reviewed or m.status == MatchStatus.UNCERTAIN.value
+        )
+        terate = tescalated / len(tmatches) if tmatches else 0.0
         tenant = tenants.get(tid)
         by_tenant.append(
             AdminTenantAnalytics(
