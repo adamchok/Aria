@@ -25,7 +25,7 @@ export function TenantDetailPage() {
       <div>
         <Link
           to="/tenants"
-          className="text-sm text-blue-600 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="text-sm text-violet-600 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
         >
           ← Back to tenants
         </Link>

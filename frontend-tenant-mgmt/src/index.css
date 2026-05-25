@@ -27,6 +27,25 @@ body {
 
 /* Focus rings are visible by default for keyboard users. */
 :focus-visible {
-  outline: 2px solid theme('colors.blue.500');
+  outline: 2px solid theme('colors.violet.500');
   outline-offset: 2px;
+}
+
+/* Sidebar scrollbar — thin track with subtle thumb. */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.slate.200') transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: theme('colors.slate.200');
+  border-radius: 9999px;
 }

@@ -47,7 +47,7 @@ export function TenantsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Acme Corp"
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </label>
             <Button type="submit" disabled={!name.trim() || createMutation.isPending}>
@@ -86,15 +86,21 @@ export function TenantsPage() {
           {tenantsQuery.data?.map((t) => (
             <div
               key={t.id}
-              className="flex items-center justify-between border-t border-slate-100 px-4 py-3 first:border-t-0"
+              className="flex items-center gap-3 border-t border-slate-100 px-4 py-3 hover:bg-slate-50 transition-colors first:border-t-0"
             >
-              <div>
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-semibold text-violet-700"
+                aria-hidden="true"
+              >
+                {t.name.charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-slate-900">{t.name}</p>
                 <p className="text-xs font-mono text-slate-500">{t.id}</p>
               </div>
               <Link
                 to={`/tenants/${t.id}`}
-                className="rounded text-sm text-blue-600 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="shrink-0 rounded text-sm text-violet-600 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 View details
               </Link>

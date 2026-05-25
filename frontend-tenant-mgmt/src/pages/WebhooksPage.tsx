@@ -232,7 +232,7 @@ export function WebhooksPage() {
                 placeholder="https://your-service.example.com/webhooks/aria"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </div>
             <div>
@@ -245,7 +245,7 @@ export function WebhooksPage() {
                 placeholder="Production webhook"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </div>
             <div>
@@ -256,7 +256,7 @@ export function WebhooksPage() {
                     key={ev.value}
                     className={`flex cursor-pointer items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition-colors ${
                       selectedEvents.includes(ev.value)
-                        ? 'border-blue-400 bg-blue-50 text-blue-700'
+                        ? 'border-violet-400 bg-violet-50 text-violet-700'
                         : 'border-slate-300 text-slate-600 hover:border-slate-400'
                     }`}
                   >

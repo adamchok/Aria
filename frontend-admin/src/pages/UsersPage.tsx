@@ -68,7 +68,7 @@ export function UsersPage() {
                 autoComplete="off"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </label>
             <div className="flex flex-col gap-1 text-sm sm:col-span-2">
@@ -83,7 +83,7 @@ export function UsersPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
               <span className="text-xs text-slate-500">Minimum 8 characters</span>
             </div>
@@ -92,7 +92,7 @@ export function UsersPage() {
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as 'admin' | 'tenant_user')}
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               >
                 <option value="tenant_user">Tenant user</option>
                 <option value="admin">Platform admin</option>
@@ -105,7 +105,7 @@ export function UsersPage() {
                   required
                   value={tenantId}
                   onChange={(e) => setTenantId(e.target.value)}
-                  className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 >
                   <option value="">Select tenant…</option>
                   {tenantsQuery.data?.map((t) => (

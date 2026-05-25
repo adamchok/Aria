@@ -53,7 +53,7 @@ export function UsersPage() {
                 autoComplete="off"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </label>
             <div className="flex flex-1 flex-col gap-1 text-sm">
@@ -68,7 +68,7 @@ export function UsersPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="rounded border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded border border-slate-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
               <span className="text-xs text-slate-500">Minimum 8 characters</span>
             </div>

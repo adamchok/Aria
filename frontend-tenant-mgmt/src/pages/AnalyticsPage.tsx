@@ -60,7 +60,7 @@ function MetricCard({ label, value, description, highlight, badge }: MetricCardP
 
 // ─── Confidence distribution ──────────────────────────────────────────────────
 
-const BUCKET_COLORS = ['bg-rose-400', 'bg-amber-400', 'bg-blue-400', 'bg-emerald-500'];
+const BUCKET_COLORS = ['bg-rose-400', 'bg-amber-400', 'bg-violet-400', 'bg-emerald-500'];
 
 function ConfidenceDistribution({ buckets }: { buckets: ConfidenceBucket[] }) {
   const maxCount = Math.max(...buckets.map((b) => b.count), 1);
@@ -72,7 +72,7 @@ function ConfidenceDistribution({ buckets }: { buckets: ConfidenceBucket[] }) {
           <div className="flex-1">
             <div className="flex h-6 items-center overflow-hidden rounded bg-slate-100">
               <div
-                className={`h-full rounded transition-all duration-500 ${BUCKET_COLORS[i]}`}
+                className={`h-full rounded transition-all duration-700 ${BUCKET_COLORS[i]}`}
                 style={{ width: `${(b.count / maxCount) * 100}%` }}
               />
             </div>
@@ -194,7 +194,7 @@ function ProcessingSparkline({ jobs, targetSeconds = 60 }: { jobs: JobProcessing
         ))}
 
         {/* Polyline */}
-        <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeLinejoin="round" />
+        <polyline points={points} fill="none" stroke="#7c3aed" strokeWidth={1.5} strokeLinejoin="round" />
 
         {/* Dots */}
         {jobs.map((j, i) => (
@@ -309,7 +309,7 @@ export function AnalyticsPage() {
             value={periodStart}
             max={periodEnd}
             onChange={(e) => setPeriodStart(e.target.value)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -321,7 +321,7 @@ export function AnalyticsPage() {
             min={periodStart}
             max={today()}
             onChange={(e) => setPeriodEnd(e.target.value)}
-            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
         </div>
         <div className="flex gap-2">
@@ -329,7 +329,7 @@ export function AnalyticsPage() {
             <button
               key={days}
               onClick={() => { setPeriodStart(daysAgo(days)); setPeriodEnd(today()); }}
-              className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-700"
+              className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-violet-400 hover:text-violet-700"
             >
               Last {days}d
             </button>
@@ -536,11 +536,11 @@ export function AnalyticsPage() {
                       <div className="flex items-center gap-2">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className={`h-full rounded-full ${
+                            className={`h-full rounded-full transition-all duration-700 ${
                               c.avg_match_rate >= 0.9
                                 ? 'bg-emerald-500'
                                 : c.avg_match_rate >= 0.75
-                                ? 'bg-blue-500'
+                                ? 'bg-violet-500'
                                 : 'bg-amber-400'
                             }`}
                             style={{ width: `${(c.avg_match_rate / maxMatchRate) * 100}%` }}
