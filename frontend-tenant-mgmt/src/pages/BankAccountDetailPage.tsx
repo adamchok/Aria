@@ -5,7 +5,6 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { UploadDropzone } from '@/components/UploadDropzone';
-import { FileList } from '@/components/FileList';
 import { formatAmount, formatDate } from '@/lib/format';
 import type { BankAccountUpdate, LedgerEntryCreate, LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
 
@@ -68,54 +67,179 @@ function ConfirmDialog({
 
 // ─── Upload statement modal ───────────────────────────────────────────────────
 
+type FileUploadStatus = 'pending' | 'uploading' | 'done' | 'error';
+interface FileUploadState {
+  status: FileUploadStatus;
+  error?: string;
+}
+
+function fileTypeLabel(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.pdf')) return 'PDF';
+  if (lower.endsWith('.xlsx')) return 'XLSX';
+  if (lower.endsWith('.csv')) return 'CSV';
+  return 'FILE';
+}
+
+function StatusIndicator({ state }: { state: FileUploadState | undefined }) {
+  if (!state || state.status === 'pending') return null;
+  if (state.status === 'uploading') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-slate-500">
+        <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-r-transparent" />
+        Uploading…
+      </span>
+    );
+  }
+  if (state.status === 'done') {
+    return (
+      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+        Uploaded
+      </span>
+    );
+  }
+  return (
+    <span className="max-w-[160px] truncate text-xs text-rose-600" title={state.error}>
+      {state.error ?? 'Failed'}
+    </span>
+  );
+}
+
 function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose: () => void }) {
   const qc = useQueryClient();
-  const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [statuses, setStatuses] = useState<Map<string, FileUploadState>>(new Map());
+  const [uploading, setUploading] = useState(false);
 
-  const upload = useMutation({
-    mutationFn: () => api.uploadAccountStatement(accountId, file!),
-    onSuccess: () => {
+  function addFiles(incoming: File[]) {
+    setFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name));
+      return [...prev, ...incoming.filter((f) => !existing.has(f.name))];
+    });
+  }
+
+  function removeFile(name: string) {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
+  }
+
+  async function handleUpload() {
+    if (files.length === 0 || uploading) return;
+    setUploading(true);
+    setStatuses(new Map(files.map((f) => [f.name, { status: 'pending' }])));
+
+    let successCount = 0;
+
+    for (const file of files) {
+      setStatuses((prev) => new Map(prev).set(file.name, { status: 'uploading' }));
+      try {
+        await api.uploadAccountStatement(accountId, file);
+        setStatuses((prev) => new Map(prev).set(file.name, { status: 'done' }));
+        successCount++;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Upload failed';
+        setStatuses((prev) => new Map(prev).set(file.name, { status: 'error', error }));
+      }
+    }
+
+    setUploading(false);
+
+    if (successCount > 0) {
       invalidateAccountQueries(qc, accountId);
+    }
+    if (successCount === files.length) {
       onClose();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
+    }
+  }
+
+  const hasFiles = files.length > 0;
+  const allDone = hasFiles && [...statuses.values()].every((s) => s.status === 'done');
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="upload-statement-title"
     >
-      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <h2 id="upload-statement-title" className="mb-4 text-lg font-semibold text-slate-900">
-          Upload bank statement
-        </h2>
+      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 id="upload-statement-title" className="text-base font-semibold text-slate-900">
+            Upload bank statements
+          </h2>
+          {!uploading && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
 
-        <UploadDropzone
-          label={file ? 'Replace bank statement' : 'Drop bank statement'}
-          onFiles={(uploaded) => {
-            setError(null);
-            setFile(uploaded[0] ?? null);
-          }}
-          helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
-          acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
-          acceptedMimeTypes={BANK_STATEMENT_MIME}
-        />
-        <FileList
-          files={file ? [file] : []}
-          onRemove={() => setFile(null)}
-          emptyLabel="No bank statement selected."
-        />
+        <div className="flex flex-col gap-4 px-6 py-5">
+          <UploadDropzone
+            label="Drop statements here"
+            multiple
+            onFiles={addFiles}
+            helperText="XLSX, CSV, or PDF — each with date, amount, reference, and counterparty columns."
+            acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
+            acceptedMimeTypes={BANK_STATEMENT_MIME}
+          />
 
-        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+          {hasFiles && (
+            <ul className="divide-y divide-slate-200 rounded-md border border-slate-200">
+              {files.map((file) => {
+                const state = statuses.get(file.name);
+                const isLocked = uploading || state?.status === 'done';
+                return (
+                  <li key={file.name} className="flex items-center gap-3 px-4 py-3">
+                    <span className="inline-flex h-8 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                      {fileTypeLabel(file.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
+                      <StatusIndicator state={state} />
+                    </div>
+                    {!isLocked && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(file.name)}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={upload.isPending} disabled={!file} onClick={() => upload.mutate()}>
-            Upload
+          {!hasFiles && (
+            <p className="text-sm text-slate-500">No files selected yet.</p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+          <Button variant="secondary" disabled={uploading} onClick={onClose}>
+            {allDone ? 'Close' : 'Cancel'}
+          </Button>
+          <Button
+            disabled={!hasFiles || uploading || allDone}
+            loading={uploading}
+            onClick={() => void handleUpload()}
+          >
+            {uploading
+              ? 'Uploading…'
+              : `Upload ${files.length} ${files.length === 1 ? 'statement' : 'statements'}`}
           </Button>
         </div>
       </div>
