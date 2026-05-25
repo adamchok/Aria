@@ -13,6 +13,7 @@ from app.graph.state import DocumentInput, ReconciliationState
 from app.models.enums import JobStatus, MatchStatus
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
+from app.repositories.vendor_rules_repository import VendorRulesRepository
 from app.services.storage import StorageService
 
 logger = get_logger(__name__)
@@ -180,6 +181,16 @@ async def execute_job(job_id: UUID | str) -> None:
                 detail="All entries already cleared — all payment records will be UNMATCHED.",
             )
 
+    # Load vendor rules before running pipeline so the ingestion stage can apply
+    # corrections learned from past human reviews.
+    vendor_rules: list[dict] = []
+    if tenant_id:
+        async with session_scope() as session:
+            rules_repo = VendorRulesRepository(session, tenant_id=tenant_id)
+            vendor_rules = await rules_repo.find_for_tenant()
+        if vendor_rules:
+            logger.info("pipeline.vendor_rules_loaded", count=len(vendor_rules))
+
     try:
         async def on_stage_complete(state: ReconciliationState, agent: str) -> None:
             await _publish_stage_progress(job_id, tenant_id, state, agent)
@@ -188,6 +199,7 @@ async def execute_job(job_id: UUID | str) -> None:
             state,
             on_stage_complete=on_stage_complete,
             tenant_id=tenant_id,
+            vendor_rules=vendor_rules,
         )
     except Exception as exc:  # noqa: BLE001 — log and persist
         logger.exception("pipeline.failed", error=str(exc))

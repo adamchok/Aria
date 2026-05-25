@@ -18,6 +18,8 @@ class ReconciliationContext:
     tenant_id: str | None = None
     settings: Settings = field(default_factory=get_settings)
     storage: StorageService = field(default_factory=StorageService)
+    # Vendor corrections loaded from DB at pipeline start; read-only during run.
+    vendor_rules: list[dict] = field(default_factory=list)
 
     @property
     def job_id(self) -> UUID:

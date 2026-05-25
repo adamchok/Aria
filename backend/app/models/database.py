@@ -279,6 +279,28 @@ class BankStatementORM(Base):
     )
 
 
+class VendorRuleORM(Base):
+    """Tenant-scoped vendor extraction corrections learned from human review."""
+
+    __tablename__ = "vendor_rules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    payee_pattern: Mapped[str] = mapped_column(String(255), nullable=False)
+    field_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    corrected_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class BankEntryORM(Base):
     __tablename__ = "bank_entries"
 

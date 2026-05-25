@@ -28,6 +28,7 @@ async def run_reconciliation(
     *,
     on_stage_complete: Callable[[ReconciliationState, str], Awaitable[None]] | None = None,
     tenant_id: str | None = None,
+    vendor_rules: list[dict] | None = None,
 ) -> ReconciliationState:
     """Run the full reconciliation pipeline (replaces ``arun_pipeline``).
 
@@ -39,7 +40,11 @@ async def run_reconciliation(
     configure_agents_sdk_tracing()
     state.started_at = state.started_at or datetime.utcnow()
 
-    ctx = ReconciliationContext(state=state, tenant_id=tenant_id)
+    ctx = ReconciliationContext(
+        state=state,
+        tenant_id=tenant_id,
+        vendor_rules=vendor_rules or [],
+    )
     llm = LLMService(ctx.settings)
 
     logger.info(

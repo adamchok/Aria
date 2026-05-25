@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,11 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db_session
 from app.core.exceptions import MatchNotFoundError
+from app.core.logging import get_logger
 from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, ReviewAction
-from app.models.schemas import MatchResult, ReviewActionRequest, ReviewActionResponse
+from app.models.schemas import BankEntry, MatchResult, ReviewActionRequest, ReviewActionResponse
+from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
+from app.repositories.vendor_rules_repository import VendorRulesRepository
+from app.services.job_bank_entries import resolve_manual_match_bank_entry
 from app.services.report_hydration import hydrate_report
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -38,19 +46,24 @@ async def submit_review_action(
     # Idempotency: a confirm/reject on an already-reviewed match returns the
     # current state instead of erroring.
     if match.human_reviewed and payload.action != ReviewAction.MANUAL_MATCH:
+        existing = match.payload or {}
+        bank_entry = existing.get("bank_entry")
         return ReviewActionResponse(
             match_id=UUID(match.id),
             status=MatchStatus(match.status),
             human_reviewed=True,
             note=match.review_notes,
+            bank_entry=BankEntry.model_validate(bank_entry) if bank_entry else None,
         )
 
     if payload.action == ReviewAction.CONFIRM:
         new_status = MatchStatus.MATCHED
         bank_entry_payload = None
+        amount_variance_myr = None
     elif payload.action == ReviewAction.REJECT:
         new_status = MatchStatus.UNMATCHED
         bank_entry_payload = None
+        amount_variance_myr = None
     elif payload.action == ReviewAction.MANUAL_MATCH:
         if payload.bank_entry_id is None:
             raise HTTPException(
@@ -58,13 +71,31 @@ async def submit_review_action(
                 detail="manual_match requires bank_entry_id",
             )
         new_status = MatchStatus.MATCHED
-        # We don't persist the bank statement separately; the match payload
-        # already carries the entry chosen during reasoning. For a manual
-        # match we record the requested id so the UI can resolve it.
-        existing_payload = dict(match.payload or {})
-        existing_entry = existing_payload.get("bank_entry") or {}
-        existing_entry["id"] = str(payload.bank_entry_id)
-        bank_entry_payload = existing_entry
+        job = await repo.get(job_id)
+        ledger = BankLedgerRepository(session, tenant_id=tenant_id)
+        try:
+            resolved = await resolve_manual_match_bank_entry(
+                job, payload.bank_entry_id, repo, ledger
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        bank_entry_payload = resolved.model_dump(mode="json")
+        match_payload = dict(match.payload or {})
+        nr = MatchResult.model_validate(match_payload).normalised_record
+        amount_variance_myr = (
+            abs(resolved.amount) - nr.amount_myr_at_settlement_rate
+        ).quantize(Decimal("0.01"))
+
+        # Learn from the correction: if bank description reveals the true
+        # currency, persist a vendor rule so future extractions are correct.
+        await _save_vendor_correction(
+            session=session,
+            tenant_id=tenant_id,
+            job_id=str(job_id),
+            payment=nr.payment,
+            bank_entry=resolved,
+            note=payload.note,
+        )
 
     updated = await repo.update_match(
         job_id,
@@ -73,7 +104,12 @@ async def submit_review_action(
         human_reviewed=True,
         review_notes=payload.note,
         bank_entry_payload=bank_entry_payload,
+        amount_variance_myr=amount_variance_myr,
     )
+
+    response_bank_entry: BankEntry | None = None
+    if updated.payload and updated.payload.get("bank_entry"):
+        response_bank_entry = BankEntry.model_validate(updated.payload["bank_entry"])
 
     job = await repo.get(job_id)
     if job.report_blob:
@@ -89,4 +125,57 @@ async def submit_review_action(
         status=MatchStatus(updated.status),
         human_reviewed=True,
         note=updated.review_notes,
+        bank_entry=response_bank_entry,
     )
+
+
+async def _save_vendor_correction(
+    *,
+    session: AsyncSession,
+    tenant_id: str,
+    job_id: str,
+    payment: object,
+    bank_entry: BankEntry,
+    note: str | None,
+) -> None:
+    """Detect field discrepancies and persist vendor rules for future jobs."""
+    from app.models.schemas import PaymentRecord as PR
+
+    if not isinstance(payment, PR):
+        return
+
+    detected = _detect_currency_from_description(bank_entry.description, payment.amount_original)
+    if detected and detected != payment.currency:
+        try:
+            rules = VendorRulesRepository(session, tenant_id=tenant_id)
+            await rules.upsert_rule(
+                payee_pattern=payment.payee,
+                field_name="currency",
+                corrected_value=detected,
+                original_value=payment.currency,
+                source_job_id=job_id,
+                source_note=note,
+            )
+        except Exception:
+            logger.exception(
+                "vendor_rule.save_failed",
+                payee=payment.payee,
+                field="currency",
+            )
+
+
+def _detect_currency_from_description(description: str, amount: Decimal) -> str | None:
+    """Parse embedded currency+amount from POS debit descriptions.
+
+    'POS DEBIT MOONSHOT AI SINGAPO (USD 5.00)' → 'USD'
+    """
+    text = (description or "").upper()
+    amount_str = str(amount.quantize(Decimal("0.01")))
+    patterns = [amount_str]
+    if amount == amount.to_integral_value():
+        patterns.append(str(int(amount)))
+    for amt in patterns:
+        m = re.search(rf"([A-Z]{{3}})\s*{re.escape(amt)}(?!\d)", text)
+        if m:
+            return m.group(1)
+    return None

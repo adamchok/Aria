@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.graph.state import DocumentInput
 from app.models.enums import JobStatus, SourceFormat
 from app.models.schemas import PaymentRecord
+from app.repositories.vendor_rules_repository import normalize_payee
 from app.tools.file_parsers import (
     detect_source_format,
     extract_pdf_text,
@@ -105,6 +106,8 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
     except Exception as exc:
         raise ExtractionError(f"LLM extraction failed for {doc.filename}: {exc}") from exc
 
+    payload = _apply_vendor_rules(payload, ctx.vendor_rules)
+
     return PaymentRecord(
         payer=payload["payer"],
         payee=payload["payee"],
@@ -119,6 +122,40 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
         field_confidences=payload.get("field_confidences", {}),
         source_document=doc.storage_key,
     )
+
+
+def _apply_vendor_rules(payload: dict, vendor_rules: list[dict]) -> dict:
+    """Override LLM-extracted fields with stored vendor corrections."""
+    if not vendor_rules:
+        return payload
+    payee_normalized = normalize_payee(payload.get("payee", ""))
+    if not payee_normalized:
+        return payload
+
+    applied = False
+    for rule in vendor_rules:
+        pattern = rule["payee_pattern"]
+        if not pattern:
+            continue
+        # Substring match after normalization: "moonshot ai" ⊂ "moonshot ai pte ltd"
+        if pattern in payee_normalized or payee_normalized in pattern:
+            field = rule["field_name"]
+            corrected = rule["corrected_value"]
+            if payload.get(field) != corrected:
+                if not applied:
+                    payload = dict(payload)
+                    applied = True
+                payload[field] = corrected
+                fc = dict(payload.get("field_confidences") or {})
+                fc[field] = 0.90
+                payload["field_confidences"] = fc
+                logger.info(
+                    "vendor_rule.applied",
+                    payee=payload.get("payee"),
+                    field=field,
+                    corrected=corrected,
+                )
+    return payload
 
 
 def _extract_audit(job_id, doc: DocumentInput, record: PaymentRecord, mode: str):
