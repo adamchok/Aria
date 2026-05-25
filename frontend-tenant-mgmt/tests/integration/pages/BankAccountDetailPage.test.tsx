@@ -50,12 +50,17 @@ describe('BankAccountDetailPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /upload statement/i }));
 
-    const stmtInput = screen.getByLabelText(/Drop bank statement file input/i) as HTMLInputElement;
+    const stmtInput = screen.getByLabelText(/Drop statements here file input/i) as HTMLInputElement;
     await userEvent.upload(stmtInput, new File(['stmt'], 'june.csv', { type: 'text/csv' }));
-    await userEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+    const uploadBtn = screen.getByRole('button', { name: /upload 1 statement/i });
+    expect(uploadBtn).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
+
+    await userEvent.click(uploadBtn);
 
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: /upload bank statement/i })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('heading', { name: /upload bank statements/i })).not.toBeInTheDocument(),
     );
   });
 });

@@ -218,9 +218,11 @@ export interface QueueStatusResponse {
 // ─── Webhooks ────────────────────────────────────────────────────────────────
 
 export const WebhookEvent = {
+  JOB_CREATED: 'job.created',
   JOB_COMPLETED: 'job.completed',
   JOB_FAILED: 'job.failed',
   JOB_REVIEW_REQUIRED: 'job.review_required',
+  JOB_STAGE_COMPLETED: 'job.stage_completed',
 } as const;
 export type WebhookEvent = (typeof WebhookEvent)[keyof typeof WebhookEvent];
 
@@ -244,6 +246,7 @@ export interface WebhookDeliveryResponse {
   attempt_count: number;
   last_attempt_at: ISODateTime | null;
   response_code: number | null;
+  response_body: string | null;
   created_at: ISODateTime;
 }
 

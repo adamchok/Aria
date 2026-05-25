@@ -155,7 +155,8 @@ function UploadStatementModal({ accountId, onClose }: { accountId: UUID; onClose
   }
 
   const hasFiles = files.length > 0;
-  const allDone = hasFiles && [...statuses.values()].every((s) => s.status === 'done');
+  const allDone =
+    hasFiles && files.every((f) => statuses.get(f.name)?.status === 'done');
 
   return (
     <div
