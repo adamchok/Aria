@@ -78,6 +78,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # ── Legacy X-API-Key path (programmatic / backward-compat) ──────────
         raw_key = request.headers.get("X-API-Key", "").strip()
+        # EventSource cannot send headers — allow ?api_key= on SSE stream paths only.
+        if not raw_key and request.url.path.endswith("/stream"):
+            raw_key = request.query_params.get("api_key", "").strip()
 
         if not raw_key:
             return _unauth("Provide Authorization: Bearer <token> or X-API-Key header")
