@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import BankEntryORM, BankStatementORM
-from app.models.schemas import BankEntry, BankStatement
+from app.models.schemas import BankEntry, BankStatement, LedgerEntryItem
 
 
 class BankLedgerRepository:
@@ -263,6 +263,99 @@ class BankLedgerRepository:
         await self._s.commit()
         stmt.storage_key = storage_key
         return stmt
+
+    _MANUAL_STATEMENT_FILENAME = "Manual Entries"
+
+    async def _get_or_create_manual_statement(
+        self, account_id: UUID | str, base_currency: str
+    ) -> BankStatementORM:
+        """Return (or lazily create) the per-account sentinel statement for manual entries."""
+        q = select(BankStatementORM).where(
+            BankStatementORM.account_id == str(account_id),
+            BankStatementORM.filename == self._MANUAL_STATEMENT_FILENAME,
+            BankStatementORM.storage_key.is_(None),
+        )
+        if self._tenant_id:
+            q = q.where(BankStatementORM.tenant_id == self._tenant_id)
+        stmt = (await self._s.execute(q)).scalar_one_or_none()
+        if stmt is None:
+            stmt = BankStatementORM(
+                id=str(uuid4()),
+                tenant_id=self._tenant_id,
+                account_id=str(account_id),
+                filename=self._MANUAL_STATEMENT_FILENAME,
+                storage_key=None,
+                base_currency=base_currency,
+                entry_count=0,
+            )
+            self._s.add(stmt)
+            await self._s.flush()
+        return stmt
+
+    async def create_entry(
+        self,
+        account_id: UUID | str,
+        *,
+        value_date,
+        amount: Decimal,
+        currency: str,
+        description: str = "",
+        reference: str | None = None,
+        counterparty: str | None = None,
+    ) -> tuple[BankEntryORM, BankStatementORM]:
+        """Create a single manual ledger entry (no uploaded file)."""
+        stmt = await self._get_or_create_manual_statement(account_id, currency)
+        entry = BankEntryORM(
+            id=str(uuid4()),
+            statement_id=stmt.id,
+            tenant_id=self._tenant_id,
+            value_date=value_date,
+            amount=amount,
+            currency=currency,
+            description=description,
+            reference=reference,
+            counterparty=counterparty,
+            raw_row={},
+            cleared=False,
+        )
+        self._s.add(entry)
+        stmt.entry_count += 1
+        await self._s.commit()
+        await self._s.refresh(entry)
+        await self._s.refresh(stmt)
+        return entry, stmt
+
+    async def create_entries(
+        self,
+        account_id: UUID | str,
+        entries: list[dict],
+        base_currency: str,
+    ) -> tuple[list[BankEntryORM], BankStatementORM]:
+        """Bulk-create manual ledger entries. Each dict follows LedgerEntryCreate fields."""
+        stmt = await self._get_or_create_manual_statement(account_id, base_currency)
+        created: list[BankEntryORM] = []
+        for e in entries:
+            orm = BankEntryORM(
+                id=str(uuid4()),
+                statement_id=stmt.id,
+                tenant_id=self._tenant_id,
+                value_date=e["value_date"],
+                amount=Decimal(str(e["amount"])),
+                currency=e["currency"],
+                description=e.get("description", ""),
+                reference=e.get("reference"),
+                counterparty=e.get("counterparty"),
+                raw_row={},
+                cleared=False,
+            )
+            self._s.add(orm)
+            created.append(orm)
+        stmt.entry_count += len(created)
+        await self._s.commit()
+        for orm in created:
+            await self._s.refresh(orm)
+        await self._s.refresh(stmt)
+        return created, stmt
 
     async def clear_entries(self, entry_ids: list[UUID | str], job_id: UUID | str) -> int:
         """Mark entries as cleared by job. Only touches entries belonging to this tenant."""

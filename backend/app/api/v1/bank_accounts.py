@@ -22,8 +22,11 @@ from app.models.enums import SourceFormat
 from app.models.schemas import (
     BankAccountCreate,
     BankAccountResponse,
+    BankAccountUpdate,
     BankStatementSummary,
     BankStatementUploadResponse,
+    LedgerBulkCreateResponse,
+    LedgerEntryCreate,
     LedgerEntryItem,
     LedgerEntryUpdate,
     LedgerPageResponse,
@@ -116,6 +119,33 @@ async def get_bank_account(
 ) -> BankAccountResponse:
     repo = BankAccountRepository(session, tenant_id=tenant_id)
     acc = await repo.get(account_id)
+    if acc is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    stats = await repo.get_stats(acc.id)
+    return BankAccountResponse(
+        id=UUID(acc.id),
+        tenant_id=UUID(acc.tenant_id) if acc.tenant_id else None,
+        name=acc.name,
+        bank_name=acc.bank_name,
+        account_number_masked=acc.account_number_masked,
+        currency=acc.currency,
+        created_at=acc.created_at,
+        **stats,
+    )
+
+
+@router.patch("/{account_id}", response_model=BankAccountResponse)
+async def update_bank_account(
+    account_id: UUID,
+    payload: BankAccountUpdate,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> BankAccountResponse:
+    repo = BankAccountRepository(session, tenant_id=tenant_id)
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    acc = await repo.update(account_id, **updates)
     if acc is None:
         raise HTTPException(status_code=404, detail="Bank account not found")
     stats = await repo.get_stats(acc.id)
@@ -273,6 +303,62 @@ async def delete_account_statement(
 
 
 # ─── Ledger view ──────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{account_id}/ledger",
+    response_model=LedgerEntryItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ledger_entry(
+    account_id: UUID,
+    payload: LedgerEntryCreate,
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> LedgerEntryItem:
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    if await acc_repo.get(account_id) is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+    entry, stmt = await ledger_repo.create_entry(
+        account_id,
+        value_date=payload.value_date,
+        amount=payload.amount,
+        currency=payload.currency,
+        description=payload.description,
+        reference=payload.reference,
+        counterparty=payload.counterparty,
+    )
+    return _ledger_item(entry, stmt.filename)
+
+
+@router.post(
+    "/{account_id}/ledger/bulk",
+    response_model=LedgerBulkCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ledger_entries_bulk(
+    account_id: UUID,
+    payload: list[LedgerEntryCreate],
+    session: AsyncSession = Depends(get_db_session),
+    tenant_id: str = Depends(require_tenant),
+) -> LedgerBulkCreateResponse:
+    if not payload:
+        raise HTTPException(status_code=400, detail="entries list must not be empty")
+    if len(payload) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 entries per bulk request")
+
+    acc_repo = BankAccountRepository(session, tenant_id=tenant_id)
+    acc = await acc_repo.get(account_id)
+    if acc is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+
+    ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
+    entries_data = [e.model_dump() for e in payload]
+    created, stmt = await ledger_repo.create_entries(account_id, entries_data, acc.currency)
+    items = [_ledger_item(e, stmt.filename) for e in created]
+    return LedgerBulkCreateResponse(created_count=len(items), items=items)
 
 
 @router.get("/{account_id}/ledger", response_model=LedgerPageResponse)

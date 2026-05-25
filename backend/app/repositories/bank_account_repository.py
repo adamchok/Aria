@@ -59,6 +59,30 @@ class BankAccountRepository:
         rows = (await self._s.execute(q)).scalars().all()
         return list(rows), count
 
+    async def update(
+        self,
+        account_id: UUID | str,
+        *,
+        name: str | None = None,
+        bank_name: str | None = None,
+        account_number_masked: str | None = None,
+        currency: str | None = None,
+    ) -> BankAccountORM | None:
+        acc = await self.get(account_id)
+        if acc is None:
+            return None
+        if name is not None:
+            acc.name = name
+        if bank_name is not None:
+            acc.bank_name = bank_name
+        if account_number_masked is not None:
+            acc.account_number_masked = account_number_masked
+        if currency is not None:
+            acc.currency = currency
+        await self._s.commit()
+        await self._s.refresh(acc)
+        return acc
+
     async def delete(self, account_id: UUID | str) -> bool:
         acc = await self.get(account_id)
         if acc is None:

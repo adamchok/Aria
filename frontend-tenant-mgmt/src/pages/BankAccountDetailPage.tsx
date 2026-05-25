@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatAmount, formatDate } from '@/lib/format';
-import type { LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
+import type { BankAccountUpdate, LedgerEntryCreate, LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
 
 const PAGE_SIZE = 50;
 
@@ -240,6 +240,222 @@ function EditLedgerEntryModal({
   );
 }
 
+// ─── Edit account modal ───────────────────────────────────────────────────────
+
+const CURRENCIES = ['MYR', 'USD', 'EUR', 'GBP', 'SGD'];
+
+function EditAccountModal({
+  accountId,
+  current,
+  onClose,
+}: {
+  accountId: UUID;
+  current: { name: string; bank_name: string; account_number_masked: string; currency: string };
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState<BankAccountUpdate>({
+    name: current.name,
+    bank_name: current.bank_name,
+    account_number_masked: current.account_number_masked,
+    currency: current.currency,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () => api.updateBankAccount(accountId, form),
+    onSuccess: () => {
+      invalidateAccountQueries(qc, accountId);
+      onClose();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  function field(key: keyof BankAccountUpdate) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-account-title"
+    >
+      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+        <h2 id="edit-account-title" className="mb-4 text-lg font-semibold text-slate-900">
+          Edit bank account
+        </h2>
+
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Account name
+            <input
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={form.name ?? ''}
+              onChange={field('name')}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Bank name
+            <input
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={form.bank_name ?? ''}
+              onChange={field('bank_name')}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Account number (masked)
+            <input
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={form.account_number_masked ?? ''}
+              onChange={field('account_number_masked')}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Currency
+            <select
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={form.currency ?? ''}
+              onChange={field('currency')}
+            >
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add ledger entry modal ───────────────────────────────────────────────────
+
+function AddLedgerEntryModal({
+  accountId,
+  defaultCurrency,
+  onClose,
+}: {
+  accountId: UUID;
+  defaultCurrency: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState<LedgerEntryCreate>({
+    value_date: today,
+    amount: '',
+    currency: defaultCurrency,
+    description: '',
+    reference: null,
+    counterparty: null,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: () => api.createLedgerEntry(accountId, form),
+    onSuccess: () => {
+      invalidateAccountQueries(qc, accountId);
+      onClose();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  function field(key: keyof LedgerEntryCreate) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-entry-title"
+    >
+      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+        <h2 id="add-entry-title" className="mb-4 text-lg font-semibold text-slate-900">
+          Add ledger entry
+        </h2>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Value date
+            <input
+              type="date"
+              value={form.value_date}
+              onChange={field('value_date')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Currency
+            <input
+              value={form.currency}
+              onChange={field('currency')}
+              maxLength={3}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm uppercase"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            Amount
+            <input
+              value={form.amount}
+              onChange={field('amount')}
+              inputMode="decimal"
+              placeholder="e.g. -250.00 for debit"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm tabular-nums"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            Description
+            <input
+              value={form.description ?? ''}
+              onChange={field('description')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Reference
+            <input
+              value={form.reference ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value || null }))}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Counterparty
+            <input
+              value={form.counterparty ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, counterparty: e.target.value || null }))}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+
+        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            loading={create.isPending}
+            disabled={!form.value_date || !form.amount || !form.currency}
+            onClick={() => create.mutate()}
+          >
+            Add entry
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Ledger entry row ─────────────────────────────────────────────────────────
 
 function LedgerRow({
@@ -366,6 +582,8 @@ export function BankAccountDetailPage() {
   const qc = useQueryClient();
 
   const [showUpload, setShowUpload] = useState(false);
+  const [showEditAccount, setShowEditAccount] = useState(false);
+  const [showAddEntry, setShowAddEntry] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   const [clearedFilter, setClearedFilter] = useState<ClearedFilter>('all');
   const [page, setPage] = useState(1);
@@ -457,6 +675,9 @@ export function BankAccountDetailPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowEditAccount(true)}>
+            Edit
+          </Button>
           <Button variant="secondary" onClick={() => setShowUpload(true)}>
             Upload statement
           </Button>
@@ -524,7 +745,10 @@ export function BankAccountDetailPage() {
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle>Ledger entries</CardTitle>
-              {ledger && <span className="text-sm text-slate-500">{ledger.total} total</span>}
+              <div className="flex items-center gap-3">
+                {ledger && <span className="text-sm text-slate-500">{ledger.total} total</span>}
+                <Button size="sm" onClick={() => setShowAddEntry(true)}>Add entry</Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {ledgerLoading && (
@@ -668,6 +892,22 @@ export function BankAccountDetailPage() {
 
       {showUpload && (
         <UploadStatementModal accountId={accountId!} onClose={() => setShowUpload(false)} />
+      )}
+
+      {showEditAccount && account && (
+        <EditAccountModal
+          accountId={accountId!}
+          current={account}
+          onClose={() => setShowEditAccount(false)}
+        />
+      )}
+
+      {showAddEntry && account && (
+        <AddLedgerEntryModal
+          accountId={accountId!}
+          defaultCurrency={account.currency}
+          onClose={() => setShowAddEntry(false)}
+        />
       )}
 
       {editingEntry && (

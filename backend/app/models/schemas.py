@@ -413,11 +413,50 @@ class LedgerEntryUpdate(_Base):
         return upper
 
 
+class LedgerEntryCreate(_Base):
+    value_date: date
+    amount: Decimal
+    currency: str = Field(min_length=3, max_length=3, description="ISO 4217")
+    description: str = ""
+    reference: str | None = None
+    counterparty: str | None = None
+
+    @field_validator("currency")
+    @classmethod
+    def _upper_currency(cls, v: str) -> str:
+        upper = v.strip().upper()
+        if not upper.isalpha() or len(upper) != 3:
+            raise ValueError("currency must be a 3-letter ISO 4217 code")
+        return upper
+
+
+class LedgerBulkCreateResponse(_Base):
+    created_count: int
+    items: list[LedgerEntryItem]
+
+
 class LedgerPageResponse(_Base):
     items: list[LedgerEntryItem]
     total: int
     page: int
     page_size: int
+
+
+class BankAccountUpdate(_Base):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    bank_name: str | None = Field(default=None, min_length=1, max_length=255)
+    account_number_masked: str | None = Field(default=None, min_length=1, max_length=50)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+    @field_validator("currency")
+    @classmethod
+    def _upper_currency(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        upper = v.strip().upper()
+        if not upper.isalpha() or len(upper) != 3:
+            raise ValueError("currency must be a 3-letter ISO 4217 code")
+        return upper
 
 
 # ─── SSE event ───────────────────────────────────────────────────────────────

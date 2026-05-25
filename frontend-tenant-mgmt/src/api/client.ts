@@ -3,8 +3,11 @@ import type {
   ApiKeyResponse,
   BankAccountCreate,
   BankAccountResponse,
+  BankAccountUpdate,
   BankStatementSummary,
   BankStatementUploadResponse,
+  LedgerBulkCreateResponse,
+  LedgerEntryCreate,
   LedgerEntryItem,
   LedgerEntryUpdate,
   LedgerPageResponse,
@@ -134,6 +137,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  updateBankAccount: (accountId: UUID, payload: BankAccountUpdate): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>(`/api/v1/bank-accounts/${accountId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
   deleteBankAccount: (accountId: UUID): Promise<void> =>
     request<void>(`/api/v1/bank-accounts/${accountId}`, { method: 'DELETE' }),
 
@@ -169,6 +178,18 @@ export const api = {
     request<LedgerEntryItem>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    }),
+
+  createLedgerEntry: (accountId: UUID, payload: LedgerEntryCreate): Promise<LedgerEntryItem> =>
+    request<LedgerEntryItem>(`/api/v1/bank-accounts/${accountId}/ledger`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  createLedgerEntries: (accountId: UUID, entries: LedgerEntryCreate[]): Promise<LedgerBulkCreateResponse> =>
+    request<LedgerBulkCreateResponse>(`/api/v1/bank-accounts/${accountId}/ledger/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(entries),
     }),
 
   deleteLedgerEntry: (accountId: UUID, entryId: UUID): Promise<void> =>
