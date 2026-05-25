@@ -32,3 +32,15 @@ def test_admin_api_key_from_env(monkeypatch):
     monkeypatch.setenv("ADMIN_API_KEY", "my-admin-secret")
     s = Settings(_env_file=None)
     assert s.admin_api_key == "my-admin-secret"
+
+
+def test_live_llm_requires_anthropic_key():
+    import pytest
+
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        Settings(_env_file=None, llm_mode="live", anthropic_api_key="")
+
+
+def test_live_llm_accepts_anthropic_key():
+    s = Settings(_env_file=None, llm_mode="live", anthropic_api_key="sk-ant-test")
+    assert s.llm_mode == "live"

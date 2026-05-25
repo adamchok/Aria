@@ -120,7 +120,7 @@ docker compose up --build
 | MinIO console | [localhost:9001](http://localhost:9001) | `ariaadmin` / `ariaadmin` |
 
 {: .tip }
-> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user. Sign in to **Tenant mgmt** (:5175) with the tenant user. For **NovaPay** (:5173), use demo credentials (`finance@novapay.demo` / `novapay2026`) and set `VITE_API_KEY` in `frontend-novapay/.env` (see [Getting Started]({{ '/getting-started' | relative_url }})).
+> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user. Sign in to **Tenant mgmt** (:5175) with the tenant user, create an API key, and set `VITE_API_KEY` in repo-root `.env` before rebuilding NovaPay (see [Getting Started]({{ '/getting-started' | relative_url }})).
 
 {: .tip }
 > **Progressive disclosure:** Mock mode explores the full pipeline at zero LLM cost. Switch to live Claude extraction when ready — see [Configuration]({{ '/configuration' | relative_url }}).

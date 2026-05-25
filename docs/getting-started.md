@@ -116,12 +116,17 @@ Wait until all health checks pass and you see the API listening on port 8000.
 3. Create a **tenant** (Tenants → New tenant)
 4. Create a **tenant user** assigned to that tenant (Users → New user, role `tenant_user`)
 5. Sign in to **Tenant mgmt** (:5175) with the tenant user credentials
-6. Create a **tenant API key** in Tenant mgmt → Keys — required for NovaPay API calls
+6. Create a **tenant API key** in Tenant mgmt → Keys — copy the `aria_…` value
+7. Add the key to repo-root `.env` as `VITE_API_KEY=aria_…`, then rebuild NovaPay:
 
-**NovaPay** (:5173) uses a separate UI gate: sign in with demo credentials `finance@novapay.demo` / `novapay2026` (no backend auth call). All NovaPay API requests send `X-API-Key` from `VITE_API_KEY`.
+```bash
+docker compose up --build frontend-novapay
+```
 
-{: .important }
-> **Docker full stack:** the NovaPay container is built without a tenant API key. API calls return `401` until you set `VITE_API_KEY` at build time (add `ARG VITE_API_KEY` to `frontend-novapay/Dockerfile` before `npm run build`) or use **Option 2 (hybrid dev)** with `frontend-novapay/.env`.
+**NovaPay** (:5173) uses a separate UI gate: sign in with demo credentials `finance@novapay.demo` / `novapay2026` (no backend auth call). All NovaPay API requests send `X-API-Key` from `VITE_API_KEY` (baked in at Docker build time from repo-root `.env`).
+
+{: .note }
+> **Tip:** You can set `VITE_API_KEY` before the first `docker compose up --build` if you already have a tenant key. Otherwise complete steps 1–6 first, then rebuild NovaPay as shown in step 7.
 
 Optional: use the same tenant API key for curl/SDK integrations (`X-API-Key` header).
 

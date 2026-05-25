@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -112,6 +112,12 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_origins(cls, v: str) -> str:
         return v.strip()
+
+    @model_validator(mode="after")
+    def _validate_live_llm(self) -> Settings:
+        if self.llm_mode == "live" and not self.anthropic_api_key.strip():
+            raise ValueError("ANTHROPIC_API_KEY is required when LLM_MODE=live")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

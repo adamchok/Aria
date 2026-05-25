@@ -46,7 +46,7 @@ nav_order: 7
 | `frontend-novapay/.env` | NovaPay Vite dev | Port 5173 |
 | `frontend-admin/.env` | Admin app Vite dev | Port 5174 |
 | `frontend-tenant-mgmt/.env` | Mgmt app Vite dev | Port 5175 |
-| `.env` (repo root) | Docker Compose; hybrid backend | Compose substitution; also loaded by backend when running locally |
+| `.env` (repo root) | Docker Compose; hybrid backend | Compose substitution for all backend services + `VITE_API_KEY` NovaPay build arg |
 
 {: .warning }
 > Never commit `.env` files containing secrets. They are listed in `.gitignore`.
@@ -254,22 +254,25 @@ APP_ENV=production
 
 ## Docker Compose passthrough
 
-The root `.env` file is read by Docker Compose for variable substitution. The following variables are wired into the `api`, `worker`, and `beat` services:
+The root `.env` file is read by Docker Compose for `${VAR}` substitution. All backend services (`api`, `worker`, `beat`) share a common environment block defined in `docker-compose.yml` (`x-backend-environment`), including:
 
-```yaml
-ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-LLM_MODE: ${LLM_MODE:-mock}
-ADMIN_API_KEY: ${ADMIN_API_KEY:-aria-dev-admin}
-JWT_SECRET_KEY: ${JWT_SECRET_KEY:-aria-dev-jwt-secret-change-in-production}
-DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@aria.local}
-DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
-CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
-BATCH_SIZE_THRESHOLD: ${BATCH_SIZE_THRESHOLD:-50}
-BATCH_TIME_WINDOW_MINUTES: ${BATCH_TIME_WINDOW_MINUTES:-15}
-CELERY_BEAT_INTERVAL_MINUTES: ${CELERY_BEAT_INTERVAL_MINUTES:-2}
+| Category | Variables |
+| --- | --- |
+| LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `AGENTS_SDK_TRACING`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL` |
+| Observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` |
+| Auth | `ADMIN_API_KEY`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` |
+| Webhooks | `WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`, `WEBHOOK_SECRET_ENCRYPTION_KEY` |
+| FX | `EXCHANGERATE_API_KEY`, `OPENEXCHANGERATES_APP_ID`, `FX_CACHE_TTL_SECONDS` |
+| Reconciliation | `BASE_CURRENCY`, `FX_VARIANCE_BUFFER_PCT`, `MATCH_CONFIDENCE_THRESHOLD`, `EXTRACTION_ESCALATION_THRESHOLD`, `DATE_WINDOW_DAYS` |
+| Ingestion | `BATCH_SIZE_THRESHOLD`, `BATCH_TIME_WINDOW_MINUTES`, `CELERY_BEAT_INTERVAL_MINUTES` |
+
+The `api` service additionally receives `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, and `CORS_ORIGINS`. Docker-internal URLs (`DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, etc.) are fixed in compose for container networking.
+
+**NovaPay:** `VITE_API_KEY` from root `.env` is passed as a Docker build arg to `frontend-novapay`. Rebuild that service after creating a tenant API key:
+
+```bash
+docker compose up --build frontend-novapay
 ```
-
-Webhook retry vars (`WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`) are read from `backend/.env` when running the API/worker locally but are **not** currently passed through in `docker-compose.yml` — add them to service `environment` blocks if you need non-default values in Docker.
 
 Copy `.env.example` → `.env` at the repo root to get started. For hybrid development, put the full configuration in `backend/.env` and run the API/worker locally.
 
