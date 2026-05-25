@@ -425,13 +425,12 @@ Event types:
 
 | Event | When | Payload fields |
 | --- | --- | --- |
-| `status_change` | Agent starts | `status`, `progress_pct` |
-| `agent_complete` | Agent finishes | `agent`, `progress_pct`, `agents_completed` |
-| `progress_update` | Mid-agent | `progress_pct` |
-| `match_found` | Per match | `match_id`, `status`, `confidence` |
-| `completed` | Terminal | `status`, `summary` |
-| `review_required` | Terminal | `status`, `summary` |
-| `error` | Terminal | `status`, `error` |
+| `status_change` | Status transition | `status`, `progress_pct` |
+| `agent_complete` | Pipeline stage finishes | `agent`, `status`, `progress_pct`, `agents_completed` |
+| `progress_update` | Progress tick | `progress_pct` |
+| `completed` | Terminal — all resolved | `status`, `summary` (`matched`, `uncertain`, `unmatched`, `total`) |
+| `review_required` | Terminal — items need review | `status`, `summary` |
+| `error` | Terminal — pipeline failed | `status`, `error` |
 
 ```
 event: status_change

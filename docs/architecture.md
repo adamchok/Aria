@@ -73,12 +73,13 @@ A **ReconciliationOrchestrator** manager agent coordinates specialist stages wit
 flowchart TD
   ORCH[ReconciliationOrchestrator] --> IN[IngestionSpecialist]
   ORCH --> BS[BankStatementSpecialist]
-  ORCH --> NO[NormalisationStage]
-  ORCH --> MA[MatchingSpecialist]
-  ORCH --> RE[ReportSpecialist]
   IN -->|confidence &lt; 0.5| HR[Human review queue]
-  HR --> RE
+  IN -->|confidence ≥ 0.5| NO[NormalisationStage\nFX service — no LLM]
+  BS --> NO
+  NO --> MA[MatchingSpecialist]
   MA -->|0.5 ≤ conf &lt; 0.75| HR
+  MA --> RE[ReportSpecialist]
+  HR --> RE
 ```
 
 <div class="aria-pipeline">
@@ -92,8 +93,8 @@ flowchart TD
 
 | Agent | Model | Responsibility |
 | --- | --- | --- |
-| **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text) |
-| **Bank statement ingestion** | Sonnet (PDF document) | Extract ledger `BankEntry` rows from statement PDFs (LLM-first; pdfplumber fallback); XLSX/CSV via structured parsers |
+| **Ingestion** | Opus (images), Haiku (Excel/CSV), Sonnet (PDF) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text) |
+| **Bank statement ingestion** | Sonnet (PDF), Haiku (text/CSV) | Extract ledger `BankEntry` rows from statement PDFs (LLM-first; pdfplumber fallback); XLSX/CSV via structured parsers |
 | **Normalisation** | FX service (no LLM) | FX conversion to base currency; tolerance window calculation; all records processed concurrently — FX cache pre-warmed for every (currency, date) pair, then `asyncio.gather` over all records |
 | **Matching** | Sonnet | FX-aware fuzzy match + confidence scoring + explanations; Phase 1 pre-scoring runs in parallel via `run_in_executor` |
 | **Report** | Sonnet | Summary synthesis, exception narratives, Excel export |

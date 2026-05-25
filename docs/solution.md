@@ -84,7 +84,6 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 | `/tenants/{id}` | Tenant detail | Tenant overview, API keys (admin path) |
 | `/users` | Users | Create platform and tenant users |
 | `/analytics` | Analytics | Cross-tenant reconciliation statistics |
-| `/queue` | Ingest queue | All tenants' buffer status, flush per tenant |
 
 #### Tenant mgmt app — configuration (`:5175`)
 
@@ -119,7 +118,7 @@ Demo this flow from **NovaPay** (`:5173`) — the reference client simulates an 
 1. **Authenticate** — sign in to NovaPay, or obtain a tenant API key from Tenant mgmt → Keys (`/keys`)
 2. **Ingest** — NovaPay → **Simulate ingest** (`/ingest`) calls `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata; or call the API directly with the key
 3. **Batch** — buffered items auto-batch via Celery Beat, or flush manually from NovaPay → **Queue** (`/queue`)
-4. **Receive** — register a webhook in Tenant mgmt (`POST /api/v1/webhooks`); receive `job.completed` with HMAC-signed payload when reconciliation finishes
+4. **Receive** — register a webhook in Tenant mgmt (`POST /api/v1/webhooks`); receive HMAC-signed payloads for `job.created`, `job.stage_completed` (with `stage` field), `job.completed`, `job.review_required`, or `job.failed`
 5. **Retrieve** — monitor jobs in NovaPay (`/jobs`), call `GET /api/v1/jobs/{id}/results`, or follow the SSE stream
 
 ## Key differentiators
