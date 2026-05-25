@@ -101,7 +101,7 @@ Wait until all health checks pass and you see the API listening on port 8000.
 
 | Service | URL | Credentials |
 | --- | --- | --- |
-| **Web UI (ops)** | [http://localhost:5173](http://localhost:5173) | Tenant user JWT (see Step 5) |
+| **NovaPay** (reference client) | [http://localhost:5173](http://localhost:5173) | Tenant user JWT (see Step 5) |
 | **Admin UI** | [http://localhost:5174](http://localhost:5174) | `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD` |
 | **Tenant mgmt UI** | [http://localhost:5175](http://localhost:5175) | Tenant user JWT |
 | **API Swagger** | [http://localhost:8000/docs](http://localhost:8000/docs) | — |
@@ -114,13 +114,13 @@ Wait until all health checks pass and you see the API listening on port 8000.
 2. Sign in with `DEFAULT_ADMIN_EMAIL` (default `admin@aria.local`) and your `DEFAULT_ADMIN_PASSWORD`
 3. Create a **tenant** (Tenants → New tenant)
 4. Create a **tenant user** assigned to that tenant (Users → New user, role `tenant_user`)
-5. Sign in to **Ops** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials
+5. Sign in to **NovaPay** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials
 
 Optional: create a programmatic **API key** in Tenant mgmt → Keys for curl/SDK integrations (`X-API-Key` header).
 
 ### Step 6: Run a reconciliation in the UI
 
-1. In the **Ops UI**, navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
+1. In **NovaPay**, navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
 2. Upload one or more payment proof files (JPEG, PNG, PDF, XLSX, or CSV)
 3. Upload a bank statement (XLSX, CSV, or PDF)
 4. Confirm base currency is **MYR**
@@ -239,14 +239,14 @@ celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
 In **three terminals** (hybrid dev):
 
 ```bash
-cd frontend-tenant-ops && npm install && cp .env.example .env && npm run dev   # :5173
+cd frontend-novapay && npm install && cp .env.example .env && npm run dev   # :5173
 cd frontend-tenant-mgmt && npm install && cp .env.example .env && npm run dev  # :5175
 cd frontend-admin && npm install && cp .env.example .env && npm run dev        # :5174
 ```
 
 Set `DEFAULT_ADMIN_PASSWORD` in `backend/.env`, restart API, then sign in to the admin app with `DEFAULT_ADMIN_EMAIL` / password. Create a tenant and tenant user from the admin console before using ops/mgmt apps.
 
-Open http://localhost:5173 (ops), http://localhost:5175 (mgmt), http://localhost:5174 (admin). Each app proxies `/api` to `http://localhost:8000`.
+Open http://localhost:5173 (NovaPay), http://localhost:5175 (mgmt), http://localhost:5174 (admin). Each app proxies `/api` to `http://localhost:8000`.
 
 ### Step 5: Verify the dev stack
 
@@ -254,7 +254,7 @@ Open http://localhost:5173 (ops), http://localhost:5175 (mgmt), http://localhost
 | --- | --- |
 | [http://localhost:8000/health](http://localhost:8000/health) | `{"status":"ok",...}` |
 | [http://localhost:8000/docs](http://localhost:8000/docs) | Swagger UI loads |
-| [http://localhost:5173/upload](http://localhost:5173/upload) | Upload page renders (after tenant user login) |
+| [http://localhost:5173/upload](http://localhost:5173/upload) | NovaPay upload page renders (after tenant user login) |
 | Celery worker logs | `celery@... ready` |
 
 ---

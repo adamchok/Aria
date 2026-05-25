@@ -15,7 +15,7 @@ Upload payment proofs in any format, match them against bank statements with FX-
 - **Explainable decisions** — Natural-language variance explanations and full audit chains
 - **Human-in-the-loop** — Review queue for uncertain matches (confidence 0.5–0.75)
 - **Five-stage pipeline** — OpenAI Agents SDK orchestration: Ingestion → Bank Statement → Normalisation → Matching → Report
-- **Multi-tenant platform** — JWT login, role-based UIs, bank account ledger, webhooks, and programmatic API keys
+- **Multi-tenant platform** — JWT login, role-based UIs, bank account ledger, webhooks, programmatic API keys, and **NovaPay** (reference external client)
 - **Production stack** — FastAPI · Celery · PostgreSQL · MinIO · React 18
 
 ## Quick start
@@ -32,7 +32,7 @@ docker compose up --build
 
 | Service | URL |
 | --- | --- |
-| Ops UI (reconciliation) | http://localhost:5173 |
+| NovaPay (reference client) | http://localhost:5173 |
 | Admin UI (platform) | http://localhost:5174 |
 | Tenant mgmt UI | http://localhost:5175 |
 | API (Swagger) | http://localhost:8000/docs |
@@ -45,7 +45,7 @@ docker compose up --build
 1. Set `DEFAULT_ADMIN_PASSWORD` in `.env` (repo root) or `backend/.env` before starting the API.
 2. Open the **Admin UI** at http://localhost:5174 and sign in with `DEFAULT_ADMIN_EMAIL` / your password.
 3. Create a **tenant** and a **tenant user** from the admin console.
-4. Sign in to **Ops** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials.
+4. Sign in to **NovaPay** (:5173) or **Tenant mgmt** (:5175) with the tenant user credentials.
 
 Programmatic integrations can use tenant **API keys** (created in the mgmt app at `/keys`) via the `X-API-Key` header instead of JWT.
 
@@ -71,7 +71,7 @@ For live Claude extraction, see [Configuration](docs/configuration.md).
 ## Architecture at a glance
 
 ```text
-Ops / Admin / Mgmt UIs  →  FastAPI (JWT + API key)  →  Celery Worker  →  Agents SDK Pipeline
+NovaPay + Admin / Mgmt UIs  →  FastAPI (JWT + API key)  →  Celery Worker  →  Agents SDK Pipeline
                                     │                              │
                                PostgreSQL                    Claude LLMs
                                Redis                         FX APIs
@@ -85,7 +85,7 @@ Supported corridors: **USD/MYR · EUR/MYR · GBP/MYR · SGD/MYR**
 ```text
 Aria/
 ├── backend/                 Python FastAPI + OpenAI Agents SDK pipeline
-├── frontend-tenant-ops/     Reconciliation ops app (port 5173)
+├── frontend-novapay/        NovaPay — reference SME client via ARIA API (port 5173)
 ├── frontend-admin/          Platform admin app (port 5174)
 ├── frontend-tenant-mgmt/    Tenant configuration app (port 5175)
 ├── docs/                    GitHub Pages documentation
@@ -100,7 +100,7 @@ Aria/
 cd backend && pip install -e ".[dev]" && pytest -q
 
 # Frontend tests (per app)
-cd frontend-tenant-ops && npm install && npm test
+cd frontend-novapay && npm install && npm test
 cd frontend-tenant-mgmt && npm install && npm test
 cd frontend-admin && npm install && npm test
 ```

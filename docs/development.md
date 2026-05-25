@@ -73,7 +73,7 @@ backend/tests/
 ### Frontend
 
 ```bash
-cd frontend-tenant-ops   # or frontend-tenant-mgmt / frontend-admin
+cd frontend-novapay   # or frontend-tenant-mgmt / frontend-admin
 npm install
 
 # Unit + integration (Vitest)
@@ -213,7 +213,7 @@ Aria/
 │   ├── tests/
 │   ├── pyproject.toml
 │   └── Dockerfile
-├── frontend-tenant-ops/     Ops app — upload, jobs, review (port 5173)
+├── frontend-novapay/        NovaPay — reference SME client via ARIA API (port 5173)
 ├── frontend-admin/          Platform admin — tenants, users (port 5174)
 ├── frontend-tenant-mgmt/    Tenant config — keys, webhooks, bank accounts (5175)
 ├── docs/                    GitHub Pages site (this documentation)
@@ -261,7 +261,7 @@ Before opening a PR touching data or AI:
 | Project overview | `PROJECT_OVERVIEW.md` | Competition context, impact, innovation |
 | Contributor guide | `CLAUDE.md` | AI assistant and developer conventions |
 | Backend README | `backend/README.md` | Backend quick reference |
-| Ops app README | `frontend-tenant-ops/README.md` | Reconciliation routes and scripts |
+| NovaPay README | `frontend-novapay/README.md` | Reference client routes and API integration scripts |
 | Admin app README | `frontend-admin/README.md` | Platform admin routes |
 | Mgmt app README | `frontend-tenant-mgmt/README.md` | Tenant configuration routes |
 

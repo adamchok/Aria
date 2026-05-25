@@ -39,6 +39,9 @@ permalink: /
 
 ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance teams upload payment proofs (screenshots, PDFs, Excel) and a bank statement. An OpenAI Agents SDK pipeline with Anthropic Claude specialists extracts structured data, converts amounts to a base currency with live FX rates, matches transactions with explainable confidence scoring, and exports an audit-ready Excel report.
 
+{: .note }
+> **NovaPay** (`frontend-novapay`, port 5173) is a **reference external client** bundled with this repo — it simulates how an SME ERP or treasury system integrates with ARIA via the REST API. ARIA's own operator UIs are **Admin** (:5174) and **Tenant mgmt** (:5175). See [Solution]({{ '/solution' | relative_url }}) for the full application map.
+
 ## Key metrics
 
 <div class="aria-stats">
@@ -113,7 +116,7 @@ docker compose up --build
 
 | Service | URL | Notes |
 | --- | --- | --- |
-| Ops UI | [localhost:5173](http://localhost:5173) | Reconciliation — tenant user login |
+| NovaPay (reference client) | [localhost:5173](http://localhost:5173) | Simulates external SME system using ARIA API — tenant user login |
 | Admin UI | [localhost:5174](http://localhost:5174) | Platform admin — seed credentials |
 | Tenant mgmt UI | [localhost:5175](http://localhost:5175) | Keys, webhooks, bank accounts |
 | API (Swagger) | [localhost:8000/docs](http://localhost:8000/docs) | Interactive OpenAPI |
@@ -121,7 +124,7 @@ docker compose up --build
 | MinIO console | [localhost:9001](http://localhost:9001) | `ariaadmin` / `ariaadmin` |
 
 {: .tip }
-> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user, then sign in to Ops (:5173) or Tenant mgmt (:5175). See [Getting Started]({{ '/getting-started' | relative_url }}).
+> **First login:** Set `DEFAULT_ADMIN_PASSWORD` in `.env`, open the Admin UI (:5174), create a tenant and tenant user, then sign in to NovaPay (:5173) or Tenant mgmt (:5175). See [Getting Started]({{ '/getting-started' | relative_url }}).
 
 {: .tip }
 > **Progressive disclosure:** Mock mode explores the full pipeline at zero LLM cost. Switch to live Claude extraction when ready — see [Configuration]({{ '/configuration' | relative_url }}).
@@ -142,7 +145,7 @@ Low-confidence items are **never** auto-confirmed — a deliberate compliance co
 ```text
 Aria/
 ├── backend/                  FastAPI, Agents SDK pipeline, Celery worker
-├── frontend-tenant-ops/      Reconciliation ops app (port 5173)
+├── frontend-novapay/         NovaPay reference client — external SME API simulation (port 5173)
 ├── frontend-admin/           Platform admin app (port 5174)
 ├── frontend-tenant-mgmt/     Tenant configuration app (port 5175)
 ├── docs/                     This documentation site

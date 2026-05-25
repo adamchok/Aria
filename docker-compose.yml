@@ -130,8 +130,8 @@ services:
     command: celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
     restart: unless-stopped
 
-  frontend-ops:
-    build: ./frontend-tenant-ops
+  frontend-novapay:
+    build: ./frontend-novapay
     depends_on:
       - api
     ports:

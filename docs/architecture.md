@@ -22,7 +22,7 @@ ARIA is an **AI-first reconciliation platform**. The OpenAI Agents SDK orchestra
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    OPS[Ops UI :5173]
+    NOVA[NovaPay :5173]
     ADMIN[Admin UI :5174]
     MGMT[Tenant mgmt UI :5175]
     SME[External SME Systems]
@@ -51,7 +51,7 @@ flowchart TB
     RD[(Redis)]
     S3[(MinIO S3)]
   end
-  OPS & ADMIN & MGMT -->|JWT Bearer| AUTH
+  NOVA & ADMIN & MGMT -->|JWT Bearer| AUTH
   SME -->|X-API-Key| AUTH
   AUTH --> JOBS & INGEST & SSE & WH & AN & BA
   INGEST -->|buffer| PG
@@ -211,13 +211,15 @@ Pydantic schemas: `backend/app/models/schemas.py`. SQLAlchemy models: `backend/a
 
 ### Frontend
 
-Three role-scoped React apps share UI primitives but deploy independently:
+Three role-scoped React apps plus **NovaPay**, a reference external client, share UI patterns but deploy independently:
 
 | App | Port | Role | Primary screens |
 | --- | --- | --- | --- |
-| `frontend-tenant-ops` | 5173 | Tenant user | Upload, jobs, results, review |
+| `frontend-novapay` | 5173 | External SME client (demo) | Upload, jobs, results, review, ingest simulation |
 | `frontend-admin` | 5174 | Platform admin | Tenants, users, cross-tenant analytics/queue |
 | `frontend-tenant-mgmt` | 5175 | Tenant admin | API keys, webhooks, bank accounts, tenant analytics |
+
+**NovaPay** is not part of ARIA's internal operator tooling. It simulates how a tenant's finance system (ERP, treasury portal, payment ops tool) consumes the ARIA REST API — JWT auth, job submission, SSE progress, ingest endpoints, and human review — so integrators can see a working reference without building from scratch.
 
 | Component | Technology |
 | --- | --- |
@@ -225,8 +227,8 @@ Three role-scoped React apps share UI primitives but deploy independently:
 | Build | Vite |
 | Styling | Tailwind CSS |
 | Auth | JWT via `auth-store`; `LoginPage` + `AuthRoute`; role guards |
-| Server state | TanStack Query + SSE (`useJobStream` in ops app) |
-| UI state | Zustand (`auth-store`, `upload-store` in ops only) |
+| Server state | TanStack Query + SSE (`useJobStream` in NovaPay) |
+| UI state | Zustand (`auth-store`, `upload-store` in NovaPay only) |
 | Tables | AG Grid Community |
 | Routing | React Router v6 |
 | Production serve | nginx (Docker) with `/api` reverse proxy |
@@ -241,7 +243,7 @@ Three role-scoped React apps share UI primitives but deploy independently:
 | `api` | `./backend` | 8000 | FastAPI REST |
 | `worker` | `./backend` | — | Celery pipeline worker |
 | `beat` | `./backend` | — | Celery Beat scheduler (auto-batching) |
-| `frontend-ops` | `./frontend-tenant-ops` | 5173 → nginx:80 | Reconciliation ops SPA |
+| `frontend-novapay` | `./frontend-novapay` | 5173 → nginx:80 | NovaPay reference client SPA |
 | `frontend-admin` | `./frontend-admin` | 5174 → nginx:80 | Platform admin SPA |
 | `frontend-tenant-mgmt` | `./frontend-tenant-mgmt` | 5175 → nginx:80 | Tenant configuration SPA |
 
@@ -288,7 +290,7 @@ backend/
 ├── alembic/                 DB migrations (0001–0008)
 └── tests/                   Unit, integration, agent tests
 
-frontend-tenant-ops/         Ops: upload, jobs, review, SSE hooks
+frontend-novapay/            NovaPay: external SME API client demo
 frontend-admin/              Admin: tenants, users, platform analytics
 frontend-tenant-mgmt/        Mgmt: keys, webhooks, bank accounts, queue
 ```

@@ -17,7 +17,7 @@ description: "ARIA's value proposition and key differentiators"
 
 ## ARIA in one sentence
 
-**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the OpenAI Agents SDK pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Three role-scoped web apps provide ops, platform admin, and tenant configuration UIs.
+**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the OpenAI Agents SDK pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Two ARIA-owned web apps provide platform admin and tenant configuration; **NovaPay** (`frontend-novapay`) simulates an external integrator consuming the same API.
 
 ## Core value proposition
 
@@ -46,27 +46,34 @@ flowchart LR
   <span class="aria-pipeline__step aria-pipeline__step--active">Review</span>
 </div>
 
-### Three web applications
+### Web applications
 
 | App | Port | Audience | Login |
 | --- | --- | --- | --- |
-| **Ops** (`frontend-tenant-ops`) | 5173 | Finance officers — reconciliation | Tenant user JWT |
+| **NovaPay** (`frontend-novapay`) | 5173 | External SME system (reference client) | Tenant user JWT |
 | **Admin** (`frontend-admin`) | 5174 | Platform operators | Admin JWT (seeded via `DEFAULT_ADMIN_PASSWORD`) |
 | **Tenant mgmt** (`frontend-tenant-mgmt`) | 5175 | Tenant administrators | Tenant user JWT |
 
-#### Ops app — reconciliation (`:5173`)
+{: .note }
+> **NovaPay is not ARIA.** It lives in this repository as a **reference integration** — a demo finance portal that calls the same REST endpoints a real ERP, treasury tool, or payment ops system would use. Production integrators can ignore NovaPay entirely and build against the API with `X-API-Key` or JWT auth.
+
+#### NovaPay — reference external client (`:5173`)
+
+NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA behind the scenes. All data flows through the platform API (`/api/v1/jobs`, `/api/v1/ingest/transactions`, SSE streams, etc.) — the UI is a stand-in for any external system.
 
 | Route | Screen | Purpose |
 | --- | --- | --- |
-| `/login` | Sign in | Email + password |
+| `/login` | Sign in | Email + password (tenant user JWT → Bearer on API calls) |
 | `/dashboard` | Pipeline dashboard | Job throughput, match-rate summary, recent jobs |
 | `/jobs` | Job monitor | Paginated, filterable job list |
 | `/jobs/{id}` | Job progress | Four-agent stepper driven by SSE (polling fallback) |
 | `/jobs/{id}/results` | Results | Summary cards, reconciliation grid, export |
 | `/jobs/{id}/review` | Review queue | Confirm / reject uncertain items |
-| `/upload` | Upload | Manual file submission |
+| `/upload` | Upload | Manual file submission (same as `POST /api/v1/jobs`) |
 | `/ingest` | Simulate ingest | Upload bank statement + push proofs via ingest API |
 | `/queue` | Transaction queue | Buffer status by corridor, manual flush → jobs |
+| `/bank-accounts` | Bank accounts | Register accounts, upload statements, ledger view |
+| `/bank-accounts/{id}` | Account detail | Statements and uncleared entries for one account |
 
 #### Admin app — platform (`:5174`)
 
@@ -93,7 +100,9 @@ flowchart LR
 | `/queue` | Transaction queue | Buffer status by corridor, manual flush |
 | `/users` | Users | Invite tenant users (tenant-scoped) |
 
-### What the finance officer does (manual upload flow)
+### What the finance officer does (manual upload flow — NovaPay demo)
+
+Demo this flow in **NovaPay** to show how an external system would drive reconciliation through the API:
 
 | Step | Screen | Action |
 | --- | --- | --- |
@@ -105,13 +114,13 @@ flowchart LR
 
 ### What an external SME system does (API integration flow)
 
-Demo this flow from **Tenant Ops** (`:5173`) — the Ops app simulates the external ERP pushing data into ARIA:
+Demo this flow from **NovaPay** (`:5173`) — the reference client simulates an external ERP pushing data into ARIA:
 
-1. **Authenticate** — sign in to Ops, or obtain a tenant API key from Tenant mgmt → Keys (`/keys`)
-2. **Ingest** — Ops → **Simulate ingest** (`/ingest`) calls `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata; or call the API directly with the key
-3. **Batch** — buffered items auto-batch via Celery Beat, or flush manually from Ops → **Queue** (`/queue`)
+1. **Authenticate** — sign in to NovaPay, or obtain a tenant API key from Tenant mgmt → Keys (`/keys`)
+2. **Ingest** — NovaPay → **Simulate ingest** (`/ingest`) calls `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata; or call the API directly with the key
+3. **Batch** — buffered items auto-batch via Celery Beat, or flush manually from NovaPay → **Queue** (`/queue`)
 4. **Receive** — register a webhook in Tenant mgmt (`POST /api/v1/webhooks`); receive `job.completed` with HMAC-signed payload when reconciliation finishes
-5. **Retrieve** — monitor jobs in Ops (`/jobs`), call `GET /api/v1/jobs/{id}/results`, or follow the SSE stream
+5. **Retrieve** — monitor jobs in NovaPay (`/jobs`), call `GET /api/v1/jobs/{id}/results`, or follow the SSE stream
 
 ## Key differentiators
 

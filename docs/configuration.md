@@ -42,7 +42,7 @@ description: "Environment variables, API keys, and tuning parameters"
 | --- | --- | --- |
 | `backend/.env` | Local Python, hybrid dev | Full backend configuration (overrides repo root) |
 | `backend/.env.example` | Template | Copy to `.env` — safe to commit |
-| `frontend-tenant-ops/.env` | Ops app Vite dev | Port 5173 |
+| `frontend-novapay/.env` | NovaPay Vite dev | Port 5173 |
 | `frontend-admin/.env` | Admin app Vite dev | Port 5174 |
 | `frontend-tenant-mgmt/.env` | Mgmt app Vite dev | Port 5175 |
 | `.env` (repo root) | Docker Compose; hybrid backend | Compose substitution; also loaded by backend when running locally |

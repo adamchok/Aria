@@ -787,4 +787,4 @@ The live OpenAPI 3 schema is served at:
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - JSON schema: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
-Frontend TypeScript types in each app's `src/types/api.ts` (`frontend-tenant-ops`, `frontend-admin`, `frontend-tenant-mgmt`) mirror these schemas. Monetary values are serialised as **strings** to preserve decimal precision across the JSON boundary.
+Frontend TypeScript types in each app's `src/types/api.ts` (`frontend-novapay`, `frontend-admin`, `frontend-tenant-mgmt`) mirror these schemas. Monetary values are serialised as **strings** to preserve decimal precision across the JSON boundary.
