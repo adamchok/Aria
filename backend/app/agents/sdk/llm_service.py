@@ -224,24 +224,15 @@ class LLMService:
 
         from app.agents.sdk.prompts.matching import MATCHING_INSTRUCTIONS
 
-        result = self._reason_match_with_model(
+        # Fix C: borderline (0.45-0.65) records go to human review regardless of
+        # model — the Opus second-call added latency without changing the outcome.
+        return self._reason_match_with_model(
             self._settings.sonnet_model,
             instructions=MATCHING_INSTRUCTIONS,
             normalised=normalised,
             candidate=candidate,
             candidate_scores=candidate_scores,
         )
-        confidence = float(result.get("confidence", 0.0))
-        if 0.45 <= confidence <= 0.65:
-            logger.info("match.escalating_to_opus", confidence=round(confidence, 3))
-            result = self._reason_match_with_model(
-                self._settings.opus_model,
-                instructions=MATCHING_INSTRUCTIONS,
-                normalised=normalised,
-                candidate=candidate,
-                candidate_scores=candidate_scores,
-            )
-        return result
 
     def _reason_match_with_model(
         self,

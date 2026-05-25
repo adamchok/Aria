@@ -47,13 +47,13 @@ async def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None 
     nrs = ctx.state.normalised_records
     results: list[MatchResult | None] = [None] * len(nrs)
 
-    # Pre-score each record (ignoring used_entries) to determine claiming priority.
-    # Highest-confidence matches claim bank entries first, reducing false conflicts.
-    pre_scores: list[tuple[int, float]] = []
-    for i, nr in enumerate(nrs):
+    # Fix D: pre-score all records concurrently. Each call is CPU-bound (rapidfuzz
+    # releases the GIL), so run_in_executor gives real parallelism via the thread pool.
+    loop = asyncio.get_running_loop()
+
+    def _pre_score_record(i: int, nr: NormalisedRecord) -> tuple[int, float]:
         if nr.fx_unavailable:
-            pre_scores.append((i, -1.0))
-            continue
+            return (i, -1.0)
         if statement:
             stage1 = _stage1_date_filter(nr, statement.entries, set(), settings)
             candidates = _stage2_amount_filter(nr, stage1)
@@ -62,7 +62,12 @@ async def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None 
         else:
             candidates = []
         best = max((_score(nr, e, settings).composite for e in candidates), default=0.0)
-        pre_scores.append((i, best))
+        return (i, best)
+
+    pre_scores: list[tuple[int, float]] = list(await asyncio.gather(*[
+        loop.run_in_executor(None, _pre_score_record, i, nr)
+        for i, nr in enumerate(nrs)
+    ]))
 
     claiming_order = sorted(pre_scores, key=lambda x: x[1], reverse=True)
 
@@ -126,7 +131,6 @@ async def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None 
         pending_llm.append((orig_idx, nr, top_entry, top_score, scored))
 
     # Phase 2: fire all LLM reasoning calls in parallel via run_in_executor.
-    loop = asyncio.get_running_loop()
 
     async def _reason(
         orig_idx: int,

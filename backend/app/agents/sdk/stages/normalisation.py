@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -51,66 +52,100 @@ async def run_normalisation_stage(
     ctx.state.status = JobStatus.NORMALISING
     fx = fx_service or FXService()
     settings = ctx.settings
-    out: list[NormalisedRecord] = []
 
-    for record in ctx.state.payment_records:
-        try:
-            normalised = await _normalise(record, ctx.base_currency, fx, settings)
-        except FXRateUnavailableError as exc:
-            logger.error("normalisation.fx_unavailable", currency=record.currency, error=str(exc))
-            ctx.state.audit_log.append(
-                make_audit_entry(
-                    job_id=ctx.job_id,
-                    agent=AGENT_NAME,
-                    action="fx_unavailable",
-                    input_snapshot={"currency": record.currency, "date": str(record.value_date)},
-                    reasoning=str(exc),
-                )
-            )
-            # Preserve record as stub — shows up as UNMATCHED with reason in report (#8)
-            out.append(
-                NormalisedRecord(
-                    payment=record,
-                    amount_myr_at_invoice_rate=Decimal("0"),
-                    amount_myr_at_settlement_rate=Decimal("0"),
-                    fx_rate_invoice=Decimal("0"),
-                    fx_rate_settlement=Decimal("0"),
-                    tolerance_low=Decimal("0"),
-                    tolerance_high=Decimal("0"),
-                    estimated_charges_myr=Decimal("0"),
-                    base_currency=ctx.base_currency,
-                    fx_unavailable=True,
-                    fx_unavailable_reason=str(exc),
-                )
-            )
-            continue
+    # Fix B: warm FX cache for every (currency, date) pair this batch needs before
+    # parallel work begins, so each _normalise_record call hits only cached values.
+    await _prefetch_fx_pairs(ctx.state.payment_records, ctx.base_currency, fx)
+
+    # Fix A: normalise all records concurrently — FX calls are now cache hits.
+    pairs = await asyncio.gather(*[
+        _normalise_record(record, ctx.base_currency, fx, settings, ctx.job_id)
+        for record in ctx.state.payment_records
+    ])
+
+    out: list[NormalisedRecord] = []
+    for normalised, audit_entry in pairs:
         out.append(normalised)
-        ctx.state.audit_log.append(
-            make_audit_entry(
-                job_id=ctx.job_id,
-                agent=AGENT_NAME,
-                action="normalise",
-                input_snapshot={
-                    "amount_original": str(record.amount_original),
-                    "currency": record.currency,
-                    "value_date": record.value_date.isoformat(),
-                },
-                output_snapshot={
-                    "amount_myr_at_invoice_rate": str(normalised.amount_myr_at_invoice_rate),
-                    "amount_myr_at_settlement_rate": str(normalised.amount_myr_at_settlement_rate),
-                    "tolerance_low": str(normalised.tolerance_low),
-                    "tolerance_high": str(normalised.tolerance_high),
-                },
-                reasoning=(
-                    f"Converted {record.amount_original} {record.currency} to "
-                    f"{ctx.base_currency} using invoice and settlement rates."
-                ),
-            )
-        )
+        ctx.state.audit_log.append(audit_entry)
 
     ctx.state.normalised_records = out
     ctx.state.agents_completed.append("normalisation")
     logger.info("normalisation.complete", count=len(out))
+
+
+async def _prefetch_fx_pairs(
+    records: list[PaymentRecord], base_currency: str, fx: FXService
+) -> None:
+    """Concurrently fetch every (currency, date) pair the batch needs.
+
+    Warms the in-memory + Redis cache so subsequent parallel _normalise_record
+    calls never hit the network. Errors are silently ignored — the real calls
+    in _normalise_record will surface them per-record.
+    """
+    pairs: set[tuple[str, date]] = set()
+    for r in records:
+        pairs.add((r.currency, r.value_date))
+        pairs.add((r.currency, _add_business_days(r.value_date, 2)))
+    await asyncio.gather(
+        *[fx.get_rate(cur, base_currency, dt) for cur, dt in pairs],
+        return_exceptions=True,
+    )
+
+
+async def _normalise_record(
+    record: PaymentRecord,
+    base_currency: str,
+    fx: FXService,
+    settings,
+    job_id,
+) -> tuple[NormalisedRecord, object]:
+    """Normalise a single record and return (NormalisedRecord, audit_entry)."""
+    try:
+        normalised = await _normalise(record, base_currency, fx, settings)
+        audit_entry = make_audit_entry(
+            job_id=job_id,
+            agent=AGENT_NAME,
+            action="normalise",
+            input_snapshot={
+                "amount_original": str(record.amount_original),
+                "currency": record.currency,
+                "value_date": record.value_date.isoformat(),
+            },
+            output_snapshot={
+                "amount_myr_at_invoice_rate": str(normalised.amount_myr_at_invoice_rate),
+                "amount_myr_at_settlement_rate": str(normalised.amount_myr_at_settlement_rate),
+                "tolerance_low": str(normalised.tolerance_low),
+                "tolerance_high": str(normalised.tolerance_high),
+            },
+            reasoning=(
+                f"Converted {record.amount_original} {record.currency} to "
+                f"{base_currency} using invoice and settlement rates."
+            ),
+        )
+        return normalised, audit_entry
+    except FXRateUnavailableError as exc:
+        logger.error("normalisation.fx_unavailable", currency=record.currency, error=str(exc))
+        stub = NormalisedRecord(
+            payment=record,
+            amount_myr_at_invoice_rate=Decimal("0"),
+            amount_myr_at_settlement_rate=Decimal("0"),
+            fx_rate_invoice=Decimal("0"),
+            fx_rate_settlement=Decimal("0"),
+            tolerance_low=Decimal("0"),
+            tolerance_high=Decimal("0"),
+            estimated_charges_myr=Decimal("0"),
+            base_currency=base_currency,
+            fx_unavailable=True,
+            fx_unavailable_reason=str(exc),
+        )
+        audit_entry = make_audit_entry(
+            job_id=job_id,
+            agent=AGENT_NAME,
+            action="fx_unavailable",
+            input_snapshot={"currency": record.currency, "date": str(record.value_date)},
+            reasoning=str(exc),
+        )
+        return stub, audit_entry
 
 
 async def _normalise(record: PaymentRecord, base_currency: str, fx: FXService, settings) -> NormalisedRecord:
