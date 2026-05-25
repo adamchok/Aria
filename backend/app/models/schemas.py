@@ -326,6 +326,7 @@ class BankStatementUploadResponse(_Base):
     id: UUID
     filename: str
     entry_count: int
+    skipped_count: int = 0
     account_id: UUID | None = None
     statement_period_start: date | None = None
     statement_period_end: date | None = None

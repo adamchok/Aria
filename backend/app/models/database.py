@@ -295,6 +295,8 @@ class BankStatementORM(Base):
     statement_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     entry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # SHA-256 of raw file bytes; unique per (account_id, file_hash) to detect re-uploads.
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     tenant: Mapped[TenantORM | None] = relationship(back_populates="bank_statements")
     account: Mapped[BankAccountORM | None] = relationship(back_populates="statements")
@@ -344,5 +346,8 @@ class BankEntryORM(Base):
     cleared_by_job_id: Mapped[str | None] = mapped_column(
         ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
     )
+    # SHA-256 of (account_id|value_date|amount|currency|reference|counterparty).
+    # Unique per account; ON CONFLICT DO NOTHING prevents cross-statement duplicates.
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     statement: Mapped[BankStatementORM] = relationship(back_populates="entries")

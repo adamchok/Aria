@@ -154,7 +154,7 @@ async def test_get_detail_404_for_other_tenant(api_client, db_session):
         base_currency="MYR",
         entries=[BankEntry(value_date=date(2026, 5, 1), amount=Decimal("50"), currency="MYR")],
     )
-    orm = await repo.create_statement(filename="other.csv", storage_key=None, base_currency="MYR", statement=stmt)
+    orm, _ = await repo.create_statement(filename="other.csv", storage_key=None, base_currency="MYR", statement=stmt)
 
     resp = await api_client.get(f"/api/v1/bank-statements/{orm.id}")
     assert resp.status_code == 404

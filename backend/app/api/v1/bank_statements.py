@@ -8,6 +8,7 @@ persistent audit trail of what has been reconciled.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Annotated
 from uuid import UUID
 
@@ -26,7 +27,7 @@ from app.models.schemas import (
     BankStatementUploadResponse,
 )
 from app.repositories.bank_account_repository import BankAccountRepository
-from app.repositories.bank_ledger_repository import BankLedgerRepository
+from app.repositories.bank_ledger_repository import BankLedgerRepository, DuplicateStatementError
 from app.services.storage import StorageService
 from app.tools.file_parsers import detect_source_format
 
@@ -78,6 +79,7 @@ async def upload_bank_statement(
 
     data = await bank_statement.read()
     filename = bank_statement.filename or "statement"
+    file_hash = hashlib.sha256(data).hexdigest()
 
     doc = DocumentInput(
         storage_key="",
@@ -96,18 +98,23 @@ async def upload_bank_statement(
     key = storage.put_object(data, filename, content_type=bank_statement.content_type)
 
     repo = BankLedgerRepository(session, tenant_id=tenant_id)
-    orm = await repo.create_statement(
-        filename=filename,
-        storage_key=key,
-        base_currency=validated_currency,
-        statement=statement,
-        account_id=resolved_account_id,
-    )
+    try:
+        orm, skipped = await repo.create_statement(
+            filename=filename,
+            storage_key=key,
+            base_currency=validated_currency,
+            statement=statement,
+            account_id=resolved_account_id,
+            file_hash=file_hash,
+        )
+    except DuplicateStatementError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return BankStatementUploadResponse(
         id=UUID(orm.id),
         filename=orm.filename,
         entry_count=orm.entry_count,
+        skipped_count=skipped,
         statement_period_start=statement.statement_period_start,
         statement_period_end=statement.statement_period_end,
     )

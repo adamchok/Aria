@@ -196,15 +196,35 @@ async def test_list_account_statements(api_client):
     create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
     acc_id = create.json()["id"]
 
-    for _ in range(2):
-        await api_client.post(
+    _CSV2 = (
+        "Date,Amount,Description,Reference\n"
+        "2026-06-01,500.00,June payment,INV-003\n"
+    ).encode()
+
+    for csv_content in [_CSV, _CSV2]:
+        r = await api_client.post(
             f"/api/v1/bank-accounts/{acc_id}/statements",
-            files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+            files={"bank_statement": ("stmt.csv", csv_content, "text/csv")},
         )
+        assert r.status_code == 201
 
     resp = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/statements")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
+
+
+@pytest.mark.asyncio
+async def test_upload_duplicate_statement_returns_409(api_client):
+    """Uploading the exact same file twice to the same account must be rejected."""
+    create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
+    acc_id = create.json()["id"]
+
+    for i, expected in enumerate([201, 409]):
+        r = await api_client.post(
+            f"/api/v1/bank-accounts/{acc_id}/statements",
+            files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+        )
+        assert r.status_code == expected, f"attempt {i + 1}: got {r.status_code}"
 
 
 @pytest.mark.asyncio
@@ -241,11 +261,17 @@ async def test_ledger_across_multiple_statements(api_client):
     create = await api_client.post("/api/v1/bank-accounts", json=_CREATE_PAYLOAD)
     acc_id = create.json()["id"]
 
-    # Upload two statements — 4 entries total
-    for _ in range(2):
+    _CSV_JUNE = (
+        "Date,Amount,Description,Reference\n"
+        "2026-06-01,300.00,June rent,INV-003\n"
+        "2026-06-15,150.00,June utilities,INV-004\n"
+    ).encode()
+
+    # Upload two distinct statements — 4 unique entries total
+    for csv_content in [_CSV, _CSV_JUNE]:
         await api_client.post(
             f"/api/v1/bank-accounts/{acc_id}/statements",
-            files={"bank_statement": ("stmt.csv", _CSV, "text/csv")},
+            files={"bank_statement": ("stmt.csv", csv_content, "text/csv")},
         )
 
     resp = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger")

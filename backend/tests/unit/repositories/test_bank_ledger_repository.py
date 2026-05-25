@@ -39,7 +39,7 @@ def _stmt(entries: int = 2) -> BankStatement:
 @pytest.mark.asyncio
 async def test_create_statement_persists_entries(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="may.csv", storage_key=None, base_currency="MYR", statement=_stmt(3)
     )
     assert orm.entry_count == 3
@@ -54,7 +54,7 @@ async def test_create_statement_persists_entries(db_session):
 @pytest.mark.asyncio
 async def test_create_statement_without_entries(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="empty.csv", storage_key=None, base_currency="MYR", statement=_stmt(0)
     )
     assert orm.entry_count == 0
@@ -67,7 +67,7 @@ async def test_create_statement_without_entries(db_session):
 @pytest.mark.asyncio
 async def test_get_statement_returns_own_tenant(db_session):
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(1)
     )
     result = await repo_a.get_statement(orm.id)
@@ -78,7 +78,7 @@ async def test_get_statement_returns_own_tenant(db_session):
 @pytest.mark.asyncio
 async def test_get_statement_returns_none_for_other_tenant(db_session):
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(1)
     )
     # Tenant B cannot see Tenant A's statement.
@@ -90,7 +90,7 @@ async def test_get_statement_returns_none_for_other_tenant(db_session):
 @pytest.mark.asyncio
 async def test_get_statement_without_tenant_filter_returns_any(db_session):
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(1)
     )
     # No tenant filter — admin-style access.
@@ -104,7 +104,7 @@ async def test_get_statement_without_tenant_filter_returns_any(db_session):
 @pytest.mark.asyncio
 async def test_get_entries_filters_cleared(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="m.csv", storage_key=None, base_currency="MYR", statement=_stmt(4)
     )
     entries = await repo.get_entries(orm.id)
@@ -121,7 +121,7 @@ async def test_get_entries_filters_cleared(db_session):
 async def test_get_entries_tenant_defense_in_depth(db_session):
     """get_entries filters by tenant even though statement_id is unique."""
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(2)
     )
     # Cross-tenant get_entries should return empty list.
@@ -151,11 +151,26 @@ async def test_get_account_uncleared_aggregates_across_statements(db_session):
         statement=_stmt(2),
         account_id=acc.id,
     )
-    stmt2 = await repo.create_statement(
+    # Use a non-overlapping entry (different ref/date) to avoid content_hash dedup.
+    jun_stmt = BankStatement(
+        base_currency="MYR",
+        statement_period_start=date(2026, 5, 2),
+        statement_period_end=date(2026, 5, 2),
+        entries=[
+            BankEntry(
+                value_date=date(2026, 5, 2),
+                amount=Decimal("999.00"),
+                currency="MYR",
+                description="June entry",
+                reference="REF-JUN-001",
+            )
+        ],
+    )
+    stmt2, _ = await repo.create_statement(
         filename="jun.csv",
         storage_key=None,
         base_currency="MYR",
-        statement=_stmt(1),
+        statement=jun_stmt,
         account_id=acc.id,
     )
     entries = await repo.get_entries(stmt2.id)
@@ -179,7 +194,7 @@ async def test_get_uncleared_as_bank_statement_raises_for_missing(db_session):
 @pytest.mark.asyncio
 async def test_get_uncleared_as_bank_statement_excludes_cleared(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="m.csv", storage_key=None, base_currency="MYR", statement=_stmt(3)
     )
     entries = await repo.get_entries(orm.id)
@@ -193,7 +208,7 @@ async def test_get_uncleared_as_bank_statement_excludes_cleared(db_session):
 @pytest.mark.asyncio
 async def test_get_uncleared_raises_for_other_tenant(db_session):
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(1)
     )
     repo_b = BankLedgerRepository(db_session, tenant_id=TENANT_B)
@@ -206,7 +221,7 @@ async def test_get_uncleared_raises_for_other_tenant(db_session):
 @pytest.mark.asyncio
 async def test_count_uncleared(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="c.csv", storage_key=None, base_currency="MYR", statement=_stmt(5)
     )
     assert await repo.count_uncleared(orm.id) == 5
@@ -220,7 +235,7 @@ async def test_count_uncleared(db_session):
 @pytest.mark.asyncio
 async def test_clear_entries_marks_correct_entries(db_session):
     repo = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo.create_statement(
+    orm, _ = await repo.create_statement(
         filename="cl.csv", storage_key=None, base_currency="MYR", statement=_stmt(3)
     )
     entries = await repo.get_entries(orm.id)
@@ -239,7 +254,7 @@ async def test_clear_entries_marks_correct_entries(db_session):
 async def test_clear_entries_does_not_cross_tenant(db_session):
     """Entries belonging to Tenant A cannot be cleared by Tenant B's repo."""
     repo_a = BankLedgerRepository(db_session, tenant_id=TENANT_A)
-    orm = await repo_a.create_statement(
+    orm, _ = await repo_a.create_statement(
         filename="a.csv", storage_key=None, base_currency="MYR", statement=_stmt(2)
     )
     entries_a = await repo_a.get_entries(orm.id)

@@ -8,6 +8,7 @@ all entries across statements for that account with match status.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Annotated
 from uuid import UUID
 
@@ -35,7 +36,7 @@ from app.models.schemas import (
     LedgerPageResponse,
 )
 from app.repositories.bank_account_repository import BankAccountRepository
-from app.repositories.bank_ledger_repository import BankLedgerRepository
+from app.repositories.bank_ledger_repository import BankLedgerRepository, DuplicateStatementError
 from app.services.storage import StorageService
 from app.tools.file_parsers import detect_source_format
 
@@ -208,6 +209,7 @@ async def upload_statement_to_account(
 
     data = await bank_statement.read()
     filename = bank_statement.filename or "statement"
+    file_hash = hashlib.sha256(data).hexdigest()
 
     doc = DocumentInput(
         storage_key="",
@@ -230,18 +232,23 @@ async def upload_statement_to_account(
     key = storage.put_object(data, filename, content_type=bank_statement.content_type)
 
     ledger_repo = BankLedgerRepository(session, tenant_id=tenant_id)
-    orm = await ledger_repo.create_statement(
-        filename=filename,
-        storage_key=key,
-        base_currency=currency,
-        statement=statement,
-        account_id=str(account_id),
-    )
+    try:
+        orm, skipped = await ledger_repo.create_statement(
+            filename=filename,
+            storage_key=key,
+            base_currency=currency,
+            statement=statement,
+            account_id=str(account_id),
+            file_hash=file_hash,
+        )
+    except DuplicateStatementError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return BankStatementUploadResponse(
         id=UUID(orm.id),
         filename=orm.filename,
         entry_count=orm.entry_count,
+        skipped_count=skipped,
         account_id=account_id,
         statement_period_start=statement.statement_period_start,
         statement_period_end=statement.statement_period_end,

@@ -141,7 +141,7 @@ async def test_create_job_accepts_valid_statement_id(api_client, db_session, fix
         base_currency="MYR",
         entries=[BankEntry(value_date=date(2026, 5, 1), amount=Decimal("100"), currency="MYR")],
     )
-    orm = await repo.create_statement(filename="ledger.csv", storage_key=None, base_currency="MYR", statement=stmt)
+    orm, _ = await repo.create_statement(filename="ledger.csv", storage_key=None, base_currency="MYR", statement=stmt)
 
     files = _files(fixtures_dir)
     resp = await api_client.post(
@@ -160,7 +160,7 @@ async def test_create_job_rejects_other_tenant_statement_id(api_client, db_sessi
         base_currency="MYR",
         entries=[BankEntry(value_date=date(2026, 5, 1), amount=Decimal("50"), currency="MYR")],
     )
-    orm = await repo_other.create_statement(
+    orm, _ = await repo_other.create_statement(
         filename="other.csv", storage_key=None, base_currency="MYR", statement=stmt
     )
 
@@ -260,7 +260,7 @@ async def test_create_job_rejects_both_statement_id_and_account_id(
         currency="MYR",
     )
     ledger = BankLedgerRepository(db_session, tenant_id=TEST_TENANT_ID)
-    orm = await ledger.create_statement(
+    orm, _ = await ledger.create_statement(
         filename="ledger.csv",
         storage_key=None,
         base_currency="MYR",

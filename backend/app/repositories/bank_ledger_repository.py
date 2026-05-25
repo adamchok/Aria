@@ -2,15 +2,37 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, insert as sa_insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import BankEntryORM, BankStatementORM
 from app.models.schemas import BankEntry, BankStatement, LedgerEntryItem
+
+
+class DuplicateStatementError(Exception):
+    """Raised when the same file has already been uploaded for this account."""
+
+
+def _entry_content_hash(account_id: str | None, entry: BankEntry) -> str:
+    """Stable SHA-256 fingerprint for a bank entry scoped to its account.
+
+    Excludes description (noisy across export formats); reference + amount +
+    date + currency + counterparty is sufficient for collision resistance.
+    """
+    parts = "|".join([
+        account_id or "",
+        str(entry.value_date),
+        f"{entry.amount:.6f}",
+        entry.currency.upper(),
+        entry.reference or "",
+        entry.counterparty or "",
+    ])
+    return hashlib.sha256(parts.encode()).hexdigest()
 
 
 class BankLedgerRepository:
@@ -26,7 +48,27 @@ class BankLedgerRepository:
         base_currency: str,
         statement: BankStatement,
         account_id: str | None = None,
-    ) -> BankStatementORM:
+        file_hash: str | None = None,
+    ) -> tuple[BankStatementORM, int]:
+        """Create a statement and its entries, skipping duplicate entries.
+
+        Returns (orm, skipped_count).  Raises DuplicateStatementError when
+        file_hash matches an existing upload for the same account.
+        """
+        # Option C: reject exact file re-uploads before any DB writes.
+        if file_hash and account_id:
+            existing = (await self._s.execute(
+                select(BankStatementORM).where(
+                    BankStatementORM.account_id == account_id,
+                    BankStatementORM.file_hash == file_hash,
+                )
+            )).scalar_one_or_none()
+            if existing is not None:
+                raise DuplicateStatementError(
+                    f"File already uploaded as statement '{existing.filename}' "
+                    f"(id={existing.id})."
+                )
+
         stmt_id = str(uuid4())
         orm = BankStatementORM(
             id=stmt_id,
@@ -37,32 +79,64 @@ class BankLedgerRepository:
             base_currency=base_currency,
             statement_period_start=statement.statement_period_start,
             statement_period_end=statement.statement_period_end,
-            entry_count=len(statement.entries),
+            entry_count=0,  # updated below after counting actual inserts
             created_at=datetime.utcnow(),
+            file_hash=file_hash,
         )
         self._s.add(orm)
         await self._s.flush()
 
-        for entry in statement.entries:
-            self._s.add(
-                BankEntryORM(
-                    id=str(entry.id),
-                    statement_id=stmt_id,
-                    tenant_id=self._tenant_id,
-                    value_date=entry.value_date,
-                    amount=entry.amount,
-                    currency=entry.currency,
-                    description=entry.description,
-                    reference=entry.reference,
-                    counterparty=entry.counterparty,
-                    raw_row=entry.raw_row,
-                    cleared=False,
-                )
+        skipped = 0
+        if statement.entries:
+            # Option B: pre-check existing content_hashes, bulk-insert only new rows.
+            # Works on SQLite (tests) and PostgreSQL (production) without dialect-specific
+            # syntax. The unique index on content_hash still protects against races in prod.
+            all_hashes = {
+                _entry_content_hash(account_id, entry): entry
+                for entry in statement.entries
+            }
+            existing_hashes: set[str] = set(
+                (
+                    await self._s.execute(
+                        select(BankEntryORM.content_hash).where(
+                            BankEntryORM.content_hash.in_(list(all_hashes.keys()))
+                        )
+                    )
+                ).scalars().all()
             )
+            new_entries = [
+                entry for h, entry in all_hashes.items() if h not in existing_hashes
+            ]
+            skipped = len(statement.entries) - len(new_entries)
+
+            if new_entries:
+                await self._s.execute(
+                    sa_insert(BankEntryORM),
+                    [
+                        {
+                            "id": str(entry.id),
+                            "statement_id": stmt_id,
+                            "tenant_id": self._tenant_id,
+                            "value_date": entry.value_date,
+                            "amount": entry.amount,
+                            "currency": entry.currency,
+                            "description": entry.description,
+                            "reference": entry.reference,
+                            "counterparty": entry.counterparty,
+                            "raw_row": entry.raw_row,
+                            "cleared": False,
+                            "content_hash": _entry_content_hash(account_id, entry),
+                        }
+                        for entry in new_entries
+                    ],
+                )
+            orm.entry_count = len(new_entries)
+        else:
+            orm.entry_count = 0
 
         await self._s.commit()
         await self._s.refresh(orm)
-        return orm
+        return orm, skipped
 
     async def get_statement(self, statement_id: UUID | str) -> BankStatementORM | None:
         q = select(BankStatementORM).where(BankStatementORM.id == str(statement_id))
