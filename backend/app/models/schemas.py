@@ -317,6 +317,7 @@ class WebhookDeliveryResponse(_Base):
     attempt_count: int
     last_attempt_at: datetime | None = None
     response_code: int | None = None
+    response_body: str | None = None
     created_at: datetime
 
 

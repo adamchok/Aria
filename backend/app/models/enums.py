@@ -46,6 +46,7 @@ class WebhookEvent(StrEnum):
     JOB_FAILED = "job.failed"
     JOB_REVIEW_REQUIRED = "job.review_required"
     JOB_CREATED = "job.created"
+    JOB_STAGE_COMPLETED = "job.stage_completed"
 
 
 class WebhookDeliveryStatus(StrEnum):

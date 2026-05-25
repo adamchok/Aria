@@ -131,6 +131,7 @@ async def list_deliveries(
             attempt_count=d.attempt_count,
             last_attempt_at=d.last_attempt_at,
             response_code=d.response_code,
+            response_body=d.response_body,
             created_at=d.created_at,
         )
         for d in deliveries

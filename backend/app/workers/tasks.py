@@ -348,11 +348,28 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
     body = json.dumps(payload).encode()
     timestamp = int(time.time())
     settings = get_settings()
-    signing_secret = resolve_webhook_signing_secret(
-        webhook.secret,
-        encryption_key=settings.webhook_secret_encryption_key,
-        fallback_secret=settings.jwt_secret_key,
-    )
+    try:
+        signing_secret = resolve_webhook_signing_secret(
+            webhook.secret,
+            encryption_key=settings.webhook_secret_encryption_key,
+            fallback_secret=settings.jwt_secret_key,
+        )
+    except ValueError:
+        logger.error(
+            "webhook.secret_decrypt_failed",
+            webhook_id=webhook_id,
+            hint="WEBHOOK_SECRET_ENCRYPTION_KEY or JWT_SECRET_KEY changed after webhook was created. "
+                 "Delete and recreate the webhook to fix.",
+        )
+        async with session_scope() as session:
+            repo = WebhookRepository(session)
+            await repo.update_delivery(
+                delivery.id,
+                status=WebhookDeliveryStatus.FAILED,
+                attempt_count=task.request.retries + 1,
+                response_body="Unable to decrypt webhook secret — key mismatch",
+            )
+        return  # permanent failure, no retry
     signature = sign_webhook_payload(signing_secret, timestamp, body)
 
     # Deliver with retries

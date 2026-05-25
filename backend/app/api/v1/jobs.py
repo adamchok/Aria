@@ -285,6 +285,11 @@ async def create_job(
         ledger_stmt=bool(bank_statement_id),
         ledger_account=bool(bank_account_id),
     )
+    try:
+        from app.workers.tasks import trigger_webhooks
+        await trigger_webhooks(tenant_id, job.id, "job.created")
+    except Exception:  # noqa: BLE001
+        pass
 
     return JobCreateResponse(
         job_id=UUID(job.id), status=JobStatus(job.status), created_at=job.created_at
