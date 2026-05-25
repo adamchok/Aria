@@ -33,10 +33,22 @@ MATCHING_INSTRUCTIONS = build_instructions(
     ],
     capabilities=[
         "Composite weights: amount 0.4, date 0.2, reference 0.3, payer 0.1.",
+        (
+            "Bank POS/card debit descriptions embed the original foreign currency and amount "
+            "(e.g. 'ANTHROPIC SAN FRA (USD 20.00)' or 'MOONSHOT AI SINGAPO USD5.00'). "
+            "When the description contains the payment's original amount, treat it as strong "
+            "reference evidence even if the invoice reference number is absent."
+        ),
     ],
     reminders=[
         "FX variance between invoice and settlement dates is expected in corridors.",
         "confidence >= 0.75 → MATCHED; 0.5–0.75 → UNCERTAIN; < 0.5 → UNMATCHED.",
+        (
+            "For card payments, the bank description and counterparty are the primary "
+            "identifiers — SWIFT reference numbers do not appear. If the description "
+            "matches the payee name and embeds the correct foreign currency+amount, "
+            "raise confidence accordingly even when reference_similarity_score is low."
+        ),
     ],
 )
 

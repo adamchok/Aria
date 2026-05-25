@@ -42,5 +42,11 @@ INGESTION_INSTRUCTIONS = build_instructions(
     reminders=[
         "Use ISO 4217 currency codes and ISO dates (YYYY-MM-DD).",
         "Today's processing date may appear in the user message for context.",
+        (
+            "Currency disambiguation: '$' alone is ambiguous. Resolve using explicit "
+            "symbols (S$ or SGD → SGD; A$ → AUD; US$ → USD) or vendor address country. "
+            "US-incorporated SaaS companies (even Singapore-registered) typically bill in USD. "
+            "When uncertain, lower field_confidences['currency'] below 0.7."
+        ),
     ],
 )

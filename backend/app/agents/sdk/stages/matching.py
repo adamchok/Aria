@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from rapidfuzz import fuzz
 
@@ -80,8 +80,13 @@ def _match_one(
 ) -> MatchResult:
     candidates: list[BankEntry] = []
     if statement:
-        candidates = _stage1_date_filter(nr, statement.entries, used_entries, settings)
-        candidates = _stage2_amount_filter(nr, candidates)
+        stage1 = _stage1_date_filter(nr, statement.entries, used_entries, settings)
+        candidates = _stage2_amount_filter(nr, stage1)
+        if not candidates:
+            # Amount filter may fail when LLM extracted wrong currency (e.g. SGD vs
+            # USD for a Singapore SaaS company). Rescue entries whose description
+            # embeds the payment's original amount (POS debit format: "USD5.00").
+            candidates = _description_rescue(nr, stage1, candidates)
 
     scored: list[tuple[BankEntry, CandidateScore]] = []
     for entry in candidates:
@@ -158,6 +163,38 @@ def _stage2_amount_filter(nr, entries) -> list[BankEntry]:
     hi = nr.tolerance_high + slack
     # Bank debits are stored as negative; compare absolute value.
     return [e for e in entries if lo <= abs(e.amount) <= hi]
+
+
+def _description_rescue(
+    nr: NormalisedRecord,
+    stage1_candidates: list[BankEntry],
+    existing_candidates: list[BankEntry],
+) -> list[BankEntry]:
+    """Rescue date-filtered entries whose description embeds the payment amount.
+
+    POS debit descriptions encode the original foreign currency+amount
+    (e.g. 'ANTHROPIC SAN FRA (USD 20.00)' or 'MOONSHOT AI SINGAPO USD5.00').
+    This catches cases where the extracted currency is wrong (SGD vs USD for
+    Singapore SaaS) or the FX rate used differs from the card settlement rate.
+    """
+    already = {str(e.id) for e in existing_candidates}
+    amount = nr.payment.amount_original
+    amount_str = str(amount.quantize(Decimal("0.01")))  # "5.00"
+    targets = {amount_str}
+    if amount == amount.to_integral_value():
+        targets.add(str(int(amount)))  # "5"
+
+    rescued = []
+    for entry in stage1_candidates:
+        if str(entry.id) in already:
+            continue
+        text = f"{entry.description or ''} {entry.reference or ''}".upper()
+        for amt in targets:
+            # Match ISO currency code adjacent to the amount: "USD5.00", "USD 5.00"
+            if re.search(rf"[A-Z]{{3}}\s*{re.escape(amt)}(?!\d)", text):
+                rescued.append(entry)
+                break
+    return rescued
 
 
 def _score(nr: NormalisedRecord, entry: BankEntry, settings) -> CandidateScore:
