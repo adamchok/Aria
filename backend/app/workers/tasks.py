@@ -476,4 +476,4 @@ async def trigger_webhooks(tenant_id: str, job_id: str, event: str, *, stage: st
         webhooks = await repo.get_enabled_for_event(tenant_id, event)
 
     for webhook in webhooks:
-        deliver_webhook_task.delay(webhook.id, job_id, event, stage)
+        deliver_webhook_task.delay(webhook.id, job_id, event, stage=stage)

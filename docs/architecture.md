@@ -94,8 +94,8 @@ flowchart TD
 | --- | --- | --- |
 | **Ingestion** | Sonnet (multimodal) | Extract `PaymentRecord` from images (vision), PDF/Excel/CSV (text) |
 | **Bank statement ingestion** | Sonnet (PDF document) | Extract ledger `BankEntry` rows from statement PDFs (LLM-first; pdfplumber fallback); XLSX/CSV via structured parsers |
-| **Normalisation** | Haiku | FX conversion to base currency; tolerance window calculation |
-| **Matching** | Sonnet | FX-aware fuzzy match + confidence scoring + explanations |
+| **Normalisation** | FX service (no LLM) | FX conversion to base currency; tolerance window calculation; all records processed concurrently — FX cache pre-warmed for every (currency, date) pair, then `asyncio.gather` over all records |
+| **Matching** | Sonnet | FX-aware fuzzy match + confidence scoring + explanations; Phase 1 pre-scoring runs in parallel via `run_in_executor` |
 | **Report** | Sonnet | Summary synthesis, exception narratives, Excel export |
 
 ### Pipeline routing (deterministic)
@@ -156,18 +156,37 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 2. **Amount filter** — within `[tolerance_low, tolerance_high]`
 3. **LLM reasoning** — semantic match on reference, payer, residual variance
 
+**Performance:** Phase 1 pre-scoring (`rapidfuzz` similarity) runs via `asyncio.gather` + `loop.run_in_executor` so all records score in parallel (rapidfuzz releases the GIL). Borderline scores (0.45–0.65) route directly to human review without a second Opus escalation call — outcomes are identical and the extra call added latency without changing the result. Matching uses Sonnet throughout.
+
 ## Data flow
 
 | Step | Actor | Input | Output | Est. latency |
 | --- | --- | --- | --- | --- |
 | 1. Upload | User / API | Proofs + bank statement | Job ID, S3 keys | &lt; 1 s |
 | 2. Ingest | Agent 1 | Raw files | `List[PaymentRecord]` | 3–8 s / doc |
-| 3. Normalise | Agent 2 | Records + FX API | `List[NormalisedRecord]` | 1–2 s / record |
+| 3. Normalise | Agent 2 | Records + FX API | `List[NormalisedRecord]` | ~max(single FX call); all records run concurrently after cache pre-warm |
 | 4. Match | Agent 3 | Normalised + statement | `List[MatchResult]` | 2–5 s / match |
 | 5. Report | Agent 4 | All match results | `ReconciliationReport` | 3–5 s |
 | 6. Review | Human | UNCERTAIN items | Confirmed / rejected matches | Async; results re-hydrated from DB |
 
 Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Redis is unreachable, the API falls back to inline execution for developer convenience. On **Windows**, run the worker with `--pool=solo`.
+
+## Webhook events
+
+ARIA delivers signed HMAC-SHA256 `POST` payloads to registered tenant endpoints at pipeline milestones. All payloads include `job_id`, `event`, and `timestamp`.
+
+| Event | When fired | Extra payload fields |
+| --- | --- | --- |
+| `job.created` | Job accepted by the API (before pipeline starts) | — |
+| `job.stage_completed` | Each pipeline stage finishes (ingestion, normalisation, matching, report) | `stage` — the stage name |
+| `job.completed` | Pipeline finished; all matches auto-resolved | `summary` (matched/uncertain/unmatched/total counts) |
+| `job.review_required` | Pipeline finished with items needing human review (status `AWAITING_REVIEW`) | `summary` (same shape) |
+| `job.failed` | Pipeline failed or job was cancelled | `error` — reason string |
+
+Register endpoints and inspect delivery history in the **Tenant Management** UI (`/webhooks`) or via the REST API (`POST /api/v1/webhooks`). Deliveries are retried up to `WEBHOOK_MAX_RETRIES` times with exponential backoff.
+
+{: .important }
+> Set `WEBHOOK_SECRET_ENCRYPTION_KEY` once on first deploy and **never rotate it**. Rotating this key will render all existing webhook secrets unreadable and break delivery until webhooks are recreated.
 
 ## Core data models
 
