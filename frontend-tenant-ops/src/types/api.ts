@@ -276,6 +276,27 @@ export interface BankAccountCreate {
   currency: string;
 }
 
+export interface BankAccountUpdate {
+  name?: string;
+  bank_name?: string;
+  account_number_masked?: string;
+  currency?: string;
+}
+
+export interface LedgerEntryCreate {
+  value_date: ISODate;
+  amount: MoneyStr;
+  currency: string;
+  description?: string;
+  reference?: string | null;
+  counterparty?: string | null;
+}
+
+export interface LedgerBulkCreateResponse {
+  created_count: number;
+  items: LedgerEntryItem[];
+}
+
 export interface BankAccountResponse {
   id: UUID;
   tenant_id: UUID | null;
@@ -322,6 +343,15 @@ export interface LedgerEntryItem {
   counterparty: string | null;
   cleared: boolean;
   cleared_by_job_id: UUID | null;
+}
+
+export interface LedgerEntryUpdate {
+  value_date?: ISODate;
+  amount?: MoneyStr;
+  currency?: string;
+  description?: string;
+  reference?: string | null;
+  counterparty?: string | null;
 }
 
 export interface LedgerPageResponse {

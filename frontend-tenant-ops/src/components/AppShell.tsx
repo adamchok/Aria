@@ -56,6 +56,14 @@ function UploadIcon() {
   );
 }
 
+function BankIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M3 10h18M5 10V7l7-4 7 4v3M9 21v-7h2v7M13 21v-7h2v7" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -69,6 +77,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: <LayoutIcon /> },
       { to: '/jobs', label: 'Jobs', icon: <BriefcaseIcon /> },
+      { to: '/bank-accounts', label: 'Bank Accounts', icon: <BankIcon /> },
     ],
   },
 ];

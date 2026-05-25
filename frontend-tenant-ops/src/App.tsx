@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/AppShell';
 import { AuthRoute } from '@/components/AuthRoute';
 import { TenantRoleRoute } from '@/components/TenantRoleRoute';
+import { BankAccountDetailPage } from '@/pages/BankAccountDetailPage';
+import { BankAccountsPage } from '@/pages/BankAccountsPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { JobProgressPage } from '@/pages/JobProgressPage';
 import { JobsPage } from '@/pages/JobsPage';
@@ -28,6 +30,8 @@ export default function App() {
                 <Route path="/jobs/:jobId/results" element={<ResultsPage />} />
                 <Route path="/jobs/:jobId/review" element={<ReviewPage />} />
                 <Route path="/upload" element={<UploadPage />} />
+                <Route path="/bank-accounts" element={<BankAccountsPage />} />
+                <Route path="/bank-accounts/:accountId" element={<BankAccountDetailPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
               </AppShell>

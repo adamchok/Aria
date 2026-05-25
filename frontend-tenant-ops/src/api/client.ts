@@ -1,10 +1,18 @@
 import type {
+  BankAccountCreate,
   BankAccountResponse,
+  BankAccountUpdate,
   BankEntry,
   BankStatementSummary,
+  BankStatementUploadResponse,
   JobCreateResponse,
   JobListResponse,
   JobStatusResponse,
+  LedgerBulkCreateResponse,
+  LedgerEntryCreate,
+  LedgerEntryItem,
+  LedgerEntryUpdate,
+  LedgerPageResponse,
   LoginResponse,
   MatchResult,
   ReconciliationReport,
@@ -95,8 +103,71 @@ export const api = {
   listBankAccounts: (): Promise<BankAccountResponse[]> =>
     request<BankAccountResponse[]>('/api/v1/bank-accounts'),
 
+  getBankAccount: (accountId: UUID): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>(`/api/v1/bank-accounts/${accountId}`),
+
+  createBankAccount: (payload: BankAccountCreate): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>('/api/v1/bank-accounts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateBankAccount: (accountId: UUID, payload: BankAccountUpdate): Promise<BankAccountResponse> =>
+    request<BankAccountResponse>(`/api/v1/bank-accounts/${accountId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteBankAccount: (accountId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}`, { method: 'DELETE' }),
+
   listAccountStatements: (accountId: UUID): Promise<BankStatementSummary[]> =>
     request<BankStatementSummary[]>(`/api/v1/bank-accounts/${accountId}/statements`),
+
+  uploadAccountStatement: (accountId: UUID, file: File): Promise<BankStatementUploadResponse> => {
+    const form = new FormData();
+    form.append('bank_statement', file, file.name);
+    return request<BankStatementUploadResponse>(`/api/v1/bank-accounts/${accountId}/statements`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+
+  deleteAccountStatement: (accountId: UUID, statementId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}/statements/${statementId}`, { method: 'DELETE' }),
+
+  getAccountLedger: (
+    accountId: UUID,
+    params?: { cleared?: boolean; page?: number; page_size?: number },
+  ): Promise<LedgerPageResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.cleared !== undefined) qs.set('cleared', String(params.cleared));
+    if (params?.page !== undefined) qs.set('page', String(params.page));
+    if (params?.page_size !== undefined) qs.set('page_size', String(params.page_size));
+    const query = qs.toString();
+    return request<LedgerPageResponse>(`/api/v1/bank-accounts/${accountId}/ledger${query ? `?${query}` : ''}`);
+  },
+
+  createLedgerEntry: (accountId: UUID, payload: LedgerEntryCreate): Promise<LedgerEntryItem> =>
+    request<LedgerEntryItem>(`/api/v1/bank-accounts/${accountId}/ledger`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  createLedgerEntries: (accountId: UUID, entries: LedgerEntryCreate[]): Promise<LedgerBulkCreateResponse> =>
+    request<LedgerBulkCreateResponse>(`/api/v1/bank-accounts/${accountId}/ledger/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(entries),
+    }),
+
+  updateLedgerEntry: (accountId: UUID, entryId: UUID, payload: LedgerEntryUpdate): Promise<LedgerEntryItem> =>
+    request<LedgerEntryItem>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteLedgerEntry: (accountId: UUID, entryId: UUID): Promise<void> =>
+    request<void>(`/api/v1/bank-accounts/${accountId}/ledger/${entryId}`, { method: 'DELETE' }),
 
   listJobs: (params?: { status?: string; page?: number; page_size?: number }): Promise<JobListResponse> => {
     const qs = new URLSearchParams();
