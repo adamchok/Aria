@@ -16,6 +16,7 @@ from app.core.logging import bind_job_id, get_logger
 from app.core.security import resolve_webhook_signing_secret, sign_webhook_payload
 from app.repositories.pipeline_runner import execute_job
 from app.workers.celery_app import celery_app
+from app.workers.webhook_throttle import parse_retry_after, wait_for_webhook_slot
 
 logger = get_logger(__name__)
 
@@ -275,7 +276,7 @@ async def _batch_one_tenant(
 
 # ─── Webhook delivery ────────────────────────────────────────────────────────
 
-@celery_app.task(name="aria.deliver_webhook", bind=True, max_retries=3)
+@celery_app.task(name="aria.deliver_webhook", bind=True, max_retries=5)
 def deliver_webhook_task(self, webhook_id: str, job_id: str | None, event: str, stage: str | None = None) -> None:
     try:
         asyncio.run(_deliver_webhook(self, webhook_id, job_id, event, stage=stage))
@@ -374,9 +375,10 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
         return  # permanent failure, no retry
     signature = sign_webhook_payload(signing_secret, timestamp, body)
 
-    # Deliver with retries
+    # Deliver with retries (throttle per URL to avoid receiver 429 bursts)
     attempt = task.request.retries + 1
     try:
+        await wait_for_webhook_slot(webhook.url, settings.webhook_min_interval_seconds)
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 webhook.url,
@@ -404,7 +406,22 @@ async def _deliver_webhook(task, webhook_id: str, job_id: str | None, event: str
             )
 
         if not success:
-            backoff = settings.webhook_retry_backoff_base_seconds * (2 ** task.request.retries)
+            if response_code == 429:
+                retry_after = parse_retry_after(response.headers)
+                base = max(
+                    retry_after or 0.0,
+                    float(settings.webhook_rate_limit_backoff_seconds),
+                )
+                backoff = int(base * (2 ** task.request.retries))
+                logger.warning(
+                    "webhook.rate_limited",
+                    webhook_id=webhook_id,
+                    job_id=job_id,
+                    retry_in_s=backoff,
+                    attempt=attempt,
+                )
+            else:
+                backoff = settings.webhook_retry_backoff_base_seconds * (2 ** task.request.retries)
             raise task.retry(exc=Exception(f"HTTP {response_code}"), countdown=backoff)
 
         logger.info("webhook.delivered", webhook_id=webhook_id, job_id=job_id, webhook_event=event)

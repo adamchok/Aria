@@ -100,8 +100,12 @@ class Settings(BaseSettings):
     llm_retry_tpm_base_seconds: float = 30.0
 
     # Webhooks
-    webhook_max_retries: int = 3
+    webhook_max_retries: int = 5
     webhook_retry_backoff_base_seconds: int = 5
+    # Min seconds between POSTs to the same webhook URL (per worker process).
+    webhook_min_interval_seconds: float = 1.5
+    # Base countdown when receiver returns HTTP 429 (before exponential multiplier).
+    webhook_rate_limit_backoff_seconds: int = 60
     webhook_secret_encryption_key: str = ""
 
     # Email notifications

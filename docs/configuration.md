@@ -170,8 +170,10 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WEBHOOK_MAX_RETRIES` | `3` | Maximum delivery attempts per webhook event |
-| `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS` | `5` | Base delay for exponential backoff; attempt N waits `base × 2^(N-1)` seconds |
+| `WEBHOOK_MAX_RETRIES` | `5` | Maximum delivery attempts per webhook event |
+| `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS` | `5` | Base delay for non-429 failures; attempt N waits `base × 2^(N-1)` seconds |
+| `WEBHOOK_MIN_INTERVAL_SECONDS` | `1.5` | Minimum spacing between POSTs to the same URL (per Celery worker) — reduces receiver 429s after job completion bursts |
+| `WEBHOOK_RATE_LIMIT_BACKOFF_SECONDS` | `60` | Initial Celery retry countdown when the receiver returns HTTP 429 (doubles per retry; honors `Retry-After` when present) |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY` | *(falls back to `JWT_SECRET_KEY`)* | Fernet key material for encrypting webhook signing secrets at rest |
 
 ### Application
@@ -269,7 +271,7 @@ The root `.env` file is read by Docker Compose for `${VAR}` substitution. All ba
 | LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `AGENTS_SDK_TRACING`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `INGESTION_CONCURRENCY`, `MATCHING_CONCURRENCY`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS`, `LLM_RETRY_TPM_BASE_SECONDS` |
 | Observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` |
 | Auth | `ADMIN_API_KEY`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` |
-| Webhooks | `WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`, `WEBHOOK_SECRET_ENCRYPTION_KEY` |
+| Webhooks | `WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`, `WEBHOOK_MIN_INTERVAL_SECONDS`, `WEBHOOK_RATE_LIMIT_BACKOFF_SECONDS`, `WEBHOOK_SECRET_ENCRYPTION_KEY` |
 | FX | `EXCHANGERATE_API_KEY`, `OPENEXCHANGERATES_APP_ID`, `FX_CACHE_TTL_SECONDS` |
 | Reconciliation | `BASE_CURRENCY`, `FX_VARIANCE_BUFFER_PCT`, `MATCH_CONFIDENCE_THRESHOLD`, `EXTRACTION_ESCALATION_THRESHOLD`, `DATE_WINDOW_DAYS` |
 | Ingestion | `BATCH_SIZE_THRESHOLD`, `BATCH_TIME_WINDOW_MINUTES`, `CELERY_BEAT_INTERVAL_MINUTES` |
