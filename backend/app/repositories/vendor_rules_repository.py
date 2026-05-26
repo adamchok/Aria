@@ -111,6 +111,49 @@ class VendorRulesRepository:
             for r in result.scalars().all()
         ]
 
+    async def list_for_tenant(self) -> list[VendorRuleORM]:
+        """Return full ORM objects for CRUD operations."""
+        stmt = (
+            select(VendorRuleORM)
+            .where(VendorRuleORM.tenant_id == self._tenant_id)
+            .order_by(VendorRuleORM.updated_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_by_id(self, rule_id: str) -> VendorRuleORM | None:
+        stmt = select(VendorRuleORM).where(
+            VendorRuleORM.id == rule_id,
+            VendorRuleORM.tenant_id == self._tenant_id,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def update_rule(
+        self,
+        rule_id: str,
+        corrected_value: str,
+        source_note: str | None,
+    ) -> VendorRuleORM | None:
+        rule = await self.get_by_id(rule_id)
+        if rule is None:
+            return None
+        rule.corrected_value = corrected_value
+        if source_note is not None:
+            rule.source_note = source_note
+        rule.updated_at = datetime.utcnow()
+        await self._session.commit()
+        await self._session.refresh(rule)
+        return rule
+
+    async def delete_rule(self, rule_id: str) -> bool:
+        rule = await self.get_by_id(rule_id)
+        if rule is None:
+            return False
+        await self._session.delete(rule)
+        await self._session.commit()
+        return True
+
     async def increment_applied(self, payee_pattern: str, field_name: str) -> None:
         pattern = normalize_payee(payee_pattern)
         stmt = (

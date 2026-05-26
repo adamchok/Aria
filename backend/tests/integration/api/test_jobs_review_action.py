@@ -289,3 +289,132 @@ async def test_manual_match_clears_ledger_entry(api_client, db_session, normalis
     ledger = await api_client.get(f"/api/v1/bank-accounts/{acc_id}/ledger?cleared=true")
     assert ledger.json()["total"] == 1
     assert ledger.json()["items"][0]["cleared_by_job_id"] == str(job_id)
+
+
+# ─── Vendor rule learning from confirm ───────────────────────────────────────
+
+def _make_moonshot_nr(currency: str = "SGD") -> "NormalisedRecord":
+    from app.models.enums import SourceFormat
+    from app.models.schemas import NormalisedRecord, PaymentRecord
+
+    return NormalisedRecord(
+        payment=PaymentRecord(
+            payer="Corp A",
+            payee="MOONSHOT AI PTE. LTD.",
+            amount_original=Decimal("10.00"),
+            currency=currency,
+            value_date=date(2026, 5, 18),
+            source_format=SourceFormat.IMAGE,
+            extraction_confidence=0.65,
+            raw_extracted_text="10.00",
+            field_confidences={},
+        ),
+        amount_myr_at_invoice_rate=Decimal("30.50"),
+        amount_myr_at_settlement_rate=Decimal("30.80"),
+        fx_rate_invoice=Decimal("3.050"),
+        fx_rate_settlement=Decimal("3.080"),
+        tolerance_low=Decimal("29.00"),
+        tolerance_high=Decimal("32.00"),
+        estimated_charges_myr=Decimal("0.50"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_confirm_saves_vendor_rule_for_currency_mismatch(api_client, db_session):
+    """Confirming with a bank description that embeds the true currency saves a vendor rule."""
+    from app.models.database import VendorRuleORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    bank_entry = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="POS DEBIT MOONSHOT AI SINGAPO (USD 10.00)",
+    )
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    # SGD extracted (wrong) but bank description says USD
+    job_id, match_id = await _seed_uncertain(repo, _make_moonshot_nr("SGD"), bank_entry)
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
+    )
+    assert resp.status_code == 200
+
+    result = await db_session.execute(
+        select(VendorRuleORM).where(
+            VendorRuleORM.field_name == "currency",
+            VendorRuleORM.corrected_value == "USD",
+        )
+    )
+    rule = result.scalar_one_or_none()
+    assert rule is not None, "confirm must save vendor rule when bank description reveals true currency"
+    assert "moonshot ai" in rule.payee_pattern
+    assert rule.original_value == "SGD"
+
+
+@pytest.mark.asyncio
+async def test_sibling_flagged_after_confirm_saves_vendor_rule(api_client, db_session):
+    """UNCERTAIN sibling with same payee gets vendor_rule_note after confirm saves a rule."""
+    from app.models.database import MatchORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    bank_entry_with_usd = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="POS DEBIT MOONSHOT AI SINGAPO (USD 10.00)",
+    )
+    match1 = MatchResult(
+        normalised_record=_make_moonshot_nr("SGD"),
+        bank_entry=bank_entry_with_usd,
+        confidence=0.62,
+        status=MatchStatus.UNCERTAIN,
+    )
+    match2 = MatchResult(
+        normalised_record=_make_moonshot_nr("SGD"),
+        bank_entry=None,
+        confidence=0.60,
+        status=MatchStatus.UNCERTAIN,
+    )
+
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    job = await repo.create_job(base_currency="MYR", payment_proof_keys=[], bank_statement_key=None)
+    await repo.replace_matches(job.id, [match1, match2])
+    rows = await repo.list_matches(job.id, status=MatchStatus.UNCERTAIN)
+    await repo.save_report(
+        job.id,
+        ReconciliationReport(
+            job_id=UUID(str(job.id)),
+            summary=ReconciliationSummary(
+                total_records=2,
+                matched_count=0,
+                uncertain_count=2,
+                unmatched_count=0,
+                total_value_myr=Decimal("61.60"),
+                matched_value_myr=Decimal("0"),
+                total_variance_myr=Decimal("0"),
+                processing_seconds=1.0,
+            ),
+            matches=[match1, match2],
+            generated_at=datetime.utcnow(),
+            narrative="Initial snapshot",
+        ).model_dump(mode="json"),
+    )
+
+    match1_row = next(r for r in rows if (r.payload or {}).get("bank_entry") is not None)
+    match2_id = next(r.id for r in rows if r.id != match1_row.id)
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job.id}/review/{match1_row.id}", json={"action": "confirm"}
+    )
+    assert resp.status_code == 200
+
+    db_session.expire_all()
+    fresh = await db_session.execute(select(MatchORM).where(MatchORM.id == match2_id))
+    sibling = fresh.scalar_one()
+    assert "vendor_rule_note" in (sibling.payload or {}), (
+        "sibling UNCERTAIN match with same payee must be flagged with vendor_rule_note"
+    )
+    assert "currency" in sibling.payload["vendor_rule_note"]

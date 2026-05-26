@@ -671,3 +671,23 @@ class DryRunResponse(_Base):
     job_id: UUID
     dry_run: bool = True
     report: "ReconciliationReport"
+
+
+# ─── Vendor rules (AI feedback) ──────────────────────────────────────────────
+
+class VendorRuleResponse(_Base):
+    id: UUID
+    payee_pattern: str
+    field_name: str
+    corrected_value: str
+    original_value: str | None = None
+    source_job_id: str | None = None
+    source_note: str | None = None
+    applied_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class VendorRuleUpdateRequest(_Base):
+    corrected_value: str = Field(min_length=1, max_length=255)
+    source_note: str | None = None

@@ -18,6 +18,7 @@ from app.api.v1 import (
     tenant_settings,
     tenants,
     users,
+    vendor_rules,
     webhooks,
 )
 
@@ -42,3 +43,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(bank_statements.router, prefix="/bank-statements", tags=["bank-statements"])
 api_router.include_router(bank_accounts.router, prefix="/bank-accounts", tags=["bank-accounts"])
 api_router.include_router(schedules.router, prefix="/schedules", tags=["schedules"])
+api_router.include_router(vendor_rules.router, prefix="/vendor-rules", tags=["vendor-rules"])

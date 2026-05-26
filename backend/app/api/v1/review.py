@@ -14,10 +14,10 @@ from app.core.exceptions import MatchNotFoundError
 from app.core.logging import get_logger
 from app.core.middleware import require_tenant
 from app.models.enums import JobStatus, MatchStatus, ReviewAction
-from app.models.schemas import BankEntry, MatchResult, ReviewActionRequest, ReviewActionResponse
+from app.models.schemas import BankEntry, MatchResult, PaymentRecord, ReviewActionRequest, ReviewActionResponse
 from app.repositories.bank_ledger_repository import BankLedgerRepository
 from app.repositories.job_repository import JobRepository
-from app.repositories.vendor_rules_repository import VendorRulesRepository
+from app.repositories.vendor_rules_repository import VendorRulesRepository, normalize_payee
 from app.services.job_bank_entries import (
     clear_ledger_entry_for_review_match,
     resolve_manual_match_bank_entry,
@@ -63,6 +63,25 @@ async def submit_review_action(
         new_status = MatchStatus.MATCHED
         bank_entry_payload = None
         amount_variance_myr = None
+        confirmed_result = MatchResult.model_validate(dict(match.payload or {}))
+        if confirmed_result.bank_entry is not None:
+            corrections = await _save_vendor_correction(
+                session=session,
+                tenant_id=tenant_id,
+                job_id=str(job_id),
+                payment=confirmed_result.normalised_record.payment,
+                bank_entry=confirmed_result.bank_entry,
+                note=payload.note,
+            )
+            if corrections:
+                await _propagate_vendor_rules_to_siblings(
+                    session=session,
+                    job_id=job_id,
+                    current_match_id=match_id,
+                    payee=confirmed_result.normalised_record.payment.payee,
+                    corrections=corrections,
+                    repo=repo,
+                )
     elif payload.action == ReviewAction.REJECT:
         new_status = MatchStatus.UNMATCHED
         bank_entry_payload = None
@@ -89,9 +108,7 @@ async def submit_review_action(
             abs(resolved.amount) - nr.amount_myr_at_settlement_rate
         ).quantize(Decimal("0.01"))
 
-        # Learn from the correction: if bank description reveals the true
-        # currency, persist a vendor rule so future extractions are correct.
-        await _save_vendor_correction(
+        corrections = await _save_vendor_correction(
             session=session,
             tenant_id=tenant_id,
             job_id=str(job_id),
@@ -99,6 +116,15 @@ async def submit_review_action(
             bank_entry=resolved,
             note=payload.note,
         )
+        if corrections:
+            await _propagate_vendor_rules_to_siblings(
+                session=session,
+                job_id=job_id,
+                current_match_id=match_id,
+                payee=nr.payment.payee,
+                corrections=corrections,
+                repo=repo,
+            )
 
     updated = await repo.update_match(
         job_id,
@@ -165,12 +191,14 @@ async def _save_vendor_correction(
     payment: object,
     bank_entry: BankEntry,
     note: str | None,
-) -> None:
-    """Detect field discrepancies and persist vendor rules for future jobs."""
-    from app.models.schemas import PaymentRecord as PR
+) -> list[tuple[str, str]]:
+    """Detect field discrepancies and persist vendor rules for future jobs.
 
-    if not isinstance(payment, PR):
-        return
+    Returns list of (field_name, corrected_value) for each rule saved.
+    """
+    saved: list[tuple[str, str]] = []
+    if not isinstance(payment, PaymentRecord):
+        return saved
 
     detected = _detect_currency_from_description(bank_entry.description, payment.amount_original)
     if detected and detected != payment.currency:
@@ -184,12 +212,59 @@ async def _save_vendor_correction(
                 source_job_id=job_id,
                 source_note=note,
             )
+            saved.append(("currency", detected))
         except Exception:
             logger.exception(
                 "vendor_rule.save_failed",
                 payee=payment.payee,
                 field="currency",
             )
+    return saved
+
+
+async def _propagate_vendor_rules_to_siblings(
+    *,
+    session: AsyncSession,
+    job_id: UUID,
+    current_match_id: UUID,
+    payee: str,
+    corrections: list[tuple[str, str]],
+    repo: JobRepository,
+) -> int:
+    """Flag sibling UNCERTAIN matches with the same payee so reviewers see the correction context."""
+    payee_norm = normalize_payee(payee)
+    siblings = await repo.list_matches(job_id, status=MatchStatus.UNCERTAIN)
+    count = 0
+    for sibling in siblings:
+        if str(sibling.id) == str(current_match_id):
+            continue
+        sib_payload = dict(sibling.payload or {})
+        try:
+            sib_result = MatchResult.model_validate(sib_payload)
+        except Exception:
+            continue
+        sib_payment = sib_result.normalised_record.payment
+        sib_norm = normalize_payee(sib_payment.payee)
+        if payee_norm not in sib_norm and sib_norm not in payee_norm:
+            continue
+        applicable = [
+            f"{field}: {getattr(sib_payment, field, '?')!r} → {value!r}"
+            for field, value in corrections
+            if str(getattr(sib_payment, field, None) or "") != value
+        ]
+        if not applicable:
+            continue
+        sib_payload["vendor_rule_note"] = "Peer review correction: " + "; ".join(applicable) + "."
+        sibling.payload = sib_payload
+        count += 1
+    if count:
+        logger.info(
+            "vendor_rule.siblings_flagged",
+            job_id=str(job_id),
+            payee=payee_norm,
+            count=count,
+        )
+    return count
 
 
 def _detect_currency_from_description(description: str, amount: Decimal) -> str | None:
