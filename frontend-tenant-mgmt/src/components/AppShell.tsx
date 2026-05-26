@@ -97,6 +97,14 @@ function UsersNavIcon() {
   );
 }
 
+function BrainNavIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15M14.25 3.104c.251.023.501.05.75.082M19.8 15l-1.575 1.575A3.75 3.75 0 0115.75 18h-7.5a3.75 3.75 0 01-2.475-.925L4.2 15m15.6 0H4.2m0 0L3 16.2" />
+    </svg>
+  );
+}
+
 function LogOutIcon() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
@@ -115,6 +123,7 @@ const navSections: NavSection[] = [
       { to: '/queue', label: 'Queue', icon: <InboxIcon /> },
       { to: '/analytics', label: 'Analytics', icon: <ChartIcon /> },
       { to: '/users', label: 'Users', icon: <UsersNavIcon /> },
+      { to: '/vendor-rules', label: 'AI Feedback', icon: <BrainNavIcon /> },
     ],
   },
 ];

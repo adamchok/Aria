@@ -10,6 +10,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { MgmtDashboardPage } from '@/pages/MgmtDashboardPage';
 import { QueuePage } from '@/pages/QueuePage';
 import { UsersPage } from '@/pages/UsersPage';
+import { VendorRulesPage } from '@/pages/VendorRulesPage';
 import { WebhooksPage } from '@/pages/WebhooksPage';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
                   <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/queue" element={<QueuePage />} />
                   <Route path="/users" element={<UsersPage />} />
+                  <Route path="/vendor-rules" element={<VendorRulesPage />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </AppShell>

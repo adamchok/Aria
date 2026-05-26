@@ -1,5 +1,6 @@
 import type {
   AdminAnalyticsSummary,
+  AdminQueueStatusResponse,
   ApiKeyResponse,
   LoginResponse,
   TenantResponse,
@@ -79,4 +80,10 @@ export const api = {
       : '';
     return request(`/api/v1/analytics/admin/summary${qs}`);
   },
+
+  getAdminQueue: (): Promise<AdminQueueStatusResponse> =>
+    request('/api/v1/ingest/admin/queue'),
+
+  flushAdminQueue: (tenantId: UUID): Promise<{ status: string }> =>
+    request(`/api/v1/ingest/admin/queue/flush/${tenantId}`, { method: 'POST' }),
 };

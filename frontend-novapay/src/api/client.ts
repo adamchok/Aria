@@ -21,6 +21,8 @@ import type {
   TransactionIngestResponse,
   QueueStatusResponse,
   UUID,
+  VendorRule,
+  VendorRuleUpdateRequest,
 } from '@/types/api';
 
 const API_BASE = (import.meta.env?.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
@@ -238,6 +240,18 @@ export const api = {
 
   flushQueue: (): Promise<{ status: string }> =>
     request<{ status: string }>('/api/v1/ingest/queue/flush', { method: 'POST' }),
+
+  listVendorRules: (): Promise<VendorRule[]> =>
+    request<VendorRule[]>('/api/v1/vendor-rules'),
+
+  updateVendorRule: (ruleId: UUID, payload: VendorRuleUpdateRequest): Promise<VendorRule> =>
+    request<VendorRule>(`/api/v1/vendor-rules/${ruleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteVendorRule: (ruleId: UUID): Promise<void> =>
+    request<void>(`/api/v1/vendor-rules/${ruleId}`, { method: 'DELETE' }),
 };
 
 export type Api = typeof api;

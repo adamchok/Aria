@@ -10,6 +10,7 @@ import { JobsPage } from '@/pages/JobsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { QueuePage } from '@/pages/QueuePage';
 import { ResultsPage } from '@/pages/ResultsPage';
+import { VendorRulesPage } from '@/pages/VendorRulesPage';
 import { ReviewPage } from '@/pages/ReviewPage';
 import { UploadPage } from '@/pages/UploadPage';
 
@@ -34,6 +35,7 @@ export default function App() {
                 <Route path="/queue" element={<QueuePage />} />
                 <Route path="/bank-accounts" element={<BankAccountsPage />} />
                 <Route path="/bank-accounts/:accountId" element={<BankAccountDetailPage />} />
+                <Route path="/vendor-rules" element={<VendorRulesPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </AppShell>

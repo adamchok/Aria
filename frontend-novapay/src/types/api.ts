@@ -414,3 +414,23 @@ export interface LoginResponse {
   token_type: string;
   user: UserResponse;
 }
+
+// ─── Vendor Rules ─────────────────────────────────────────────────────────────
+
+export interface VendorRule {
+  id: UUID;
+  payee_pattern: string;
+  field_name: string;
+  corrected_value: string;
+  original_value: string | null;
+  source_job_id: string | null;
+  source_note: string | null;
+  applied_count: number;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+export interface VendorRuleUpdateRequest {
+  corrected_value: string;
+  source_note?: string | null;
+}

@@ -16,6 +16,8 @@ import type {
   QueueStatusResponse,
   UserResponse,
   UUID,
+  VendorRule,
+  VendorRuleUpdateRequest,
   WebhookDeliveryResponse,
   WebhookResponse,
 } from '@/types/api';
@@ -232,4 +234,16 @@ export const api = {
     request<void>(`/api/v1/bank-accounts/${accountId}/statements/${statementId}`, {
       method: 'DELETE',
     }),
+
+  listVendorRules: (): Promise<VendorRule[]> =>
+    request<VendorRule[]>('/api/v1/vendor-rules'),
+
+  updateVendorRule: (ruleId: UUID, payload: VendorRuleUpdateRequest): Promise<VendorRule> =>
+    request<VendorRule>(`/api/v1/vendor-rules/${ruleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteVendorRule: (ruleId: UUID): Promise<void> =>
+    request<void>(`/api/v1/vendor-rules/${ruleId}`, { method: 'DELETE' }),
 };
