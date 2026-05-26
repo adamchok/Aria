@@ -31,7 +31,7 @@ describe('api client', () => {
     const stmt = new File(['s'], 'may.csv', { type: 'text/csv' });
     const result = await api.createJob({
       paymentProofs: [proof],
-      bankStatement: stmt,
+      bankStatements: [stmt],
       baseCurrency: 'MYR',
     });
 
@@ -87,7 +87,7 @@ describe('api client', () => {
     );
 
     const result = await api.ingestTransactions({
-      transactions: [{ payment_proof_b64: 'abc', corridor: 'USD/MYR', value_date: '2026-05-24' }],
+      transactions: [{ payment_proof_b64: 'abc', corridor: 'USD/MYR' }],
     });
     expect(path).toContain('/ingest/transactions');
     expect(result.buffered).toBe(1);

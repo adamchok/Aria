@@ -22,6 +22,16 @@ function isAccepted(
   return extensions.some((ext) => lower.endsWith(ext));
 }
 
+function collectFilesFromDataTransfer(dataTransfer: DataTransfer): File[] {
+  const fromFiles = Array.from(dataTransfer.files ?? []);
+  if (fromFiles.length > 0) return fromFiles;
+
+  return Array.from(dataTransfer.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((f): f is File => f !== null);
+}
+
 interface UploadDropzoneProps {
   label: string;
   multiple?: boolean;
@@ -44,9 +54,10 @@ export function UploadDropzone({
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
 
   const handleFiles = useCallback(
-    (fileList: FileList | null) => {
+    (fileList: FileList | File[] | null) => {
       if (!fileList || fileList.length === 0) return;
       const files = Array.from(fileList);
       const rejected = files.filter((f) => !isAccepted(f, acceptedExtensions, acceptedMimeTypes));
@@ -63,11 +74,34 @@ export function UploadDropzone({
     [acceptedExtensions, acceptedMimeTypes, multiple, onFiles],
   );
 
+  const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  }, []);
+
+  const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  }, []);
+
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      e.stopPropagation();
+      dragDepthRef.current = 0;
       setIsDragging(false);
-      handleFiles(e.dataTransfer.files);
+      handleFiles(collectFilesFromDataTransfer(e.dataTransfer));
     },
     [handleFiles],
   );
@@ -93,11 +127,9 @@ export function UploadDropzone({
             inputRef.current?.click();
           }
         }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
         onDrop={onDrop}
         className={cn(
           'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors',

@@ -20,3 +20,10 @@ export async function seedTenantAuth(page: Page) {
     );
   });
 }
+
+/** Clear persisted auth so e2e login flows start from the sign-in page. */
+export async function stubTenantLogin(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.removeItem('novapay-auth');
+  });
+}

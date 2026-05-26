@@ -71,7 +71,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface CreateJobInput {
   paymentProofs: File[];
-  bankStatement?: File;
+  bankStatements?: File[];
   bankStatementId?: UUID;
   bankAccountId?: UUID;
   baseCurrency: string;
@@ -85,8 +85,10 @@ export const api = {
       form.append('bank_account_id', input.bankAccountId);
     } else if (input.bankStatementId) {
       form.append('bank_statement_id', input.bankStatementId);
-    } else if (input.bankStatement) {
-      form.append('bank_statement', input.bankStatement, input.bankStatement.name);
+    } else if (input.bankStatements?.length) {
+      for (const file of input.bankStatements) {
+        form.append('bank_statement', file, file.name);
+      }
     }
     form.append('base_currency', input.baseCurrency);
     return request<JobCreateResponse>('/api/v1/jobs', { method: 'POST', body: form });

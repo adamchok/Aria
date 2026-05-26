@@ -67,7 +67,7 @@ Returns service status and version.
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `payment_proofs` | file[] | Yes | One or more payment proof files |
-| `bank_statement` | file | One of three sources | Bank statement (XLSX, CSV, or PDF). Omit when using ledger references. |
+| `bank_statement` | file (repeatable) | One of three sources | Bank statement file(s) (XLSX, CSV, or PDF). Multiple files are merged into one ledger. Omit when using ledger references. |
 | `bank_statement_id` | string (UUID) | One of three sources | Single uploaded statement from `/bank-accounts/{id}/statements` or `/bank-statements`. Uses uncleared entries only. |
 | `bank_account_id` | string (UUID) | One of three sources | Registered bank account. Aggregates **all pending (uncleared) ledger entries** across every statement for that account. |
 | `base_currency` | string | No | ISO 4217 code (default: `MYR`) |

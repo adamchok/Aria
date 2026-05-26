@@ -62,6 +62,7 @@ export const adminAnalyticsFixture: AdminAnalyticsSummary = {
   period_start: '2026-04-01',
   period_end: '2026-05-01',
   total_tenants: 2,
+  active_tenants: 2,
   total_jobs: 15,
   total_records: 312,
   matched_records: 289,
@@ -69,6 +70,7 @@ export const adminAnalyticsFixture: AdminAnalyticsSummary = {
   unmatched_records: 5,
   avg_match_rate: 0.926,
   escalation_rate: 0.058,
+  avg_seconds_per_record: 1.8,
   by_tenant: [
     {
       tenant_id: TENANT_ID,

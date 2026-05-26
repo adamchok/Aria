@@ -28,13 +28,14 @@ export function UploadPage() {
   const navigate = useNavigate();
   const {
     paymentProofs,
-    bankStatement,
+    bankStatements,
     bankStatementSource,
     selectedAccountId,
     baseCurrency,
     addPaymentProofs,
     removePaymentProof,
-    setBankStatement,
+    addBankStatements,
+    removeBankStatement,
     setBankStatementSource,
     setSelectedAccountId,
     setBaseCurrency,
@@ -52,7 +53,7 @@ export function UploadPage() {
 
   const hasBankData =
     bankStatementSource === 'upload'
-      ? bankStatement !== null
+      ? bankStatements.length > 0
       : !!selectedAccountId && (selectedAccount?.uncleared_count ?? 0) > 0;
 
   const canSubmit = paymentProofs.length > 0 && hasBankData && !createJob.isPending;
@@ -62,7 +63,7 @@ export function UploadPage() {
     createJob.mutate(
       {
         paymentProofs,
-        bankStatement: bankStatementSource === 'upload' ? bankStatement ?? undefined : undefined,
+        bankStatements: bankStatementSource === 'upload' ? bankStatements : undefined,
         bankAccountId:
           bankStatementSource === 'ledger' ? selectedAccountId ?? undefined : undefined,
         baseCurrency,
@@ -145,16 +146,21 @@ export function UploadPage() {
               <>
                 <UploadDropzone
                   testId="bank-statement-dropzone"
-                  label={bankStatement ? 'Replace bank statement' : 'Drop bank statement'}
-                  onFiles={(files) => setBankStatement(files[0] ?? null)}
-                  helperText="One XLSX, CSV, or PDF file with date, amount, reference, and counterparty columns."
+                  label={
+                    bankStatements.length > 0
+                      ? 'Add more bank statements'
+                      : 'Drop bank statements'
+                  }
+                  multiple
+                  onFiles={addBankStatements}
+                  helperText="Multiple XLSX, CSV, or PDF files supported. Entries are merged for reconciliation."
                   acceptedExtensions={BANK_STATEMENT_EXTENSIONS}
                   acceptedMimeTypes={BANK_STATEMENT_MIME}
                 />
                 <FileList
-                  files={bankStatement ? [bankStatement] : []}
-                  onRemove={() => setBankStatement(null)}
-                  emptyLabel="No bank statement uploaded."
+                  files={bankStatements}
+                  onRemove={removeBankStatement}
+                  emptyLabel="No bank statements uploaded."
                 />
               </>
             ) : (

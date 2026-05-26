@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UploadDropzone } from '@/components/UploadDropzone';
 
@@ -15,6 +15,20 @@ describe('UploadDropzone', () => {
     const file = makeFile('proof.png');
     await userEvent.upload(input, file);
     expect(onFiles).toHaveBeenCalledWith([file]);
+  });
+
+  it('accepts multiple files from drag-and-drop', () => {
+    const onFiles = vi.fn();
+    render(<UploadDropzone label="Drop here" multiple onFiles={onFiles} />);
+    const dropzone = screen.getByRole('button', { name: 'Drop here' });
+    const files = [makeFile('a.png'), makeFile('b.png')];
+
+    fireEvent.dragEnter(dropzone);
+    fireEvent.drop(dropzone, {
+      dataTransfer: { files, items: files.map((file) => ({ kind: 'file', getAsFile: () => file })) },
+    });
+
+    expect(onFiles).toHaveBeenCalledWith(files);
   });
 
   it('rejects unsupported file types and shows an alert', async () => {

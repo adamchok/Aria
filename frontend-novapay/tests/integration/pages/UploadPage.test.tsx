@@ -27,18 +27,26 @@ describe('UploadPage', () => {
     expect(submit).toBeDisabled();
 
     const proofInput = screen.getByLabelText(/Drop payment proofs file input/i) as HTMLInputElement;
-    await userEvent.upload(proofInput, new File(['p'], 'usd.png', { type: 'image/png' }));
+    await userEvent.upload(proofInput, [
+      new File(['p'], 'usd.png', { type: 'image/png' }),
+      new File(['p2'], 'eur.png', { type: 'image/png' }),
+    ]);
+    expect(screen.getAllByTestId('file-list-item')).toHaveLength(2);
     expect(submit).toBeDisabled();
 
-    const stmtInput = screen.getByLabelText(/Drop bank statement file input/i) as HTMLInputElement;
-    await userEvent.upload(stmtInput, new File(['s'], 'may.csv', { type: 'text/csv' }));
+    const stmtInput = screen.getByLabelText(/Drop bank statements file input/i) as HTMLInputElement;
+    await userEvent.upload(stmtInput, [
+      new File(['s'], 'may.csv', { type: 'text/csv' }),
+      new File(['s2'], 'jun.csv', { type: 'text/csv' }),
+    ]);
+    expect(screen.getAllByTestId('file-list-item')).toHaveLength(4);
     expect(submit).toBeEnabled();
   });
 
   it('navigates to the job progress page on successful create', async () => {
     renderWithProviders(<Harness />, { initialEntries: ['/upload'] });
     const proofInput = screen.getByLabelText(/Drop payment proofs file input/i) as HTMLInputElement;
-    const stmtInput = screen.getByLabelText(/Drop bank statement file input/i) as HTMLInputElement;
+    const stmtInput = screen.getByLabelText(/Drop bank statements file input/i) as HTMLInputElement;
     await userEvent.upload(proofInput, new File(['p'], 'usd.png', { type: 'image/png' }));
     await userEvent.upload(stmtInput, new File(['s'], 'may.csv', { type: 'text/csv' }));
     await userEvent.click(screen.getByRole('button', { name: /Start reconciliation/i }));

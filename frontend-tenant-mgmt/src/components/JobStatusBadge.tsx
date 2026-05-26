@@ -13,6 +13,7 @@ const JOB_STATUS_MAP: Record<
   AWAITING_REVIEW: { label: 'Awaiting review', bg: 'bg-amber-50', fg: 'text-amber-800', border: 'border-amber-200' },
   COMPLETED: { label: 'Completed', bg: 'bg-emerald-50', fg: 'text-emerald-800', border: 'border-emerald-200' },
   FAILED: { label: 'Failed', bg: 'bg-rose-50', fg: 'text-rose-800', border: 'border-rose-200' },
+  CANCELLED: { label: 'Cancelled', bg: 'bg-slate-100', fg: 'text-slate-500', border: 'border-slate-200' },
 };
 
 export function JobStatusBadge({ status, className }: { status: JobStatus; className?: string }) {

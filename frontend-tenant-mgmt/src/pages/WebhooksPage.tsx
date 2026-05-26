@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { WebhookEvent } from '@/types/api';
@@ -48,10 +48,12 @@ const ALL_EVENTS = [
 
 // ─── Delivery status ──────────────────────────────────────────────────────────
 
+const DEFAULT_STATUS_META = { badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-400' };
+
 const STATUS_META: Record<string, { badge: string; dot: string }> = {
   SUCCESS: { badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-400' },
   FAILED: { badge: 'bg-rose-50 text-rose-700', dot: 'bg-rose-400' },
-  PENDING: { badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-400' },
+  PENDING: DEFAULT_STATUS_META,
   DISABLED: { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300' },
 };
 
@@ -106,7 +108,7 @@ function DeliveryRow({
   onResend: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const statusMeta = STATUS_META[d.status] ?? STATUS_META.PENDING;
+  const statusMeta = STATUS_META[d.status] ?? DEFAULT_STATUS_META;
 
   return (
     <>

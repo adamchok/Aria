@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -25,6 +26,7 @@ _CANCELLABLE_STATUSES = {
 }
 from app.models.schemas import (
     BankEntry,
+    BankStatement,
     DryRunResponse,
     JobCreateResponse,
     JobListItem,
@@ -39,7 +41,7 @@ from app.repositories.job_repository import JobRepository
 from app.services.job_bank_entries import list_job_bank_entries
 from app.services.report_hydration import hydrate_report
 from app.services.storage import StorageService
-from app.tools.file_parsers import detect_source_format
+from app.tools.file_parsers import bank_statement_to_csv_bytes, detect_source_format
 from app.workers.tasks import enqueue_job
 
 router = APIRouter()
@@ -65,6 +67,47 @@ _ACCEPTED_PROOF_TYPES = {
     "text/csv",
     "application/csv",
 }
+
+
+async def _persist_bank_statements(
+    files: list[UploadFile],
+    base_currency: str,
+    storage: StorageService,
+) -> str:
+    """Store one or more uploaded bank statements; merge ledger rows when multiple."""
+    from app.agents.sdk.stages.bank_statement import extract_bank_statement
+    from app.graph.state import DocumentInput
+
+    uploads: list[tuple[bytes, str, str | None]] = []
+    for upload in files:
+        stmt_fmt = detect_source_format(upload.filename or "statement", upload.content_type)
+        if stmt_fmt not in {SourceFormat.EXCEL, SourceFormat.CSV, SourceFormat.PDF}:
+            raise HTTPException(
+                status_code=400,
+                detail="Bank statement must be XLSX, CSV, or PDF. Image formats are not supported.",
+            )
+        uploads.append((await upload.read(), upload.filename or "statement", upload.content_type))
+
+    if len(uploads) == 1:
+        body, filename, content_type = uploads[0]
+        return storage.put_object(body, filename, content_type=content_type)
+
+    merged_entries: list[BankEntry] = []
+    period_dates: list[date] = []
+    for body, filename, content_type in uploads:
+        doc = DocumentInput(filename=filename, content_type=content_type, bytes_data=body)
+        result = extract_bank_statement(doc, base_currency)
+        merged_entries.extend(result.statement.entries)
+        period_dates.extend(entry.value_date for entry in result.statement.entries)
+
+    merged = BankStatement(
+        entries=merged_entries,
+        base_currency=base_currency,
+        statement_period_start=min(period_dates) if period_dates else None,
+        statement_period_end=max(period_dates) if period_dates else None,
+    )
+    csv_bytes = bank_statement_to_csv_bytes(merged)
+    return storage.put_object(csv_bytes, "merged_bank_statements.csv", content_type="text/csv")
 
 
 @router.get("", response_model=JobListResponse)
@@ -105,9 +148,9 @@ async def create_job(
     request: Request,
     payment_proofs: Annotated[list[UploadFile], File(description="Payment proofs (multi-file)")],
     bank_statement: Annotated[
-        UploadFile | None,
-        File(description="Bank statement file (XLSX, CSV, or PDF). Omit when using ledger references."),
-    ] = None,
+        list[UploadFile],
+        File(description="Bank statement file(s) (XLSX, CSV, or PDF). Omit when using ledger references."),
+    ] = [],
     bank_statement_id: Annotated[
         str | None,
         Form(description="ID of a previously uploaded bank statement from /bank-statements."),
@@ -136,7 +179,7 @@ async def create_job(
     bank_account_id = (bank_account_id or "").strip() or None
 
     bank_sources = [
-        bank_statement is not None,
+        len(bank_statement) > 0,
         bool(bank_statement_id),
         bool(bank_account_id),
     ]
@@ -209,22 +252,8 @@ async def create_job(
         proof_keys.append(key)
 
     stmt_key: str | None = None
-    if bank_statement is not None:
-        stmt_fmt = detect_source_format(
-            bank_statement.filename or "statement",
-            bank_statement.content_type,
-        )
-        if stmt_fmt not in {SourceFormat.EXCEL, SourceFormat.CSV, SourceFormat.PDF}:
-            raise HTTPException(
-                status_code=400,
-                detail="Bank statement must be XLSX, CSV, or PDF. Image formats are not supported.",
-            )
-        stmt_body = await bank_statement.read()
-        stmt_key = storage.put_object(
-            stmt_body,
-            bank_statement.filename or "statement",
-            content_type=bank_statement.content_type,
-        )
+    if bank_statement:
+        stmt_key = await _persist_bank_statements(bank_statement, validated_currency, storage)
 
     if dry_run:
         from datetime import datetime

@@ -9,7 +9,7 @@ import type { UserResponse } from '@/types/api';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function initials(email: string): string {
-  const parts = email.split('@')[0].split(/[._-]/);
+  const parts = (email.split('@')[0] ?? email).split(/[._-]/);
   return parts
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')

@@ -94,6 +94,7 @@ export const aiPerformanceFixture: AIPerformanceSummary = {
   escalation_in_target_range: true,
   processing_target_met: true,
   avg_processing_seconds: 38.5,
+  avg_seconds_per_record: 1.6,
   recent_jobs: [
     {
       job_id: '11111111-1111-1111-1111-111111111111',
@@ -139,6 +140,7 @@ export const webhookDeliveryFixture: WebhookDeliveryResponse = {
   attempt_count: 1,
   last_attempt_at: '2026-05-23T10:00:00Z',
   response_code: 200,
+  response_body: '{"ok":true}',
   created_at: '2026-05-23T10:00:00Z',
 };
 

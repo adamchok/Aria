@@ -102,7 +102,7 @@ Demo this flow in **NovaPay** to show how an external system would drive reconci
 
 | Step | Screen | Action |
 | --- | --- | --- |
-| 1 | `/upload` | Drag payment proofs; attach bank data (upload file **or** select bank account — all pending ledger entries are included automatically); select base currency (MYR) |
+| 1 | `/upload` | Drag multiple payment proofs and bank statements (upload files **or** select bank account — all pending ledger entries are included automatically); select base currency (MYR) |
 | 2 | `/jobs/{id}` | Watch four-agent stepper; SSE delivers live progress |
 | 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
 | 4 | `/jobs/{id}/review` | Confirm or reject uncertain items (side-by-side proof vs bank line) |

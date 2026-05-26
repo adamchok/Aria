@@ -443,6 +443,25 @@ def _build_statement(rows: list[dict[str, Any]], base_currency: str) -> BankStat
     )
 
 
+def bank_statement_to_csv_bytes(stmt: BankStatement) -> bytes:
+    """Serialise ledger rows to CSV for merged multi-file uploads."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["date", "amount", "description", "reference", "counterparty", "currency"])
+    for entry in stmt.entries:
+        writer.writerow(
+            [
+                entry.value_date.isoformat(),
+                str(entry.amount),
+                entry.description,
+                entry.reference or "",
+                entry.counterparty or "",
+                entry.currency,
+            ]
+        )
+    return buf.getvalue().encode("utf-8")
+
+
 def bank_statement_from_llm_payload(payload: dict[str, Any], base_currency: str) -> BankStatement:
     """Convert LLM JSON output into a validated ``BankStatement``."""
     entries: list[BankEntry] = []
