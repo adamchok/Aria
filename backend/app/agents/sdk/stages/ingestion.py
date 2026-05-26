@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+from langsmith import traceable
+
 from app.agents.audit import make_audit_entry
 from app.agents.sdk.context import ReconciliationContext
 from app.agents.sdk.llm_service import LLMService
@@ -28,6 +30,7 @@ logger = get_logger(__name__)
 AGENT_NAME = "ingestion"
 
 
+@traceable(run_type="chain", name="ingestion_stage")
 async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None = None) -> None:
     """Extract payment proofs and optional bank statement file."""
     ctx.state.status = JobStatus.INGESTING

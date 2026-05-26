@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
+from langsmith import traceable
+
 from app.agents.sdk.context import ReconciliationContext
 from app.agents.sdk.llm_service import LLMService
 from app.agents.sdk.provider import configure_agents_sdk_tracing
@@ -23,6 +25,7 @@ from app.graph.state import ReconciliationState
 logger = get_logger(__name__)
 
 
+@traceable(run_type="chain", name="reconciliation_pipeline")
 async def run_reconciliation(
     state: ReconciliationState,
     *,

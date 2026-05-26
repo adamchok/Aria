@@ -6,6 +6,7 @@ import asyncio
 import re
 from decimal import Decimal, InvalidOperation
 
+from langsmith import traceable
 from rapidfuzz import fuzz
 
 from app.agents.audit import make_audit_entry
@@ -38,6 +39,7 @@ _W_PAYER_CARD = 0.15
 _RE_POS = re.compile(r"^POS\s+(DEBIT|CREDIT)\b", re.IGNORECASE)
 
 
+@traceable(run_type="chain", name="matching_stage")
 async def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None = None) -> None:
     ctx.state.status = JobStatus.MATCHING
     llm = llm or LLMService(ctx.settings)

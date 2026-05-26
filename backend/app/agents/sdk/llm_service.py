@@ -81,7 +81,14 @@ class LLMService:
                 from anthropic import Anthropic
             except ImportError as exc:
                 raise LLMError("anthropic package not installed") from exc
-            self._anthropic = Anthropic(api_key=self._settings.anthropic_api_key)
+            client = Anthropic(api_key=self._settings.anthropic_api_key)
+            if self._settings.langsmith_tracing and self._settings.langsmith_api_key:
+                try:
+                    from langsmith.wrappers import wrap_anthropic
+                    client = wrap_anthropic(client)
+                except (ImportError, Exception):
+                    pass
+            self._anthropic = client
         return self._anthropic
 
     def extract_payment_record(

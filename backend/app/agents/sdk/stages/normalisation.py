@@ -6,6 +6,8 @@ import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 
+from langsmith import traceable
+
 from app.agents.audit import make_audit_entry
 from app.agents.sdk.context import ReconciliationContext
 from app.core.exceptions import FXRateUnavailableError
@@ -45,6 +47,7 @@ _PUBLIC_HOLIDAYS: frozenset[date] = frozenset({
 })
 
 
+@traceable(run_type="chain", name="normalisation_stage")
 async def run_normalisation_stage(
     ctx: ReconciliationContext,
     fx_service: FXService | None = None,

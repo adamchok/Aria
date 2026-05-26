@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
+from langsmith import traceable
+
 from app.agents.audit import make_audit_entry
 from app.agents.sdk.context import ReconciliationContext
 from app.agents.sdk.llm_service import LLMService
@@ -17,6 +19,7 @@ logger = get_logger(__name__)
 AGENT_NAME = "report"
 
 
+@traceable(run_type="chain", name="report_stage")
 def run_report_stage(ctx: ReconciliationContext, llm: LLMService | None = None) -> None:
     ctx.state.status = JobStatus.REPORTING
     llm = llm or LLMService(ctx.settings)

@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     langsmith_api_key: str = ""
     langsmith_project: str = "aria"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_tracing: bool = False
     llm_mode: Literal["mock", "live"] = "mock"
-    agents_sdk_tracing: bool = False
     sonnet_model: str = "claude-sonnet-4-6"
     haiku_model: str = "claude-haiku-4-5-20251001"
     opus_model: str = "claude-opus-4-7"
