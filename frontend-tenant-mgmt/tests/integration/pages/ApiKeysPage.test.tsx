@@ -32,4 +32,36 @@ describe('ApiKeysPage', () => {
     );
     expect(screen.getByText('Staging')).toBeInTheDocument();
   });
+
+  it('opens confirm dialog when Revoke clicked', async () => {
+    renderWithProviders(<ApiKeysPage />);
+    await waitFor(() => expect(screen.getByText('Production')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^revoke$/i }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/revoke api key/i)).toBeInTheDocument();
+  });
+
+  it('revokes key after confirming in dialog', async () => {
+    renderWithProviders(<ApiKeysPage />);
+    await waitFor(() => expect(screen.getByText('Production')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^revoke$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^revoke key$/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Revoked')).toBeInTheDocument();
+  });
+
+  it('dismisses dialog without revoking when Cancel clicked', async () => {
+    renderWithProviders(<ApiKeysPage />);
+    await waitFor(() => expect(screen.getByText('Production')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^revoke$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+  });
 });

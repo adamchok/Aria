@@ -2,6 +2,7 @@ import { HttpResponse, http } from 'msw';
 import {
   ACCOUNT_ID,
   KEY_ID,
+  RULE_ID,
   STMT_ID,
   TENANT_ID,
   WEBHOOK_ID,
@@ -14,6 +15,7 @@ import {
   queueFixture,
   statementFixture,
   tenantUserFixture,
+  vendorRuleFixture,
   webhookDeliveryFixture,
   webhookFixture,
 } from './fixtures';
@@ -22,6 +24,7 @@ let apiKeys = [apiKeyFixture];
 let tenantUsers = [tenantUserFixture];
 let webhooks = [webhookFixture];
 let bankAccounts = [bankAccountFixture];
+let vendorRules = [vendorRuleFixture];
 
 export const handlers = [
   http.post('http://localhost/api/v1/auth/login', async ({ request }) => {
@@ -183,6 +186,20 @@ export const handlers = [
   http.delete(`http://localhost/api/v1/bank-accounts/${ACCOUNT_ID}/statements/:statementId`, () =>
     new HttpResponse(null, { status: 204 }),
   ),
+
+  http.get('http://localhost/api/v1/vendor-rules', () => HttpResponse.json(vendorRules)),
+
+  http.put(`http://localhost/api/v1/vendor-rules/${RULE_ID}`, async ({ request }) => {
+    const body = (await request.json()) as { corrected_value: string; source_note?: string | null };
+    const updated = { ...vendorRuleFixture, ...body, updated_at: new Date().toISOString() };
+    vendorRules = vendorRules.map((r) => (r.id === RULE_ID ? updated : r));
+    return HttpResponse.json(updated);
+  }),
+
+  http.delete(`http://localhost/api/v1/vendor-rules/${RULE_ID}`, () => {
+    vendorRules = vendorRules.filter((r) => r.id !== RULE_ID);
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];
 
 export function resetHandlerState() {
@@ -190,4 +207,5 @@ export function resetHandlerState() {
   tenantUsers = [tenantUserFixture];
   webhooks = [webhookFixture];
   bankAccounts = [bankAccountFixture];
+  vendorRules = [vendorRuleFixture];
 }

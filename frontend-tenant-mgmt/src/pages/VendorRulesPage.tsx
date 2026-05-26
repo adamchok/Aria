@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import type { VendorRule } from '@/types/api';
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -125,54 +127,16 @@ function EditRow({
   );
 }
 
-// ─── Delete confirm inline ────────────────────────────────────────────────────
-
-function DeleteCell({ ruleId, onDelete, isPending }: { ruleId: string; onDelete: (id: string) => void; isPending: boolean }) {
-  const [confirming, setConfirming] = useState(false);
-
-  if (confirming) {
-    return (
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-slate-500">Delete rule?</span>
-        <button
-          onClick={() => { onDelete(ruleId); setConfirming(false); }}
-          disabled={isPending}
-          className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-        >
-          Yes, delete
-        </button>
-        <button
-          onClick={() => setConfirming(false)}
-          className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setConfirming(true)}
-      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-    >
-      Delete
-    </button>
-  );
-}
-
 // ─── Row ─────────────────────────────────────────────────────────────────────
 
 function RuleRow({
   rule,
   onEdit,
-  onDelete,
-  isDeletePending,
+  onDeleteClick,
 }: {
   rule: VendorRule;
   onEdit: () => void;
-  onDelete: (id: string) => void;
-  isDeletePending: boolean;
+  onDeleteClick: (id: string, pattern: string) => void;
 }) {
   return (
     <tr className="transition-colors hover:bg-slate-50">
@@ -194,7 +158,12 @@ function RuleRow({
           >
             <PencilIcon /> Edit
           </button>
-          <DeleteCell ruleId={rule.id} onDelete={onDelete} isPending={isDeletePending} />
+          <button
+            onClick={() => onDeleteClick(rule.id, rule.payee_pattern)}
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            Delete
+          </button>
         </div>
       </td>
     </tr>
@@ -206,6 +175,7 @@ function RuleRow({
 export function VendorRulesPage() {
   const qc = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { pending: confirmPending, open: openConfirm, close: closeConfirm } = useConfirmDialog();
 
   const rulesQuery = useQuery({
     queryKey: ['vendor-rules'],
@@ -223,8 +193,25 @@ export function VendorRulesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (ruleId: string) => api.deleteVendorRule(ruleId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['vendor-rules'] }),
+    onSuccess: () => {
+      closeConfirm();
+      void qc.invalidateQueries({ queryKey: ['vendor-rules'] });
+    },
   });
+
+  function handleDeleteClick(id: string, pattern: string) {
+    openConfirm({
+      title: 'Delete feedback rule',
+      message: (
+        <>
+          Delete the rule for <strong className="font-semibold">{pattern}</strong>? ARIA will no longer apply this
+          correction automatically.
+        </>
+      ),
+      confirmLabel: 'Delete rule',
+      onConfirm: () => deleteMutation.mutate(id),
+    });
+  }
 
   const rules = rulesQuery.data ?? [];
 
@@ -327,8 +314,7 @@ export function VendorRulesPage() {
                         key={rule.id}
                         rule={rule}
                         onEdit={() => setEditingId(rule.id)}
-                        onDelete={(id) => deleteMutation.mutate(id)}
-                        isDeletePending={deleteMutation.isPending}
+                        onDeleteClick={handleDeleteClick}
                       />
                     ),
                   )}
@@ -344,6 +330,14 @@ export function VendorRulesPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmPending && (
+        <ConfirmDialog
+          {...confirmPending}
+          loading={deleteMutation.isPending}
+          onClose={closeConfirm}
+        />
+      )}
     </div>
   );
 }

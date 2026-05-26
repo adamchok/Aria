@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import type { ApiKeyResponse } from '@/types/api';
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -133,43 +135,6 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
   );
 }
 
-// ─── Revoke confirm inline ────────────────────────────────────────────────────
-
-function RevokeCell({ k, onRevoke, isPending }: { k: ApiKeyResponse; onRevoke: (id: string) => void; isPending: boolean }) {
-  const [confirming, setConfirming] = useState(false);
-
-  if (!k.enabled) return <span className="text-xs text-slate-400">—</span>;
-
-  if (confirming) {
-    return (
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-slate-500">Revoke this key?</span>
-        <button
-          onClick={() => { onRevoke(k.id); setConfirming(false); }}
-          disabled={isPending}
-          className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-        >
-          Yes, revoke
-        </button>
-        <button
-          onClick={() => setConfirming(false)}
-          className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setConfirming(true)}
-      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-    >
-      Revoke
-    </button>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -177,6 +142,7 @@ export function ApiKeysPage() {
   const qc = useQueryClient();
   const [newKey, setNewKey] = useState<string | null>(null);
   const [label, setLabel] = useState('');
+  const { pending: confirmPending, open: openConfirm, close: closeConfirm } = useConfirmDialog();
 
   const keysQuery = useQuery({
     queryKey: ['tenant', 'keys'],
@@ -194,8 +160,25 @@ export function ApiKeysPage() {
 
   const revokeMutation = useMutation({
     mutationFn: (keyId: string) => api.revokeTenantKey(keyId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tenant', 'keys'] }),
+    onSuccess: () => {
+      closeConfirm();
+      void qc.invalidateQueries({ queryKey: ['tenant', 'keys'] });
+    },
   });
+
+  function handleRevokeClick(k: ApiKeyResponse) {
+    openConfirm({
+      title: 'Revoke API key',
+      message: (
+        <>
+          Revoke <strong className="font-semibold">{k.label || 'this key'}</strong>? Any integrations using it will
+          stop working immediately. This cannot be undone.
+        </>
+      ),
+      confirmLabel: 'Revoke key',
+      onConfirm: () => revokeMutation.mutate(k.id),
+    });
+  }
 
   const activeCount = keysQuery.data?.filter((k) => k.enabled).length ?? 0;
 
@@ -339,11 +322,16 @@ export function ApiKeysPage() {
                         {k.expires_at ? formatDate(k.expires_at) : <span className="text-slate-400">Never</span>}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <RevokeCell
-                          k={k}
-                          onRevoke={(id) => revokeMutation.mutate(id)}
-                          isPending={revokeMutation.isPending}
-                        />
+                        {k.enabled ? (
+                          <button
+                            onClick={() => handleRevokeClick(k)}
+                            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                          >
+                            Revoke
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -353,6 +341,14 @@ export function ApiKeysPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmPending && (
+        <ConfirmDialog
+          {...confirmPending}
+          loading={revokeMutation.isPending}
+          onClose={closeConfirm}
+        />
+      )}
 
       {/* Security note */}
       <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">

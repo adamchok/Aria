@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { WebhookEvent } from '@/types/api';
 import type { WebhookResponse, WebhookDeliveryResponse } from '@/types/api';
 
@@ -161,7 +163,7 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
   const [tested, setTested] = useState(false);
   const [showDeliveries, setShowDeliveries] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { pending: confirmPending, open: openConfirm, close: closeConfirm } = useConfirmDialog();
 
   const deliveriesQuery = useQuery({
     queryKey: ['webhooks', webhook.id, 'deliveries'],
@@ -172,7 +174,10 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteWebhook(webhook.id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] }),
+    onSuccess: () => {
+      closeConfirm();
+      void qc.invalidateQueries({ queryKey: ['webhooks'] });
+    },
   });
 
   const testMutation = useMutation({
@@ -199,6 +204,7 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
   const successRate = deliveries.length > 0 ? Math.round((successCount / deliveries.length) * 100) : null;
 
   return (
+    <>
     <Card>
       {/* Header */}
       <CardHeader className="pb-3">
@@ -260,31 +266,24 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
               : `View deliveries${deliveries.length > 0 ? ` (${deliveries.length})` : ''}`}
           </Button>
           <div className="ml-auto">
-            {confirmDelete ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">Remove this webhook?</span>
-                <button
-                  onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
-                  className="rounded bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
-                >
-                  {deleteMutation.isPending ? 'Removing…' : 'Confirm'}
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="rounded px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="rounded px-2.5 py-1 text-xs text-slate-400 hover:text-rose-600"
-              >
-                Remove
-              </button>
-            )}
+            <button
+              onClick={() =>
+                openConfirm({
+                  title: 'Remove webhook',
+                  message: (
+                    <>
+                      Remove the webhook for <strong className="font-semibold break-all">{webhook.url}</strong>? No
+                      further events will be delivered to this endpoint.
+                    </>
+                  ),
+                  confirmLabel: 'Remove webhook',
+                  onConfirm: () => deleteMutation.mutate(),
+                })
+              }
+              className="rounded px-2.5 py-1 text-xs text-slate-400 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            >
+              Remove
+            </button>
           </div>
         </div>
 
@@ -346,6 +345,15 @@ function WebhookCard({ webhook }: { webhook: WebhookResponse }) {
         )}
       </CardContent>
     </Card>
+
+    {confirmPending && (
+      <ConfirmDialog
+        {...confirmPending}
+        loading={deleteMutation.isPending}
+        onClose={closeConfirm}
+      />
+    )}
+    </>
   );
 }
 

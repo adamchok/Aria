@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { UploadDropzone } from '@/components/UploadDropzone';
 import { formatAmount, formatDate } from '@/lib/format';
 import type { BankAccountUpdate, LedgerEntryCreate, LedgerEntryItem, LedgerEntryUpdate, UUID } from '@/types/api';
@@ -23,46 +24,6 @@ function invalidateAccountQueries(qc: ReturnType<typeof useQueryClient>, account
   qc.invalidateQueries({ queryKey: ['bank-account-statements', accountId] });
   qc.invalidateQueries({ queryKey: ['bank-account-ledger', accountId] });
   qc.invalidateQueries({ queryKey: ['bank-accounts'] });
-}
-
-// ─── Confirm dialog ───────────────────────────────────────────────────────────
-
-function ConfirmDialog({
-  title,
-  message,
-  confirmLabel,
-  loading,
-  onConfirm,
-  onClose,
-}: {
-  title: string;
-  message: React.ReactNode;
-  confirmLabel: string;
-  loading?: boolean;
-  onConfirm: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-    >
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <h2 id="confirm-dialog-title" className="text-lg font-semibold text-slate-900">
-          {title}
-        </h2>
-        <div className="mt-2 text-sm text-slate-600">{message}</div>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="danger" loading={loading} onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── Upload statement modal ───────────────────────────────────────────────────

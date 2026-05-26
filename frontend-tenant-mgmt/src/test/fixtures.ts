@@ -9,6 +9,7 @@ import type {
   LoginResponse,
   QueueStatusResponse,
   UserResponse,
+  VendorRule,
   WebhookDeliveryResponse,
   WebhookResponse,
 } from '@/types/api';
@@ -20,6 +21,7 @@ export const STMT_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 export const KEY_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 export const WEBHOOK_ID = 'wwwwwwww-wwww-wwww-wwww-wwwwwwwwwwww';
 export const USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+export const RULE_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
 export const tenantUserFixture: UserResponse = {
   id: USER_ID,
@@ -184,4 +186,17 @@ export const ledgerPageFixture: LedgerPageResponse = {
   total: 1,
   page: 1,
   page_size: 50,
+};
+
+export const vendorRuleFixture: VendorRule = {
+  id: RULE_ID,
+  payee_pattern: 'moonshot ai',
+  field_name: 'currency',
+  corrected_value: 'USD',
+  original_value: 'SGD',
+  source_job_id: null,
+  source_note: 'Confirmed via review queue',
+  applied_count: 3,
+  created_at: '2026-05-10T08:00:00Z',
+  updated_at: '2026-05-20T08:00:00Z',
 };

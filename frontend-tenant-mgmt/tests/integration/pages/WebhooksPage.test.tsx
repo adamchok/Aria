@@ -25,15 +25,50 @@ describe('WebhooksPage', () => {
     renderWithProviders(<WebhooksPage />);
     await waitFor(() => expect(screen.getByText('ERP')).toBeInTheDocument());
 
+    await userEvent.click(screen.getByRole('button', { name: /\+ add webhook/i }));
+    await waitFor(() => expect(screen.getByLabelText(/endpoint url/i)).toBeInTheDocument());
+
     await userEvent.type(
       screen.getByLabelText(/endpoint url/i),
       'https://hooks.example.com/aria',
     );
-    await userEvent.click(screen.getByRole('button', { name: /register webhook/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^register webhook$/i }));
 
     await waitFor(() =>
       expect(screen.getByText(/whsec_test_secret_shown_once/i)).toBeInTheDocument(),
     );
     expect(screen.getByText(/hooks\.example\.com/i)).toBeInTheDocument();
+  });
+
+  it('opens confirm dialog when Remove clicked', async () => {
+    renderWithProviders(<WebhooksPage />);
+    await waitFor(() => expect(screen.getByText('ERP')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /remove webhook/i })).toBeInTheDocument();
+  });
+
+  it('removes webhook after confirming in dialog', async () => {
+    renderWithProviders(<WebhooksPage />);
+    await waitFor(() => expect(screen.getByText('ERP')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^remove webhook$/i }));
+
+    await waitFor(() => expect(screen.queryByText('ERP')).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('dismisses dialog without removing when Cancel clicked', async () => {
+    renderWithProviders(<WebhooksPage />);
+    await waitFor(() => expect(screen.getByText('ERP')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('ERP')).toBeInTheDocument();
   });
 });
