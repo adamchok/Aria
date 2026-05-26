@@ -418,3 +418,153 @@ async def test_sibling_flagged_after_confirm_saves_vendor_rule(api_client, db_se
         "sibling UNCERTAIN match with same payee must be flagged with vendor_rule_note"
     )
     assert "currency" in sibling.payload["vendor_rule_note"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_saves_currency_rule_from_counterparty(api_client, db_session):
+    """Currency embedded in bank counterparty field (not description) is also learned."""
+    from app.models.database import VendorRuleORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    # description has no currency pattern; counterparty does
+    bank_entry = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="INWARD TRANSFER",
+        counterparty="MOONSHOT AI (USD 10.00)",
+    )
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    job_id, match_id = await _seed_uncertain(repo, _make_moonshot_nr("SGD"), bank_entry)
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
+    )
+    assert resp.status_code == 200
+
+    result = await db_session.execute(
+        select(VendorRuleORM).where(
+            VendorRuleORM.field_name == "currency",
+            VendorRuleORM.corrected_value == "USD",
+        )
+    )
+    rule = result.scalar_one_or_none()
+    assert rule is not None, "currency rule must be created from counterparty text when description has no pattern"
+    assert rule.original_value == "SGD"
+
+
+@pytest.mark.asyncio
+async def test_confirm_saves_payee_rule_from_counterparty(api_client, db_session):
+    """When bank counterparty differs from extracted payee, a payee correction rule is saved."""
+    from app.models.database import VendorRuleORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    bank_entry = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="INWARD TRANSFER",
+        counterparty="Moonshot Technologies Sdn Bhd",
+    )
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    job_id, match_id = await _seed_uncertain(repo, _make_moonshot_nr("USD"), bank_entry)
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
+    )
+    assert resp.status_code == 200
+
+    result = await db_session.execute(
+        select(VendorRuleORM).where(
+            VendorRuleORM.field_name == "payee",
+            VendorRuleORM.corrected_value == "Moonshot Technologies Sdn Bhd",
+        )
+    )
+    rule = result.scalar_one_or_none()
+    assert rule is not None, "payee rule must be created when bank counterparty differs from extracted payee"
+    assert "moonshot ai" in rule.payee_pattern
+
+
+@pytest.mark.asyncio
+async def test_confirm_no_payee_rule_when_counterparty_matches(api_client, db_session):
+    """No spurious payee rule when bank counterparty normalises to the same form as extracted payee."""
+    from app.models.database import VendorRuleORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    bank_entry = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="INWARD TRANSFER",
+        # Same vendor, different formatting — normalises identically
+        counterparty="MOONSHOT AI PTE LTD",
+    )
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    job_id, match_id = await _seed_uncertain(repo, _make_moonshot_nr("USD"), bank_entry)
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job_id}/review/{match_id}", json={"action": "confirm"}
+    )
+    assert resp.status_code == 200
+
+    result = await db_session.execute(
+        select(VendorRuleORM).where(VendorRuleORM.field_name == "payee")
+    )
+    assert result.scalar_one_or_none() is None, "no payee rule when counterparty is same vendor after normalization"
+
+
+@pytest.mark.asyncio
+async def test_manual_match_saves_payee_rule_from_counterparty(api_client, db_session):
+    """manual_match also triggers payee correction learning from the chosen bank entry's counterparty."""
+    from app.models.database import VendorRuleORM
+    from app.models.schemas import BankEntry
+    from sqlalchemy import select
+
+    bank_entry = BankEntry(
+        value_date=date(2026, 5, 20),
+        amount=Decimal("44.20"),
+        currency="MYR",
+        description="INWARD TRANSFER",
+        counterparty="Moonshot Technologies Sdn Bhd",
+    )
+    repo = JobRepository(db_session, tenant_id=TEST_TENANT_ID)
+    nr = _make_moonshot_nr("USD")
+    job = await repo.create_job(base_currency="MYR", payment_proof_keys=[], bank_statement_key=None)
+    match = MatchResult(
+        normalised_record=nr,
+        bank_entry=None,
+        confidence=0.61,
+        status=MatchStatus.UNCERTAIN,
+    )
+    await repo.replace_matches(job.id, [match])
+    rows = await repo.list_matches(job.id)
+    report = ReconciliationReport(
+        job_id=UUID(str(job.id)),
+        summary=ReconciliationSummary(
+            total_records=1, matched_count=0, uncertain_count=1, unmatched_count=0,
+            total_value_myr=nr.amount_myr_at_settlement_rate,
+            matched_value_myr=Decimal("0"), total_variance_myr=Decimal("0"),
+            processing_seconds=1.0,
+        ),
+        matches=[match],
+        bank_entries=[bank_entry],
+        generated_at=datetime.utcnow(),
+    )
+    await repo.save_report(job.id, report.model_dump(mode="json"))
+
+    resp = await api_client.post(
+        f"/api/v1/jobs/{job.id}/review/{rows[0].id}",
+        json={"action": "manual_match", "bank_entry_id": str(bank_entry.id)},
+    )
+    assert resp.status_code == 200
+
+    result = await db_session.execute(
+        select(VendorRuleORM).where(
+            VendorRuleORM.field_name == "payee",
+            VendorRuleORM.corrected_value == "Moonshot Technologies Sdn Bhd",
+        )
+    )
+    assert result.scalar_one_or_none() is not None, "manual_match must learn payee from bank counterparty"

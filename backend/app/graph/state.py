@@ -56,6 +56,9 @@ class ReconciliationState(BaseModel):
     # Bookkeeping
     agents_completed: list[str] = Field(default_factory=list)
     audit_log: list[AuditLogEntry] = Field(default_factory=list)
+    # (payee_pattern, field_name) pairs for each vendor rule applied during ingestion.
+    # Pipeline runner increments applied_count in DB after the pipeline completes.
+    applied_vendor_rules: list[tuple[str, str]] = Field(default_factory=list)
     error: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None

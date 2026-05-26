@@ -238,6 +238,17 @@ async def execute_job(job_id: UUID | str) -> None:
             tenant_id=tenant_id,
             vendor_rules=vendor_rules,
         )
+
+        if state.applied_vendor_rules and tenant_id:
+            async with session_scope() as session:
+                rules_repo = VendorRulesRepository(session, tenant_id=tenant_id)
+                for payee_pattern, field_name in state.applied_vendor_rules:
+                    await rules_repo.increment_applied(payee_pattern, field_name)
+            logger.info(
+                "pipeline.vendor_rules_applied",
+                job_id=job_id_str,
+                count=len(state.applied_vendor_rules),
+            )
     except JobCancelledError:
         logger.info("pipeline.cancelled", job_id=job_id_str)
         await _emit(

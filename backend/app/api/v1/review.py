@@ -194,31 +194,57 @@ async def _save_vendor_correction(
 ) -> list[tuple[str, str]]:
     """Detect field discrepancies and persist vendor rules for future jobs.
 
+    Learns from:
+    - Currency embedded in bank entry description or counterparty text
+    - Payee canonical name from bank entry counterparty field
+
     Returns list of (field_name, corrected_value) for each rule saved.
     """
     saved: list[tuple[str, str]] = []
     if not isinstance(payment, PaymentRecord):
         return saved
 
-    detected = _detect_currency_from_description(bank_entry.description, payment.amount_original)
-    if detected and detected != payment.currency:
+    rules = VendorRulesRepository(session, tenant_id=tenant_id)
+
+    # --- Currency: check description first, then counterparty ---
+    detected_currency = _detect_currency_from_description(
+        bank_entry.description, payment.amount_original
+    ) or _detect_currency_from_description(
+        bank_entry.counterparty or "", payment.amount_original
+    )
+    if detected_currency and detected_currency != payment.currency:
         try:
-            rules = VendorRulesRepository(session, tenant_id=tenant_id)
             await rules.upsert_rule(
                 payee_pattern=payment.payee,
                 field_name="currency",
-                corrected_value=detected,
+                corrected_value=detected_currency,
                 original_value=payment.currency,
                 source_job_id=job_id,
                 source_note=note,
             )
-            saved.append(("currency", detected))
+            saved.append(("currency", detected_currency))
         except Exception:
-            logger.exception(
-                "vendor_rule.save_failed",
-                payee=payment.payee,
-                field="currency",
+            logger.exception("vendor_rule.save_failed", payee=payment.payee, field="currency")
+
+    # --- Payee: bank counterparty names the vendor differently from what was extracted ---
+    # When the bank records a different name for the counterparty (e.g. "Moonshot Technologies"
+    # vs the extracted "MOONSHOT AI PTE. LTD."), learning the canonical form improves future
+    # matching scores for this vendor.
+    counterparty = (bank_entry.counterparty or "").strip()
+    if counterparty and normalize_payee(counterparty) != normalize_payee(payment.payee):
+        try:
+            await rules.upsert_rule(
+                payee_pattern=payment.payee,
+                field_name="payee",
+                corrected_value=counterparty,
+                original_value=payment.payee,
+                source_job_id=job_id,
+                source_note=note,
             )
+            saved.append(("payee", counterparty))
+        except Exception:
+            logger.exception("vendor_rule.save_failed", payee=payment.payee, field="payee")
+
     return saved
 
 

@@ -65,15 +65,17 @@ async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None
                 logger.error("ingestion.extract.failed", filename=doc.filename, error=str(result))
                 ctx.state.audit_log.append(_fail_audit(ctx.job_id, doc, result))
             else:
-                records.append(result)
-                ctx.state.audit_log.append(_extract_audit(ctx.job_id, doc, result, llm.mode))
+                record, applied = result
+                records.append(record)
+                ctx.state.applied_vendor_rules.extend(applied)
+                ctx.state.audit_log.append(_extract_audit(ctx.job_id, doc, record, llm.mode))
 
     ctx.state.payment_records = records
     ctx.state.agents_completed.append("ingestion")
     logger.info("ingestion.complete", count=len(records), parallel=True)
 
 
-def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService, vendor_index: dict[str, list[dict]] | None = None) -> PaymentRecord:
+def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService, vendor_index: dict[str, list[dict]] | None = None) -> tuple[PaymentRecord, list[tuple[str, str]]]:
     data = doc.bytes_data if doc.bytes_data is not None else ctx.storage.get_object(doc.storage_key)
     fmt = detect_source_format(doc.filename, doc.content_type)
     settings = ctx.settings
@@ -114,7 +116,7 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
     except Exception as exc:
         raise ExtractionError(f"LLM extraction failed for {doc.filename}: {exc}") from exc
 
-    payload = _apply_vendor_rules(payload, vendor_index or {})
+    payload, applied = _apply_vendor_rules(payload, vendor_index or {})
 
     return PaymentRecord(
         payer=payload["payer"],
@@ -132,18 +134,23 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
         amount_charged_local=payload.get("amount_charged_local"),
         local_currency=payload.get("local_currency"),
         card_fx_rate=payload.get("card_fx_rate"),
-    )
+    ), applied
 
 
-def _apply_vendor_rules(payload: dict, vendor_index: dict[str, list[dict]]) -> dict:
-    """Override LLM-extracted fields with stored vendor corrections."""
+def _apply_vendor_rules(payload: dict, vendor_index: dict[str, list[dict]]) -> tuple[dict, list[tuple[str, str]]]:
+    """Override LLM-extracted fields with stored vendor corrections.
+
+    Returns (modified_payload, applied) where applied is a list of
+    (payee_pattern, field_name) for each rule that changed a field value.
+    """
+    applied_rules: list[tuple[str, str]] = []
     if not vendor_index:
-        return payload
+        return payload, applied_rules
     payee_normalized = normalize_payee(payload.get("payee", ""))
     if not payee_normalized:
-        return payload
+        return payload, applied_rules
 
-    applied = False
+    modified = False
     for pattern, rules in vendor_index.items():
         if not pattern:
             continue
@@ -153,20 +160,21 @@ def _apply_vendor_rules(payload: dict, vendor_index: dict[str, list[dict]]) -> d
                 field = rule["field_name"]
                 corrected = rule["corrected_value"]
                 if payload.get(field) != corrected:
-                    if not applied:
+                    if not modified:
                         payload = dict(payload)
-                        applied = True
+                        modified = True
                     payload[field] = corrected
                     fc = dict(payload.get("field_confidences") or {})
                     fc[field] = 0.90
                     payload["field_confidences"] = fc
+                    applied_rules.append((pattern, field))
                     logger.info(
                         "vendor_rule.applied",
                         payee=payload.get("payee"),
                         field=field,
                         corrected=corrected,
                     )
-    return payload
+    return payload, applied_rules
 
 
 def _extract_audit(job_id, doc: DocumentInput, record: PaymentRecord, mode: str):
