@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
-import time
 from concurrent.futures import ThreadPoolExecutor
 
 from langsmith import traceable
@@ -77,13 +75,6 @@ async def run_ingestion_stage(ctx: ReconciliationContext, llm: LLMService | None
     logger.info("ingestion.complete", count=len(records), parallel=True)
 
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    """Return True for HTTP 429 / RateLimit errors from the Anthropic SDK."""
-    if hasattr(exc, "status_code") and exc.status_code == 429:
-        return True
-    return "ratelimit" in type(exc).__name__.lower() or "rate_limit" in type(exc).__name__.lower()
-
-
 def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService, vendor_index: dict[str, list[dict]] | None = None) -> tuple[PaymentRecord, list[tuple[str, str]]]:
     data = doc.bytes_data if doc.bytes_data is not None else ctx.storage.get_object(doc.storage_key)
     fmt = detect_source_format(doc.filename, doc.content_type)
@@ -115,32 +106,15 @@ def _extract_one(doc: DocumentInput, ctx: ReconciliationContext, llm: LLMService
             except Exception:
                 bytes_for_llm = data
 
-    max_retries = settings.ingestion_max_retries
-    last_exc: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            payload = llm.extract_payment_record(
-                document_bytes=bytes_for_llm,
-                filename=doc.filename,
-                source_format=fmt,
-                text_hint=text_hint,
-            )
-            break
-        except Exception as exc:
-            last_exc = exc
-            if _is_rate_limit_error(exc) and attempt < max_retries:
-                delay = 2 ** attempt + random.uniform(0, 1)
-                logger.warning(
-                    "ingestion.rate_limit.retry",
-                    filename=doc.filename,
-                    attempt=attempt + 1,
-                    delay=round(delay, 2),
-                )
-                time.sleep(delay)
-            else:
-                raise ExtractionError(f"LLM extraction failed for {doc.filename}: {exc}") from exc
-    else:
-        raise ExtractionError(f"LLM extraction failed for {doc.filename} after {max_retries} retries: {last_exc}") from last_exc
+    try:
+        payload = llm.extract_payment_record(
+            document_bytes=bytes_for_llm,
+            filename=doc.filename,
+            source_format=fmt,
+            text_hint=text_hint,
+        )
+    except Exception as exc:
+        raise ExtractionError(f"LLM extraction failed for {doc.filename}: {exc}") from exc
 
     payload, applied = _apply_vendor_rules(payload, vendor_index or {})
 

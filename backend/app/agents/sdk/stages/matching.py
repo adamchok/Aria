@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, InvalidOperation
 
 from langsmith import traceable
@@ -132,71 +133,49 @@ async def run_matching_stage(ctx: ReconciliationContext, llm: LLMService | None 
         used_entries.add(str(top_entry.id))
         pending_llm.append((orig_idx, nr, top_entry, top_score, scored))
 
-    # Phase 2: fire all LLM reasoning calls in parallel via run_in_executor.
+    # Phase 2: bounded parallel LLM reasoning (same ThreadPoolExecutor pattern as ingestion).
+    n_pending = len(pending_llm)
+    max_workers = min(n_pending, settings.matching_concurrency) if n_pending else 1
+    if n_pending:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            tasks = [
+                loop.run_in_executor(
+                    pool,
+                    _reason_one,
+                    orig_idx,
+                    nr,
+                    top_entry,
+                    top_score,
+                    scored,
+                    ctx,
+                    llm,
+                )
+                for orig_idx, nr, top_entry, top_score, scored in pending_llm
+            ]
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _reason(
-        orig_idx: int,
-        nr: NormalisedRecord,
-        top_entry: BankEntry | None,
-        top_score: CandidateScore | None,
-        scored: list,
-    ) -> None:
-        serialised_nr = _serialise_normalised(nr)
-        candidate_data = _serialise_entry(top_entry) if top_entry else None
-        scores_data = top_score.model_dump() if top_score else {"composite": 0.0}
-
-        _s_nr = serialised_nr
-        _cand = candidate_data
-        _sc = scores_data
-        llm_response = await loop.run_in_executor(
-            None,
-            lambda: llm.reason_match(normalised=_s_nr, candidate=_cand, candidate_scores=_sc),
-        )
-
-        if top_entry is None:
-            results[orig_idx] = MatchResult(
-                normalised_record=nr,
-                bank_entry=None,
-                candidate_scores=[],
-                confidence=0.0,
-                status=MatchStatus.UNMATCHED,
-                amount_variance_myr=Decimal("0"),
-                variance_explanation=llm_response.get("variance_explanation", ""),
-                reasoning_chain=llm_response.get("reasoning_chain", ""),
-            )
-            return
-
-        status_str = llm_response.get("status", "UNCERTAIN")
-        status = (
-            MatchStatus(status_str)
-            if status_str in MatchStatus.__members__
-            else MatchStatus.UNCERTAIN
-        )
-        confidence = max(0.0, min(1.0, float(llm_response.get("confidence", top_score.composite))))
-
-        if confidence >= settings.match_confidence_threshold:
-            status = MatchStatus.MATCHED
-        elif confidence >= settings.match_review_floor:
-            status = MatchStatus.UNCERTAIN
-        else:
-            status = MatchStatus.UNMATCHED
-
-        variance = (abs(top_entry.amount) - nr.amount_myr_at_settlement_rate).quantize(Decimal("0.01"))
-        results[orig_idx] = MatchResult(
-            normalised_record=nr,
-            bank_entry=top_entry if status != MatchStatus.UNMATCHED else None,
-            candidate_scores=[s for _, s in scored[:5]],
-            confidence=confidence,
-            status=status,
-            amount_variance_myr=variance,
-            variance_explanation=llm_response.get("variance_explanation", ""),
-            reasoning_chain=llm_response.get("reasoning_chain", ""),
-        )
-
-    await asyncio.gather(*[
-        _reason(orig_idx, nr, top_entry, top_score, scored)
-        for orig_idx, nr, top_entry, top_score, scored in pending_llm
-    ])
+        for (orig_idx, nr, top_entry, top_score, scored), outcome in zip(pending_llm, outcomes):
+            if isinstance(outcome, Exception):
+                logger.error(
+                    "matching.reason.failed",
+                    index=orig_idx,
+                    payer=nr.payment.payer,
+                    error=str(outcome),
+                )
+                results[orig_idx] = MatchResult(
+                    normalised_record=nr,
+                    bank_entry=None,
+                    candidate_scores=[],
+                    confidence=0.0,
+                    status=MatchStatus.UNMATCHED,
+                    amount_variance_myr=Decimal("0"),
+                    variance_explanation=f"Match reasoning failed: {outcome}",
+                    reasoning_chain=str(outcome),
+                )
+                if top_entry is not None:
+                    used_entries.discard(str(top_entry.id))
+            else:
+                results[orig_idx] = outcome
 
     final_results: list[MatchResult] = results  # type: ignore[assignment]
     final_results = _detect_netting(final_results, statement, used_entries)
@@ -445,6 +424,68 @@ def _party_match_score(nr: NormalisedRecord, entry: BankEntry) -> float:
             best = max(best, fuzz.partial_ratio(party.upper(), target.upper()) / 100.0)
             best = max(best, similarity(party, target))
     return best
+
+
+def _reason_one(
+    _orig_idx: int,
+    nr: NormalisedRecord,
+    top_entry: BankEntry | None,
+    top_score: CandidateScore | None,
+    scored: list[tuple[BankEntry, CandidateScore]],
+    ctx: ReconciliationContext,
+    llm: LLMService,
+) -> MatchResult:
+    """Sync worker for one match LLM call (runs inside ThreadPoolExecutor)."""
+    settings = ctx.settings
+    serialised_nr = _serialise_normalised(nr)
+    candidate_data = _serialise_entry(top_entry) if top_entry else None
+    scores_data = top_score.model_dump() if top_score else {"composite": 0.0}
+
+    llm_response = llm.reason_match(
+        normalised=serialised_nr,
+        candidate=candidate_data,
+        candidate_scores=scores_data,
+    )
+
+    if top_entry is None:
+        return MatchResult(
+            normalised_record=nr,
+            bank_entry=None,
+            candidate_scores=[],
+            confidence=0.0,
+            status=MatchStatus.UNMATCHED,
+            amount_variance_myr=Decimal("0"),
+            variance_explanation=llm_response.get("variance_explanation", ""),
+            reasoning_chain=llm_response.get("reasoning_chain", ""),
+        )
+
+    status_str = llm_response.get("status", "UNCERTAIN")
+    status = (
+        MatchStatus(status_str)
+        if status_str in MatchStatus.__members__
+        else MatchStatus.UNCERTAIN
+    )
+    composite = top_score.composite if top_score else 0.0
+    confidence = max(0.0, min(1.0, float(llm_response.get("confidence", composite))))
+
+    if confidence >= settings.match_confidence_threshold:
+        status = MatchStatus.MATCHED
+    elif confidence >= settings.match_review_floor:
+        status = MatchStatus.UNCERTAIN
+    else:
+        status = MatchStatus.UNMATCHED
+
+    variance = (abs(top_entry.amount) - nr.amount_myr_at_settlement_rate).quantize(Decimal("0.01"))
+    return MatchResult(
+        normalised_record=nr,
+        bank_entry=top_entry if status != MatchStatus.UNMATCHED else None,
+        candidate_scores=[s for _, s in scored[:5]],
+        confidence=confidence,
+        status=status,
+        amount_variance_myr=variance,
+        variance_explanation=llm_response.get("variance_explanation", ""),
+        reasoning_chain=llm_response.get("reasoning_chain", ""),
+    )
 
 
 def _serialise_normalised(nr: NormalisedRecord) -> dict:

@@ -7,6 +7,7 @@ import json
 import re
 from typing import Any
 
+from app.agents.sdk.llm_retry import call_with_rate_limit_retry, is_rate_limit_error
 from app.agents.sdk.mock_responses import (
     mock_bank_statement,
     mock_extraction,
@@ -91,6 +92,14 @@ class LLMService:
             self._anthropic = client
         return self._anthropic
 
+    def _create_message(self, *, log_event: str = "llm.rate_limit.retry", **kwargs: Any) -> Any:
+        client = self._get_anthropic()
+        return call_with_rate_limit_retry(
+            lambda: client.messages.create(**kwargs),
+            settings=self._settings,
+            log_event=log_event,
+        )
+
     def extract_payment_record(
         self,
         *,
@@ -142,9 +151,9 @@ class LLMService:
                 }
             )
 
-        client = self._get_anthropic()
         try:
-            resp = client.messages.create(
+            resp = self._create_message(
+                log_event="ingestion.rate_limit.retry",
                 model=model,
                 max_tokens=2048,
                 system=[
@@ -175,7 +184,6 @@ class LLMService:
                 text_hint=text_hint, filename=filename, base_currency=base_currency
             )
 
-        client = self._get_anthropic()
         if pdf_bytes is not None:
             content: list[dict[str, Any]] = [
                 {
@@ -208,7 +216,8 @@ class LLMService:
             model = self._settings.haiku_model
 
         try:
-            resp = client.messages.create(
+            resp = self._create_message(
+                log_event="bank_statement.rate_limit.retry",
                 model=model,
                 max_tokens=4096,
                 messages=[{"role": "user", "content": content}],
@@ -231,8 +240,6 @@ class LLMService:
 
         from app.agents.sdk.prompts.matching import MATCHING_INSTRUCTIONS
 
-        # Fix C: borderline (0.45-0.65) records go to human review regardless of
-        # model — the Opus second-call added latency without changing the outcome.
         return self._reason_match_with_model(
             self._settings.sonnet_model,
             instructions=MATCHING_INSTRUCTIONS,
@@ -255,13 +262,12 @@ class LLMService:
             candidate=json.dumps(candidate, default=str) if candidate else "null",
             scores=json.dumps(candidate_scores, default=str),
         )
-        client = self._get_anthropic()
         try:
-            resp = client.messages.create(
+            resp = self._create_message(
+                log_event="matching.rate_limit.retry",
                 model=model,
-                max_tokens=8000,
+                max_tokens=2048,
                 system=instructions,
-                thinking={"type": "adaptive"},
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:
@@ -279,15 +285,18 @@ class LLMService:
             summary=json.dumps(summary, default=str),
             exceptions=json.dumps(exceptions, default=str)[:8_000],
         )
-        client = self._get_anthropic()
         try:
-            resp = client.messages.create(
+            resp = self._create_message(
+                log_event="report.rate_limit.retry",
                 model=self._settings.sonnet_model,
                 max_tokens=1024,
                 system=REPORT_INSTRUCTIONS,
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:
+            if is_rate_limit_error(exc):
+                logger.warning("report.rate_limit_fallback", error=str(exc))
+                return _sanitize_narrative(mock_report_narrative(summary, exceptions))
             raise LLMError(f"Anthropic report call failed: {exc}") from exc
         raw = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
         return _sanitize_narrative(raw)

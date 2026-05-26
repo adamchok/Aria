@@ -67,6 +67,14 @@ Copy `backend/.env.example` to `backend/.env` and fill in values as needed.
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for ingestion (PDF), matching, report, bank statement (PDF) |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for ingestion (Excel/CSV), bank statement (text/CSV) |
 | `OPUS_MODEL` | `claude-opus-4-7` | Model for ingestion (images/scans — vision) |
+| `INGESTION_CONCURRENCY` | `3` | Max parallel proof-extraction LLM calls (`ThreadPoolExecutor`) |
+| `INGESTION_MAX_RETRIES` | `3` | Legacy per-document retry count; live mode uses `LLM_MAX_RETRIES` in `LLMService` |
+| `MATCHING_CONCURRENCY` | `3` | Max parallel match-reasoning LLM calls (same executor pattern as ingestion) |
+| `LLM_MAX_RETRIES` | `5` | Retries on Anthropic HTTP 429 across all pipeline LLM calls |
+| `LLM_RETRY_BASE_SECONDS` | `2.0` | Initial backoff base for rate-limit retries |
+| `LLM_RETRY_TPM_BASE_SECONDS` | `30.0` | Longer backoff from the third retry onward (output TPM windows) |
+
+**Rate limits:** Anthropic enforces per-model output TPM (e.g. 8,000 output tokens/minute on Sonnet for lower tiers). If jobs fail at the report stage after a large matching burst, lower `INGESTION_CONCURRENCY` and `MATCHING_CONCURRENCY` (try `2`), or raise your org tier. After retries are exhausted on the report call only, ARIA falls back to a deterministic summary narrative so the job can still complete.
 
 ### Observability (LangSmith)
 
@@ -258,7 +266,7 @@ The root `.env` file is read by Docker Compose for `${VAR}` substitution. All ba
 
 | Category | Variables |
 | --- | --- |
-| LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `AGENTS_SDK_TRACING`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL` |
+| LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `AGENTS_SDK_TRACING`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `INGESTION_CONCURRENCY`, `MATCHING_CONCURRENCY`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS`, `LLM_RETRY_TPM_BASE_SECONDS` |
 | Observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` |
 | Auth | `ADMIN_API_KEY`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` |
 | Webhooks | `WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`, `WEBHOOK_SECRET_ENCRYPTION_KEY` |

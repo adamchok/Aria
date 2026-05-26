@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     ingestion_concurrency: int = 3
     # Per-document retries on rate-limit (429) before failing the document.
     ingestion_max_retries: int = 3
+    # Max concurrent LLM calls during match reasoning. Keep ≤5 to avoid 429s.
+    matching_concurrency: int = 3
+    # Central Anthropic 429 retries (all LLMService messages.create calls).
+    llm_max_retries: int = 5
+    llm_retry_base_seconds: float = 2.0
+    llm_retry_tpm_base_seconds: float = 30.0
 
     # Webhooks
     webhook_max_retries: int = 3
