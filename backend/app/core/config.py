@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     batch_size_threshold: int = 50
     batch_time_window_minutes: int = 15
     celery_beat_interval_minutes: int = 2
+    # Max concurrent LLM calls during proof extraction. Keep ≤5 to avoid 429s.
+    ingestion_concurrency: int = 3
+    # Per-document retries on rate-limit (429) before failing the document.
+    ingestion_max_retries: int = 3
 
     # Webhooks
     webhook_max_retries: int = 3
