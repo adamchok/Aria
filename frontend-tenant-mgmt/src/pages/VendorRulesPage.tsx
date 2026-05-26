@@ -107,13 +107,13 @@ function EditRuleModal({
             <label htmlFor="edit-source-note" className="mb-1.5 block text-xs font-medium text-slate-600">
               Source note
             </label>
-            <input
+            <textarea
               id="edit-source-note"
-              type="text"
+              rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Optional note…"
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              className="w-full resize-y rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
             />
           </div>
         </div>
