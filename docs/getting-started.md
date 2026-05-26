@@ -88,7 +88,7 @@ LLM_MODE=live
 
 The legacy `ADMIN_API_KEY` (default `aria-dev-admin`) still works for programmatic admin endpoints (`/api/v1/tenants`) via the `X-API-Key` header. Change it in any non-local environment.
 
-Skip Anthropic configuration entirely to stay in mock mode — the full pipeline runs with deterministic fixture responses. **UI and API access always require JWT or a tenant API key.**
+Skip Anthropic configuration entirely to stay in mock mode — the full pipeline runs with deterministic fixture responses. **API access requires a tenant API key or JWT** (Admin/Tenant mgmt). NovaPay uses **`X-API-Key` only** — not JWT.
 
 ### Step 3: Start all services
 

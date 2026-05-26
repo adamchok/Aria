@@ -18,7 +18,7 @@ nav_order: 4
 
 ## System overview
 
-ARIA is an **AI-first reconciliation platform**. The OpenAI Agents SDK orchestrator runs a deterministic multi-stage pipeline with Anthropic Claude specialists; multiple SME frontends connect through an authenticated, multi-tenant API. Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
+ARIA is an **AI-first reconciliation platform**. The OpenAI Agents SDK orchestrator runs a deterministic multi-stage pipeline with Anthropic Claude specialists; **Admin** and **Tenant mgmt** connect with JWT Bearer tokens, while **NovaPay** and external integrators use tenant **API keys** (`X-API-Key`). Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
 
 ```mermaid
 flowchart TB
@@ -52,7 +52,8 @@ flowchart TB
     RD[(Redis)]
     S3[(MinIO S3)]
   end
-  NOVA & ADMIN & MGMT -->|JWT Bearer| AUTH
+  NOVA -->|X-API-Key| AUTH
+  ADMIN & MGMT -->|JWT Bearer| AUTH
   SME -->|X-API-Key| AUTH
   AUTH --> JOBS & INGEST & SSE & WH & AN & BA
   INGEST -->|buffer| PG
@@ -245,8 +246,8 @@ Three role-scoped React apps plus **NovaPay**, a reference external client, shar
 | Framework | React 18 + TypeScript (strict) |
 | Build | Vite |
 | Styling | Tailwind CSS |
-| Auth | JWT via `auth-store` in admin/tenant-mgmt; NovaPay uses demo UI login + `VITE_API_KEY` for API calls |
-| Server state | TanStack Query + SSE (`useJobStream` in NovaPay) |
+| Auth | JWT Bearer in admin/tenant-mgmt (`auth-store`); NovaPay sends `X-API-Key` from `VITE_API_KEY` (demo `/login` is UI-only) |
+| Server state | TanStack Query + SSE (`useJobStream` in NovaPay; `?api_key=` on EventSource) |
 | UI state | Zustand (`auth-store`, `upload-store` in NovaPay only) |
 | Tables | AG Grid Community |
 | Routing | React Router v6 |
@@ -268,7 +269,7 @@ Three role-scoped React apps plus **NovaPay**, a reference external client, shar
 
 ## Security considerations
 
-- **Authentication** — `AuthMiddleware` accepts JWT Bearer tokens (browser apps) or `X-API-Key` (programmatic). API keys validated via SHA-256 hash; raw keys never stored. SSE streams accept `?access_token=` (JWT) or `?api_key=` because `EventSource` cannot send headers.
+- **Authentication** — `AuthMiddleware` accepts **JWT Bearer** tokens (Admin and Tenant mgmt UIs) or **`X-API-Key`** (NovaPay reference client, external integrators, and programmatic access). API keys validated via SHA-256 hash; raw keys never stored. SSE streams accept `?access_token=` (JWT) or `?api_key=` because `EventSource` cannot send headers — NovaPay uses `?api_key=`.
 - **Roles** — `admin` (platform), `tenant_user` (scoped to one tenant). Admin may impersonate a tenant via `X-Tenant-ID` header.
 - **Multi-tenancy** — row-level isolation: all queries filter by `tenant_id`; MinIO object paths prefixed with `{tenant_id}/`
 - **Webhook signing** — HMAC-SHA256 (Stripe model); 5-minute timestamp tolerance prevents replay

@@ -321,8 +321,14 @@ curl -H "Authorization: Bearer YOUR_JWT" -OJ \
 
 All `/api/v1` endpoints (except `/health`, `/docs`, `/redoc`, `/openapi.json`, `/api/v1/auth/login`) accept **either**:
 
-1. **JWT** — `Authorization: Bearer <token>` from `POST /api/v1/auth/login`
-2. **API key** (legacy/programmatic) — `X-API-Key: aria_…`
+1. **JWT** — `Authorization: Bearer <token>` from `POST /api/v1/auth/login` (Admin and Tenant mgmt UIs)
+2. **API key** — `X-API-Key: aria_…` (NovaPay reference client, external integrators, scripts)
+
+| Client | API authentication | UI sign-in |
+| --- | --- | --- |
+| **NovaPay** (`:5173`) | `X-API-Key` via `VITE_API_KEY` | Demo credentials only (`finance@novapay.demo` / `novapay2026`) — no backend auth call |
+| **Admin** (`:5174`) | JWT Bearer | `POST /api/v1/auth/login` (platform admin) |
+| **Tenant mgmt** (`:5175`) | JWT Bearer | `POST /api/v1/auth/login` (tenant user) |
 
 ```bash
 # Login

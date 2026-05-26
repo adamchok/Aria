@@ -102,12 +102,12 @@ Every agent decision is logged: input snapshot, reasoning chain, confidence, out
 ## Architecture
 
 ```text
-NovaPay (reference client) ──┐
-Admin / Tenant mgmt UIs ──────┼──► FastAPI (JWT + API key) ──► Celery ──► Agents SDK Pipeline
-                               │         │                              │
-                               │    PostgreSQL                    Claude LLMs
-                               │    Redis · MinIO                 FX rate APIs
-                               └── SSE + Webhooks ◄─────────────────────┘
+NovaPay (X-API-Key) ─────────┐
+Admin / Tenant mgmt (JWT) ───┼──► FastAPI ──► Celery ──► Agents SDK Pipeline
+External SMEs (X-API-Key) ───┘         │                              │
+                                  PostgreSQL                    Claude LLMs
+                                  Redis · MinIO                 FX rate APIs
+                               SSE + Webhooks ◄─────────────────────┘
 ```
 
 | Layer | Stack |
@@ -142,7 +142,8 @@ docker compose up --build
 1. Set `DEFAULT_ADMIN_PASSWORD` in `.env` before starting the API.
 2. **Admin UI** (:5174) — sign in with `DEFAULT_ADMIN_EMAIL` / your password.
 3. Create a **tenant** and **tenant user**.
-4. **NovaPay** (:5173) or **Tenant mgmt** (:5175) — sign in with tenant credentials.
+4. **Tenant mgmt** (:5175) — sign in with the tenant user you created in Admin.
+5. **NovaPay** (:5173) — set `VITE_API_KEY` in repo-root `.env`, rebuild NovaPay, then sign in with demo UI credentials (`finance@novapay.demo` / `novapay2026`). API calls use the key, not JWT.
 
 Programmatic access: create an API key in Tenant mgmt → `/keys`, then call endpoints with `X-API-Key`.
 

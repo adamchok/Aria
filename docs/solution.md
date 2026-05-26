@@ -52,7 +52,7 @@ flowchart LR
 | **Tenant mgmt** (`frontend-tenant-mgmt`) | 5175 | Tenant administrators | Tenant user JWT |
 
 {: .note }
-> **NovaPay is not ARIA.** It lives in this repository as a **reference integration** — a demo finance portal that calls the same REST endpoints a real ERP, treasury tool, or payment ops system would use. Production integrators can ignore NovaPay entirely and build against the API with `X-API-Key` or JWT auth.
+> **NovaPay is not ARIA.** It lives in this repository as a **reference integration** — a demo finance portal that calls the same REST endpoints a real ERP, treasury tool, or payment ops system would use. NovaPay authenticates to the API with **`X-API-Key` only** (not JWT). Admin and Tenant mgmt use JWT Bearer tokens.
 
 #### NovaPay — reference external client (`:5173`)
 
@@ -112,7 +112,7 @@ Demo this flow in **NovaPay** to show how an external system would drive reconci
 
 Demo this flow from **NovaPay** (`:5173`) — the reference client simulates an external ERP pushing data into ARIA:
 
-1. **Authenticate** — sign in to NovaPay, or obtain a tenant API key from Tenant mgmt → Keys (`/keys`)
+1. **Authenticate** — configure `VITE_API_KEY` (create key in Tenant mgmt → `/keys`); sign in to NovaPay with demo UI credentials (local gate only)
 2. **Ingest** — NovaPay → **Simulate ingest** (`/ingest`) calls `POST /api/v1/ingest/transactions` with base64-encoded proofs and corridor metadata; or call the API directly with the key
 3. **Batch** — buffered items auto-batch via Celery Beat, or flush manually from NovaPay → **Queue** (`/queue`)
 4. **Receive** — register a webhook in Tenant mgmt (`POST /api/v1/webhooks`); receive HMAC-signed payloads for `job.created`, `job.stage_completed` (with `stage` field), `job.completed`, `job.review_required`, or `job.failed`
