@@ -12,10 +12,10 @@ x-backend-environment: &backend-environment
   S3_REGION: ${S3_REGION:-us-east-1}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   LLM_MODE: ${LLM_MODE:-mock}
-  AGENTS_SDK_TRACING: ${AGENTS_SDK_TRACING:-false}
   LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
   LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-aria}
   LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+  LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
   SONNET_MODEL: ${SONNET_MODEL:-claude-sonnet-4-6}
   HAIKU_MODEL: ${HAIKU_MODEL:-claude-haiku-4-5-20251001}
   OPUS_MODEL: ${OPUS_MODEL:-claude-opus-4-7}
