@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
@@ -25,21 +25,6 @@ function PencilIcon() {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,68 +47,91 @@ function FieldBadge({ field }: { field: string }) {
   );
 }
 
-// ─── Edit row ─────────────────────────────────────────────────────────────────
+// ─── Edit modal ───────────────────────────────────────────────────────────────
 
-function EditRow({
+function EditRuleModal({
   rule,
   onSave,
-  onCancel,
+  onClose,
   isPending,
 }: {
   rule: VendorRule;
   onSave: (correctedValue: string, note: string) => void;
-  onCancel: () => void;
+  onClose: () => void;
   isPending: boolean;
 }) {
   const [correctedValue, setCorrectedValue] = useState(rule.corrected_value);
   const [note, setNote] = useState(rule.source_note ?? '');
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   return (
-    <tr className="bg-violet-50/50">
-      <td className="px-5 py-3 font-mono text-xs text-slate-700">{rule.payee_pattern}</td>
-      <td className="px-5 py-3"><FieldBadge field={rule.field_name} /></td>
-      <td className="px-5 py-3">
-        <input
-          type="text"
-          value={correctedValue}
-          onChange={(e) => setCorrectedValue(e.target.value)}
-          className="w-full rounded-md border border-violet-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-          aria-label="Corrected value"
-        />
-      </td>
-      <td className="px-5 py-3 text-xs text-slate-400">{rule.original_value ?? '—'}</td>
-      <td className="px-5 py-3">
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Optional note…"
-          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-          aria-label="Source note"
-        />
-      </td>
-      <td className="px-5 py-3 text-xs text-slate-400">{rule.applied_count}</td>
-      <td className="px-5 py-3 text-xs text-slate-400">{formatDate(rule.updated_at)}</td>
-      <td className="px-5 py-3">
-        <div className="flex items-center justify-end gap-2">
-          <button
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-rule-title"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-4">
+          <h2 id="edit-rule-title" className="text-base font-semibold text-slate-900">
+            Edit rule for <span className="font-mono text-sm">{rule.payee_pattern}</span>
+          </h2>
+          <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+            <FieldBadge field={rule.field_name} />
+            {rule.original_value && (
+              <span>Original: <span className="font-medium text-slate-700">{rule.original_value}</span></span>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="edit-corrected-value" className="mb-1.5 block text-xs font-medium text-slate-600">
+              Corrected value
+            </label>
+            <input
+              id="edit-corrected-value"
+              type="text"
+              value={correctedValue}
+              onChange={(e) => setCorrectedValue(e.target.value)}
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-source-note" className="mb-1.5 block text-xs font-medium text-slate-600">
+              Source note
+            </label>
+            <input
+              id="edit-source-note"
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note…"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button
             onClick={() => onSave(correctedValue.trim(), note.trim())}
             disabled={isPending || !correctedValue.trim()}
-            className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-            aria-label="Save"
+            loading={isPending}
           >
-            <CheckIcon /> Save
-          </button>
-          <button
-            onClick={onCancel}
-            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-            aria-label="Cancel"
-          >
-            <XIcon /> Cancel
-          </button>
+            Save
+          </Button>
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -135,7 +143,7 @@ function RuleRow({
   onDeleteClick,
 }: {
   rule: VendorRule;
-  onEdit: () => void;
+  onEdit: (rule: VendorRule) => void;
   onDeleteClick: (id: string, pattern: string) => void;
 }) {
   return (
@@ -152,7 +160,7 @@ function RuleRow({
       <td className="px-5 py-4">
         <div className="flex items-center justify-end gap-2">
           <button
-            onClick={onEdit}
+            onClick={() => onEdit(rule)}
             className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
             aria-label={`Edit rule for ${rule.payee_pattern}`}
           >
@@ -174,7 +182,7 @@ function RuleRow({
 
 export function VendorRulesPage() {
   const qc = useQueryClient();
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRule, setEditingRule] = useState<VendorRule | null>(null);
   const { pending: confirmPending, open: openConfirm, close: closeConfirm } = useConfirmDialog();
 
   const rulesQuery = useQuery({
@@ -186,7 +194,7 @@ export function VendorRulesPage() {
     mutationFn: ({ id, correctedValue, note }: { id: string; correctedValue: string; note: string }) =>
       api.updateVendorRule(id, { corrected_value: correctedValue, source_note: note || null }),
     onSuccess: () => {
-      setEditingId(null);
+      setEditingRule(null);
       void qc.invalidateQueries({ queryKey: ['vendor-rules'] });
     },
   });
@@ -298,26 +306,14 @@ export function VendorRulesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {rules.map((rule) =>
-                    editingId === rule.id ? (
-                      <EditRow
-                        key={rule.id}
-                        rule={rule}
-                        isPending={updateMutation.isPending}
-                        onSave={(correctedValue, note) =>
-                          updateMutation.mutate({ id: rule.id, correctedValue, note })
-                        }
-                        onCancel={() => setEditingId(null)}
-                      />
-                    ) : (
-                      <RuleRow
-                        key={rule.id}
-                        rule={rule}
-                        onEdit={() => setEditingId(rule.id)}
-                        onDeleteClick={handleDeleteClick}
-                      />
-                    ),
-                  )}
+                  {rules.map((rule) => (
+                    <RuleRow
+                      key={rule.id}
+                      rule={rule}
+                      onEdit={setEditingRule}
+                      onDeleteClick={handleDeleteClick}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -330,6 +326,17 @@ export function VendorRulesPage() {
           )}
         </CardContent>
       </Card>
+
+      {editingRule && (
+        <EditRuleModal
+          rule={editingRule}
+          isPending={updateMutation.isPending}
+          onSave={(correctedValue, note) =>
+            updateMutation.mutate({ id: editingRule.id, correctedValue, note })
+          }
+          onClose={() => setEditingRule(null)}
+        />
+      )}
 
       {confirmPending && (
         <ConfirmDialog

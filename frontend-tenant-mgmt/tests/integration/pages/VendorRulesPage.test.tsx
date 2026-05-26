@@ -30,12 +30,13 @@ describe('VendorRulesPage', () => {
     await waitFor(() => expect(screen.getByText('currency')).toBeInTheDocument());
   });
 
-  it('opens inline edit when Edit clicked', async () => {
+  it('opens edit modal when Edit clicked', async () => {
     renderWithProviders(<VendorRulesPage />);
     await waitFor(() => expect(screen.getByText('moonshot ai')).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: /edit rule for moonshot ai/i }));
 
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('Corrected value')).toHaveValue('USD');
     expect(screen.getByLabelText('Source note')).toHaveValue('Confirmed via review queue');
   });
