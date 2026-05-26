@@ -152,12 +152,16 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 
 ### Composite confidence score
 
-| Signal | Weight |
-| --- | --- |
-| Amount match | 0.40 |
-| Date proximity | 0.20 |
-| Reference similarity | 0.30 |
-| Payer name | 0.10 |
+Default weights for SWIFT / wire transfers:
+
+| Signal | Weight (wire) | Weight (card / POS) |
+| --- | --- | --- |
+| Amount match | 0.40 | 0.55 |
+| Date proximity | 0.20 | 0.25 |
+| Reference similarity | 0.30 | 0.05 |
+| Payer name | 0.10 | 0.15 |
+
+Card / POS rows (detected by `POS DEBIT/CREDIT` patterns in bank descriptions) shift weight onto amount and merchant name because banks assign internal codes, never invoice references.
 
 ### Three-stage matching
 
@@ -165,7 +169,7 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 2. **Amount filter** — within `[tolerance_low, tolerance_high]`
 3. **LLM reasoning** — semantic match on reference, payer, residual variance
 
-**Performance:** Phase 1 pre-scoring (`rapidfuzz` similarity) runs via `asyncio.gather` + `loop.run_in_executor` so all records score in parallel (rapidfuzz releases the GIL). Matching uses Sonnet throughout for LLM reasoning on pending records.
+**Performance:** Phase 1 pre-scoring (`rapidfuzz` similarity) runs via `asyncio.gather` + `loop.run_in_executor` so all records score in parallel (rapidfuzz releases the GIL). Records with composite ≥ **0.92** fast-match without an LLM call; only pending records below that threshold await Sonnet reasoning. Matching uses Sonnet throughout for LLM reasoning.
 
 ## Data flow
 

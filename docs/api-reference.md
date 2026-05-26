@@ -375,8 +375,8 @@ Legacy **admin API key** (`ADMIN_API_KEY`) still works for programmatic tenant m
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/users` | Create user (`admin` or `tenant_user`; `tenant_id` required for tenant users) |
-| `GET` | `/api/v1/users` | List users (optional `tenant_id`, `page`, `page_size` query params) |
-| `DELETE` | `/api/v1/users/{user_id}` | Deactivate user |
+| `GET` | `/api/v1/users` | List users (optional `tenant_id`; `page` default 1, `page_size` default 50, max 200) |
+| `DELETE` | `/api/v1/users/{user_id}` | Deactivate user (sets `is_active=false`; does not hard-delete) |
 
 ---
 
@@ -724,11 +724,15 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 | --- | --- | --- |
 | `GET` | `/api/v1/bank-accounts` | List accounts for authenticated tenant |
 | `GET` | `/api/v1/bank-accounts/{id}` | Account detail |
+| `PATCH` | `/api/v1/bank-accounts/{id}` | Edit account metadata (name, bank name, last4) |
 | `DELETE` | `/api/v1/bank-accounts/{id}` | Delete account |
 | `POST` | `/api/v1/bank-accounts/{id}/statements` | Upload statement (multipart) to account |
 | `GET` | `/api/v1/bank-accounts/{id}/statements` | List statements for account |
 | `DELETE` | `/api/v1/bank-accounts/{id}/statements/{statement_id}` | Delete statement and all its ledger entries |
 | `GET` | `/api/v1/bank-accounts/{id}/ledger` | Paginated ledger entries (`cleared` filter optional) |
+| `POST` | `/api/v1/bank-accounts/{id}/ledger` | Create a single ledger entry (creates a manual statement on first use) |
+| `POST` | `/api/v1/bank-accounts/{id}/ledger/bulk` | Bulk create ledger entries (max 500 per request) |
+| `GET` | `/api/v1/bank-accounts/{id}/ledger/export` | Excel export — 5 sheets (Cover, All, Cleared, Uncleared, FX Summary); supports `date_from`, `date_to`, `cleared` filters |
 | `PATCH` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Edit a pending ledger entry |
 | `DELETE` | `/api/v1/bank-accounts/{id}/ledger/{entry_id}` | Delete a pending ledger entry (409 if cleared) |
 
@@ -766,7 +770,7 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 | `POST` | `/api/v1/jobs/{job_id}/cancel` | Cancel a non-terminal job (`PENDING` through `REPORTING`, or `AWAITING_REVIEW`) |
 | `DELETE` | `/api/v1/jobs/{job_id}` | Delete a job and its stored artifacts |
 | `GET` | `/api/v1/schedules` | List reconciliation schedules for the tenant |
-| `POST` | `/api/v1/schedules` | Create a schedule (`run_time_utc`, `days_of_week`, `bank_account_id`, `base_currency`) |
+| `POST` | `/api/v1/schedules` | Create a schedule (`run_time_utc` `HH:MM`, `days_of_week` 0=Mon…6=Sun, `bank_account_id`, `base_currency`, `enabled`) |
 | `PUT` | `/api/v1/schedules/{id}` | Update a schedule |
 | `DELETE` | `/api/v1/schedules/{id}` | Delete a schedule |
 | `GET` | `/api/v1/analytics/performance` | Tenant AI performance metrics |

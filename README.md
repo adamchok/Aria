@@ -113,7 +113,7 @@ External SMEs (X-API-Key) ───┘         │                              
 | Layer | Stack |
 | --- | --- |
 | Backend | Python 3.11 · FastAPI · SQLAlchemy · Celery · OpenAI Agents SDK |
-| Agents | Claude Sonnet (extract, match, report) · Haiku (normalisation) · vision-first ingestion |
+| Agents | Claude Opus (image vision) · Sonnet (PDF extract, match, report, bank statement PDF) · Haiku (Excel/CSV extract, bank statement text) · FX service for normalisation (no LLM) |
 | Frontend | React 18 · TypeScript · Tailwind · TanStack Query · AG Grid (3 role-scoped apps) |
 | Infra | PostgreSQL · Redis · MinIO · Docker Compose |
 
@@ -210,4 +210,4 @@ ARIA is an **autonomous reconciliation platform**: external systems ingest conti
 
 ## License
 
-See repository license file. Developed for **AI Marathon 2026**.
+Developed for **AI Marathon 2026**. No open-source license has been applied yet — contact the repository owner for reuse permissions.
