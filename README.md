@@ -53,7 +53,7 @@ docker compose up --build frontend-novapay
 | 0 | Admin :5174 → Tenant mgmt :5175 | Bootstrap tenant + copy API key into `VITE_API_KEY` in `.env`; rebuild NovaPay (above) |
 | 1 | [NovaPay :5173](http://localhost:5173) | Sign in (`finance@novapay.demo` / `novapay2026` — demo UI only; API uses `X-API-Key`) |
 | 2 | `/upload` | Drop messy payment proofs + bank statement (or select a registered bank account ledger) |
-| 3 | `/jobs/{id}` | Live four-agent stepper — Ingestion → Normalisation → Matching → Report (SSE stream) |
+| 3 | `/jobs/{id}` | Live four-stage stepper — Ingestion (proofs + bank statement) → Normalisation → Matching → Report (SSE stream) |
 | 4 | `/jobs/{id}/results` | Summary cards, reconciliation grid, **variance explanation** for FX matches |
 | 5 | `/jobs/{id}/review` | Confirm an uncertain match (confidence 0.50–0.74) — side-by-side proof vs bank line |
 | 6 | Export | Download Excel — Summary, Matched, Exceptions, **Audit Log** |

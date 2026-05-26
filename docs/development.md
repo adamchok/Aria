@@ -169,7 +169,7 @@ See `CLAUDE.md` §6 for full conventions.
 
 Mock mode returns deterministic, schema-shaped responses from `backend/app/agents/sdk/mock_responses.py` via `LLMService`. The full pipeline runs identically — only the intelligence layer changes.
 
-Optional: `AGENTS_SDK_TRACING=true` enables OpenAI Agents SDK built-in tracing (see [Configuration]({{ '/configuration' | relative_url }})).
+Optional: `LANGSMITH_TRACING=true` enables LangSmith trace export (see [Configuration]({{ '/configuration' | relative_url }})).
 
 **Live vision notes:** Image proofs (PNG/JPG) are sent to Claude as multimodal input. PNGs are downscaled and re-encoded as JPEG before upload — MIME type is detected from bytes, not the filename. PDF payment proofs use extracted text, not vision.
 

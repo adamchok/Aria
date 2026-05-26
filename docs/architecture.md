@@ -18,7 +18,7 @@ nav_order: 4
 
 ## System overview
 
-ARIA is an **AI-first reconciliation platform**. The OpenAI Agents SDK orchestrator runs a deterministic multi-stage pipeline with Anthropic Claude specialists; **Admin** and **Tenant mgmt** connect with JWT Bearer tokens, while **NovaPay** and external integrators use tenant **API keys** (`X-API-Key`). Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
+ARIA is an **AI-first reconciliation platform**. A **deterministic Python pipeline** (`run_reconciliation`) runs five specialist stages backed by Anthropic Claude via `LLMService`; **Admin** and **Tenant mgmt** connect with JWT Bearer tokens, while **NovaPay** and external integrators use tenant **API keys** (`X-API-Key`). Transactions flow in continuously from external systems, are automatically batched and queued, and the AI engine reconciles them without manual intervention.
 
 ```mermaid
 flowchart TB
@@ -43,7 +43,7 @@ flowchart TB
     WH_TASK[Webhook Delivery]
   end
   subgraph intelligence [Intelligence — OpenAI Agents SDK]
-    LG[4-Agent Pipeline]
+    LG[5-Agent Pipeline]
     LLM[Claude Sonnet / Haiku]
     FX[FX + SWIFT tools]
   end
@@ -69,20 +69,27 @@ flowchart TB
 
 ## Agent pipeline
 
-A **ReconciliationOrchestrator** manager agent coordinates specialist stages with shared typed state (`ReconciliationState`). Orchestration is deterministic Python (confidence routing enforced in code); specialists call Anthropic via `LLMService` with RTCIOC-structured prompts.
+Five specialist agents run in a fixed order orchestrated by deterministic Python (`run_reconciliation` in `backend/app/agents/sdk/runner.py`). Payment-proof and bank-statement extraction both execute during the **ingestion stage**, so NovaPay’s job stepper shows **four progress stages** (Ingestion → Normalisation → Matching → Report) even though two LLM specialists run in the first stage.
+
+Specialist prompts follow the OpenAI Agents SDK pattern (`backend/app/agents/sdk/prompts/`); runtime orchestration does **not** call `build_orchestrator_agent()` — routing gates live in `routing.py` and `runner.py`.
 
 ```mermaid
 flowchart TD
-  ORCH[ReconciliationOrchestrator] --> IN[IngestionSpecialist]
-  ORCH --> BS[BankStatementSpecialist]
-  IN -->|confidence &lt; 0.5| ESC[Escalate extraction]
-  IN -->|confidence ≥ 0.5| NO[NormalisationStage\nFX service — no LLM]
-  BS --> NO
-  NO --> MA[MatchingSpecialist]
-  MA --> RE[ReportSpecialist]
-  RE --> END[COMPLETED or AWAITING_REVIEW]
-  END -->|uncertain items| HR[Human review queue]
-  HR --> COMP[COMPLETED]
+  START[run_reconciliation] --> ING[Ingestion stage]
+  ING --> IN[Payment proof extraction]
+  ING --> BS[Bank statement parse]
+  IN --> GATE{Avg extraction confidence ≥ 0.5?}
+  BS --> GATE
+  GATE -->|No| SKIP[Skip normalisation and matching]
+  GATE -->|Yes| NO[Normalisation]
+  NO --> MA[Matching]
+  SKIP --> RE[Report always runs]
+  MA --> RE
+  RE --> END{Any UNCERTAIN matches?}
+  END -->|Yes| AR[AWAITING_REVIEW]
+  END -->|No| COMP[COMPLETED]
+  AR --> HR[Human review queue]
+  HR --> COMP
 ```
 
 {::nomarkdown}
@@ -104,13 +111,14 @@ flowchart TD
 | From | To | Condition |
 | --- | --- | --- |
 | Ingestion | Normalisation | Records extracted; avg confidence ≥ 0.5 |
-| Ingestion | Human review queue | No records or avg confidence &lt; 0.5 |
+| Ingestion | Report (skip normalise/match) | No records or avg confidence &lt; 0.5 — report still generated; terminal status depends on match uncertainty, not extraction alone |
 | Normalisation | Matching | Normalised records exist |
 | Normalisation | Report | Nothing to match (empty report) |
 | Matching | Report | Always |
-| Report | END | Pipeline complete |
+| Report | `AWAITING_REVIEW` | One or more `UNCERTAIN` matches (0.5–0.74) |
+| Report | `COMPLETED` | No uncertain matches |
 
-Implementation: `backend/app/agents/sdk/runner.py`, `backend/app/agents/sdk/routing.py`, `backend/app/agents/sdk/orchestrator.py`.
+Implementation: `backend/app/agents/sdk/runner.py`, `backend/app/agents/sdk/routing.py`. (`orchestrator.py` is an SDK scaffold only — not invoked at runtime.)
 
 ### RTCIOC prompting
 
@@ -164,11 +172,14 @@ Default `FX_VARIANCE_BUFFER_PCT = 0.015` (1.5%). Matching also scores payee name
 | Step | Actor | Input | Output | Est. latency |
 | --- | --- | --- | --- | --- |
 | 1. Upload | User / API | Proofs + bank statement | Job ID, S3 keys | &lt; 1 s |
-| 2. Ingest | Agent 1 | Raw files | `List[PaymentRecord]` | 3–8 s / doc |
-| 3. Normalise | Agent 2 | Records + FX API | `List[NormalisedRecord]` | ~max(single FX call); all records run concurrently after cache pre-warm |
-| 4. Match | Agent 3 | Normalised + statement | `List[MatchResult]` | 2–5 s / match |
-| 5. Report | Agent 4 | All match results | `ReconciliationReport` | 3–5 s |
-| 6. Review | Human | UNCERTAIN items | Confirmed / rejected matches | Async; results re-hydrated from DB |
+| 2. Ingest proofs | Agent 1 — Ingestion | Raw payment files | `List[PaymentRecord]` | 3–8 s / doc |
+| 3. Parse statement | Agent 2 — Bank statement | Bank statement file | `BankStatement` / `BankEntry[]` | 2–6 s (PDF LLM-first) |
+| 4. Normalise | Agent 3 — Normalisation | Records + FX API | `List[NormalisedRecord]` | ~max(single FX call); all records run concurrently after cache pre-warm |
+| 5. Match | Agent 4 — Matching | Normalised + statement | `List[MatchResult]` | 2–5 s / match |
+| 6. Report | Agent 5 — Report | All match results | `ReconciliationReport` | 3–5 s |
+| 7. Review | Human | UNCERTAIN items | Confirmed / rejected matches | Async; results re-hydrated from DB |
+
+Steps 2–3 run in the same ingestion stage before routing gates apply.
 
 Jobs are processed asynchronously by a **Celery worker** backed by **Redis**. If Celery **task dispatch** fails (broker unreachable), the API falls back to inline execution. On **Windows**, run the worker with `--pool=solo`.
 
@@ -184,7 +195,7 @@ ARIA delivers signed HMAC-SHA256 `POST` payloads to registered tenant endpoints 
 | `job.review_required` | Pipeline finished with items needing human review (status `AWAITING_REVIEW`) | `summary` (same shape) |
 | `job.failed` | Pipeline failed | `error` — reason string |
 
-Register endpoints and inspect delivery history in the **Tenant Management** UI (`/webhooks`) or via the REST API (`POST /api/v1/webhooks`). Deliveries are retried up to `WEBHOOK_MAX_RETRIES` times with exponential backoff.
+Register endpoints and inspect delivery history in the **Tenant Management** UI (`/webhooks`) or via the REST API (`POST /api/v1/webhooks`). Failed deliveries are retried up to **`WEBHOOK_MAX_RETRIES`** times (default **5**) with exponential backoff on `aria.deliver_webhook`.
 
 {: .important }
 > Set `WEBHOOK_SECRET_ENCRYPTION_KEY` once on first deploy and **never rotate it**. Rotating this key will render all existing webhook secrets unreadable and break delivery until webhooks are recreated.
@@ -301,8 +312,9 @@ backend/
 │   │   ├── webhooks.py      Webhook CRUD + test + deliveries
 │   │   ├── analytics.py     Tenant + admin analytics
 │   │   ├── bank_accounts.py Bank accounts, statements, ledger
-│   │   └── bank_statements.py Standalone statement upload/list
-│   ├── agents/sdk/          OpenAI Agents SDK orchestrator, stages, prompts, LLMService
+│   │   ├── bank_statements.py Standalone statement upload/list
+│   │   └── vendor_rules.py  AI feedback rules (tenant-scoped)
+│   ├── agents/sdk/          Pipeline stages, prompts, LLMService (deterministic runner)
 │   ├── graph/               ReconciliationState + pipeline alias (`builder.py`)
 │   ├── models/              Pydantic + SQLAlchemy models
 │   ├── repositories/        DB access layers

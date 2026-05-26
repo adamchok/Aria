@@ -50,7 +50,7 @@ Choose the run mode that fits your goal. All three paths support the full reconc
 | **curl** | Any | Smoke tests (optional) |
 
 {: .important }
-> **Windows users:** Docker Desktop and Git Bash (or WSL2) are recommended. Ensure ports **5432**, **6379**, **8000**, **5173**, **9000**, and **9001** are free before starting.
+> **Windows users:** Docker Desktop and Git Bash (or WSL2) are recommended. Ensure ports **5432**, **6379**, **8000**, **5173**, **5174**, **5175**, **9000**, and **9001** are free before starting.
 
 ---
 
@@ -134,7 +134,7 @@ Optional: use the same tenant API key for curl/SDK integrations (`X-API-Key` hea
 
 1. In **NovaPay**, navigate to [http://localhost:5173/upload](http://localhost:5173/upload)
 2. Upload one or more payment proof files (JPEG, PNG, PDF, XLSX, or CSV)
-3. Upload a bank statement (XLSX, CSV, or PDF)
+3. Upload one or more bank statements (XLSX, CSV, or PDF), **or** select a registered bank account to use pending ledger entries
 4. Confirm base currency is **MYR**
 5. Click **Start Reconciliation**
 6. Watch progress on the job page — results appear when complete
@@ -152,7 +152,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
   -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}' | jq -r .access_token)
 
 curl -H "Authorization: Bearer $TOKEN" \
-     -F "payment_proofs=@backend/tests/fixtures/payment_proofs/usd_invoice.txt" \
+     -F "payment_proofs=@backend/tests/fixtures/payment_proofs/usd_invoice.txt;type=image/png;filename=usd_invoice.png" \
      -F "bank_statement=@backend/tests/fixtures/bank_statements/may_2026.csv" \
      -F "base_currency=MYR" \
      http://localhost:8000/api/v1/jobs
@@ -230,14 +230,22 @@ alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Step 3: Start the Celery worker
+### Step 3: Start the Celery worker and Beat
 
-In a **second terminal** (same venv):
+In a **second terminal** (same venv), start the pipeline worker:
 
 ```bash
 cd backend
 source .venv/bin/activate   # or Windows equivalent
 celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --pool=solo
+```
+
+In a **third terminal**, start Beat for ingest auto-batching (optional for manual `/jobs` upload only):
+
+```bash
+cd backend
+source .venv/bin/activate
+celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
 ```
 
 {: .important }
@@ -321,7 +329,7 @@ LANGSMITH_TRACING=true
 See [Configuration]({% link configuration.md %}) for where to obtain each key and full variable reference.
 
 {: .important }
-> When running via Docker Compose, only `ANTHROPIC_API_KEY` and `LLM_MODE` are passed to containers today. For FX and LangSmith in Docker, either use **Option 2 (hybrid)** with `backend/.env`, or add the variables to `docker-compose.yml` under the `api` and `worker` services.
+> When running via Docker Compose, set live-mode keys in repo-root `.env` — `x-backend-environment` in `docker-compose.yml` passes `ANTHROPIC_API_KEY`, `LLM_MODE`, FX keys, LangSmith vars, and tuning parameters to `api`, `worker`, and `beat`. For hybrid dev, use `backend/.env` instead.
 
 ---
 

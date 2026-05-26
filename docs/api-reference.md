@@ -74,7 +74,13 @@ Returns service status and version.
 
 **Accepted MIME types for proofs:** `image/jpeg`, `image/png`, `image/webp`, `application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `text/csv`, `application/csv`
 
-**Response `201`**
+**Query parameters**
+
+| Param | Type | Default | Description |
+| --- | --- | --- | --- |
+| `dry_run` | bool | `false` | When `true`, runs the pipeline inline and returns the full report (`DryRunResponse`, status **`200`**, no Celery enqueue). Useful for integration tests. |
+
+**Response `201`** (default enqueue)
 
 ```json
 {
@@ -83,12 +89,6 @@ Returns service status and version.
   "created_at": "2026-05-23T10:00:00Z"
 }
 ```
-
-**Query parameters**
-
-| Param | Type | Default | Description |
-| --- | --- | --- | --- |
-| `dry_run` | bool | `false` | When `true`, runs the pipeline inline and returns the full report in the response (no Celery enqueue). Useful for integration tests. |
 
 **Errors**
 
@@ -639,7 +639,7 @@ X-ARIA-Signature: sha256=<hmac_hex>
 X-ARIA-Timestamp: <unix_timestamp>
 ```
 
-Delivery is retried up to 3 times with exponential backoff. Payloads that do not receive a `2xx` within 10 seconds are retried.
+Delivery is retried up to **5** times with exponential backoff. Payloads that do not receive a `2xx` within 10 seconds are retried.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -763,15 +763,18 @@ Tenants register named bank accounts, upload monthly statements, and browse a pe
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/jobs/{job_id}/cancel` | Cancel a non-terminal job (`PENDING` through `REPORTING`) |
+| `POST` | `/api/v1/jobs/{job_id}/cancel` | Cancel a non-terminal job (`PENDING` through `REPORTING`, or `AWAITING_REVIEW`) |
 | `DELETE` | `/api/v1/jobs/{job_id}` | Delete a job and its stored artifacts |
 | `GET` | `/api/v1/schedules` | List reconciliation schedules for the tenant |
-| `POST` | `/api/v1/schedules` | Create a schedule (cron + bank account + corridor) |
+| `POST` | `/api/v1/schedules` | Create a schedule (`run_time_utc`, `days_of_week`, `bank_account_id`, `base_currency`) |
 | `PUT` | `/api/v1/schedules/{id}` | Update a schedule |
 | `DELETE` | `/api/v1/schedules/{id}` | Delete a schedule |
 | `GET` | `/api/v1/analytics/performance` | Tenant AI performance metrics |
 | `GET` | `/api/v1/analytics/escalation-breakdown` | Escalation counts by reason |
 | `POST` | `/api/v1/webhooks/{id}/deliveries/{delivery_id}/resend` | Retry a failed webhook delivery |
+| `GET` | `/api/v1/vendor-rules` | List tenant vendor rules (AI feedback from review) |
+| `PUT` | `/api/v1/vendor-rules/{id}` | Update a vendor rule |
+| `DELETE` | `/api/v1/vendor-rules/{id}` | Delete a vendor rule |
 
 ---
 

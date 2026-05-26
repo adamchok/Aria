@@ -276,7 +276,11 @@ async def _batch_one_tenant(
 
 # ─── Webhook delivery ────────────────────────────────────────────────────────
 
-@celery_app.task(name="aria.deliver_webhook", bind=True, max_retries=5)
+@celery_app.task(
+    name="aria.deliver_webhook",
+    bind=True,
+    max_retries=get_settings().webhook_max_retries,
+)
 def deliver_webhook_task(self, webhook_id: str, job_id: str | None, event: str, stage: str | None = None) -> None:
     try:
         asyncio.run(_deliver_webhook(self, webhook_id, job_id, event, stage=stage))

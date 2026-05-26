@@ -63,7 +63,6 @@ Copy `backend/.env.example` to `backend/.env` and fill in values as needed.
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | *(empty)* | Anthropic API key — required when `LLM_MODE=live` |
 | `LLM_MODE` | `mock` | `mock` = deterministic in-process responses; `live` = real Claude calls |
-| `AGENTS_SDK_TRACING` | `false` | Enable OpenAI Agents SDK built-in tracing (optional; LangSmith also available) |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for ingestion (PDF), matching, report, bank statement (PDF) |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for ingestion (Excel/CSV), bank statement (text/CSV) |
 | `OPUS_MODEL` | `claude-opus-4-7` | Model for ingestion (images/scans — vision) |
@@ -83,6 +82,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in values as needed.
 | `LANGSMITH_API_KEY` | *(empty)* | LangSmith API key for agent tracing |
 | `LANGSMITH_PROJECT` | `aria` | Project name in LangSmith UI |
 | `LANGSMITH_TRACING` | `false` | Set `true` to enable trace export (`backend/.env.example` recommends `true` for demos) |
+| `LANGSMITH_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API base URL (EU/self-hosted overrides) |
 
 ### Database
 
@@ -144,7 +144,7 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 | `BASE_CURRENCY` | `MYR` | Normalisation target currency |
 | `FX_VARIANCE_BUFFER_PCT` | `0.015` | 1.5% FX spread buffer in tolerance window |
 | `MATCH_CONFIDENCE_THRESHOLD` | `0.75` | Auto-match floor |
-| `EXTRACTION_ESCALATION_THRESHOLD` | `0.5` | Route to review if avg extraction confidence below this |
+| `EXTRACTION_ESCALATION_THRESHOLD` | `0.5` | Skip normalisation/matching when avg extraction confidence is below this |
 | `DATE_WINDOW_DAYS` | `5` | ± days for date filter in matching |
 
 ### Auth & multi-tenancy
@@ -170,7 +170,7 @@ If both keys are empty, ARIA falls back to **static mid-market rates** for USD/E
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WEBHOOK_MAX_RETRIES` | `5` | Maximum delivery attempts per webhook event |
+| `WEBHOOK_MAX_RETRIES` | `5` | Max Celery retries for `aria.deliver_webhook` on HTTP/network failures |
 | `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS` | `5` | Base delay for non-429 failures; attempt N waits `base × 2^(N-1)` seconds |
 | `WEBHOOK_MIN_INTERVAL_SECONDS` | `1.5` | Minimum spacing between POSTs to the same URL (per Celery worker) — reduces receiver 429s after job completion bursts |
 | `WEBHOOK_RATE_LIMIT_BACKOFF_SECONDS` | `60` | Initial Celery retry countdown when the receiver returns HTTP 429 (doubles per retry; honors `Retry-After` when present) |
@@ -268,8 +268,8 @@ The root `.env` file is read by Docker Compose for `${VAR}` substitution. All ba
 
 | Category | Variables |
 | --- | --- |
-| LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `AGENTS_SDK_TRACING`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `INGESTION_CONCURRENCY`, `MATCHING_CONCURRENCY`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS`, `LLM_RETRY_TPM_BASE_SECONDS` |
-| Observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING` |
+| LLM | `ANTHROPIC_API_KEY`, `LLM_MODE`, `SONNET_MODEL`, `HAIKU_MODEL`, `OPUS_MODEL`, `INGESTION_CONCURRENCY`, `MATCHING_CONCURRENCY`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS`, `LLM_RETRY_TPM_BASE_SECONDS` |
+| Observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING`, `LANGSMITH_ENDPOINT` |
 | Auth | `ADMIN_API_KEY`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` |
 | Webhooks | `WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_BACKOFF_BASE_SECONDS`, `WEBHOOK_MIN_INTERVAL_SECONDS`, `WEBHOOK_RATE_LIMIT_BACKOFF_SECONDS`, `WEBHOOK_SECRET_ENCRYPTION_KEY` |
 | FX | `EXCHANGERATE_API_KEY`, `OPENEXCHANGERATES_APP_ID`, `FX_CACHE_TTL_SECONDS` |
@@ -295,7 +295,7 @@ These values drive routing logic and should not be lowered in production without
 | Level | Threshold | Action |
 | --- | --- | --- |
 | Field flag | &lt; 0.70 | Flagged in ingestion prompts when field confidence is low |
-| Extraction escalation | &lt; 0.50 (record avg) | Route to human review queue |
+| Extraction escalation | &lt; 0.50 (record avg) | Skip normalisation and matching; report still generated |
 | Match uncertain | 0.50 – 0.74 | Review queue; never auto-confirm |
 | Match confident | ≥ 0.75 | Auto-match allowed |
 | Match failed | &lt; 0.50 (all candidates) | Exception report |

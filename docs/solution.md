@@ -18,7 +18,7 @@ nav_order: 3
 
 ## ARIA in one sentence
 
-**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; the OpenAI Agents SDK pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Two ARIA-owned web apps provide platform admin and tenant configuration; **NovaPay** (`frontend-novapay`) simulates an external integrator consuming the same API.
+**ARIA** (Autonomous Reconciliation Intelligence Agent) is an AI-first reconciliation **platform**: external SME systems push transactions continuously through an authenticated API; a deterministic five-agent pipeline reconciles them autonomously; results stream back in real time via SSE and webhooks. Two ARIA-owned web apps provide platform admin and tenant configuration; **NovaPay** (`frontend-novapay`) simulates an external integrator consuming the same API.
 
 ## Core value proposition
 
@@ -63,7 +63,7 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 | `/login` | Sign in | Hardcoded demo credentials (`finance@novapay.demo` / `novapay2026`); no backend call — all API requests use `X-API-Key` from `VITE_API_KEY` env var |
 | `/dashboard` | Pipeline dashboard | Job throughput, match-rate summary, recent jobs |
 | `/jobs` | Job monitor | Paginated, filterable job list |
-| `/jobs/{id}` | Job progress | Four-agent stepper driven by SSE (polling fallback) |
+| `/jobs/{id}` | Job progress | Four-stage stepper driven by SSE (polling fallback) |
 | `/jobs/{id}/results` | Results | Summary cards, reconciliation grid, export |
 | `/jobs/{id}/review` | Review queue | Confirm / reject uncertain items |
 | `/upload` | Upload | Manual file submission (same as `POST /api/v1/jobs`) |
@@ -71,6 +71,7 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 | `/queue` | Transaction queue | Buffer status by corridor, manual flush → jobs |
 | `/bank-accounts` | Bank accounts | Register accounts, upload statements, ledger view |
 | `/bank-accounts/{id}` | Account detail | Statements and uncleared entries for one account |
+| `/vendor-rules` | AI feedback | Vendor rules learned from human review (applied on future ingestion) |
 
 #### Admin app — platform (`:5174`)
 
@@ -95,6 +96,7 @@ NovaPay simulates an SME finance team's reconciliation workspace powered by ARIA
 | `/analytics` | Analytics | Tenant-scoped match rate and corridor breakdown |
 | `/queue` | Transaction queue | Buffer status by corridor, manual flush |
 | `/users` | Users | Invite tenant users (tenant-scoped) |
+| `/vendor-rules` | AI feedback | Vendor rules learned from human review |
 
 ### What the finance officer does (manual upload flow — NovaPay demo)
 
@@ -103,7 +105,7 @@ Demo this flow in **NovaPay** to show how an external system would drive reconci
 | Step | Screen | Action |
 | --- | --- | --- |
 | 1 | `/upload` | Drag multiple payment proofs and bank statements (upload files **or** select bank account — all pending ledger entries are included automatically); select base currency (MYR) |
-| 2 | `/jobs/{id}` | Watch four-agent stepper; SSE delivers live progress |
+| 2 | `/jobs/{id}` | Watch four-stage stepper (five agents; bank statement runs inside Ingestion); SSE delivers live progress |
 | 3 | `/jobs/{id}/results` | Summary cards, filterable grid, variance explanations |
 | 4 | `/jobs/{id}/review` | Confirm or reject uncertain items (side-by-side proof vs bank line) |
 | 5 | Export | Download Excel — Summary, Matched, Exceptions, Audit Log |
@@ -154,7 +156,7 @@ Demo this flow from **NovaPay** (`:5173`) — the reference client simulates an 
 | ≥ 0.75 | <span class="aria-badge aria-badge--matched">Matched</span> | Auto-match allowed |
 | 0.50 – 0.74 | <span class="aria-badge aria-badge--uncertain">Uncertain</span> | Human review queue; never auto-confirmed |
 | &lt; 0.50 | <span class="aria-badge aria-badge--unmatched">Unmatched</span> | Exception report |
-| Extraction &lt; 0.50 | <span class="aria-badge aria-badge--neutral">Escalated</span> | Route to review |
+| Extraction &lt; 0.50 (batch avg) | <span class="aria-badge aria-badge--neutral">Escalated</span> | Skip normalisation/matching; report still runs |
 
 {: .tip }
 > ARIA matched because the settlement amount falls within the FX tolerance window for USD/MYR on the value date — not because amounts were identical. See [Architecture]({{ '/architecture' | relative_url }}) for tolerance calculation.

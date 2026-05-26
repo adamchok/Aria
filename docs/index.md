@@ -78,7 +78,7 @@ ARIA automates the full cross-border reconciliation lifecycle for SMEs. Finance 
   </a>
   <a class="aria-card" href="{{ '/architecture' | relative_url }}">
     <p class="aria-card__title">Architecture</p>
-    <p class="aria-card__desc">Four-agent pipeline, data flow, and technology stack.</p>
+    <p class="aria-card__desc">Five-agent pipeline, data flow, and technology stack.</p>
     <span class="aria-card__arrow" aria-hidden="true">→</span>
   </a>
   <a class="aria-card" href="{{ '/getting-started' | relative_url }}">
@@ -132,7 +132,7 @@ docker compose up --build
 | ≥ 0.75 | <span class="aria-badge aria-badge--matched">Matched</span> | Auto-match allowed |
 | 0.50 – 0.74 | <span class="aria-badge aria-badge--uncertain">Uncertain</span> | Human review queue |
 | &lt; 0.50 | <span class="aria-badge aria-badge--unmatched">Unmatched</span> | Exception report |
-| Extraction &lt; 0.50 | <span class="aria-badge aria-badge--neutral">Escalated</span> | Route to review |
+| Extraction &lt; 0.50 (batch avg) | <span class="aria-badge aria-badge--neutral">Escalated</span> | Skip normalisation/matching; report still runs (see [Architecture]({{ '/architecture' | relative_url }})) |
 
 Low-confidence items are **never** auto-confirmed — a deliberate compliance control for finance teams.
 
