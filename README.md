@@ -4,6 +4,13 @@
 
 > **AI Marathon 2026 · Challenge Track 3 — Global Treasury Agent**
 
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776ab.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![React 18](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/docker-compose-2496ed.svg)](docker-compose.yml)
+[![Docs](https://img.shields.io/badge/docs-live-brightgreen.svg)](https://adamchok.github.io/Aria/)
+
 An SME invoices a US buyer for **USD 10.00**. SWIFT lands **MYR 42.30** in the local account — not the MYR 42.50 expected at invoice rate. Was it the right payment? Which invoice? Why the variance?
 
 Finance teams answer that question **on every cross-border transaction**, from WhatsApp screenshots and SWIFT PDFs, in spreadsheets that take **2–4 hours per batch**. ARIA does it in **under 60 seconds** — with explainable AI reasoning, human escalation for edge cases, and audit-ready Excel output.
@@ -177,7 +184,7 @@ Aria/
 ├── frontend-tenant-mgmt/    Tenant configuration (port 5175)
 ├── docs/                    GitHub Pages documentation site
 ├── docker-compose.yml
-└── ARIA_Technical_Specification.md
+└── .env.example
 ```
 
 ---
@@ -210,4 +217,4 @@ ARIA is an **autonomous reconciliation platform**: external systems ingest conti
 
 ## License
 
-Developed for **AI Marathon 2026**. No open-source license has been applied yet — contact the repository owner for reuse permissions.
+MIT © Chok Qi Yang — see [LICENSE](LICENSE).
